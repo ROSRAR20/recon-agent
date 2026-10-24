@@ -1,0 +1,22 @@
+# Environment and Secrets (CRITICAL: never commit secrets or live keys)
+.env
+.env.*
+!.env.example
+
+# Python virtual environment
+.venv/
+venv/
+ENV/
+
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest & testing artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Raw financial data (gitignored to prevent logging or tracking raw payloads)
+data/raw/
