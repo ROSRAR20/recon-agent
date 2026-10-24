@@ -112,7 +112,8 @@ def sanitize_filename(endpoint: str, label: str) -> str:
 def run_probe() -> None:
     """Execute the read-only probe across all specified endpoints."""
     # Step 1: Load environment variables
-    load_dotenv()
+    env_file = os.path.join(REPO_ROOT, ".env")
+    load_dotenv(dotenv_path=env_file)
     key_id = os.getenv("RAZORPAY_KEY_ID")
     key_secret = os.getenv("RAZORPAY_KEY_SECRET")
 
@@ -316,3 +317,4 @@ def write_probe_report(
 
 if __name__ == "__main__":
     run_probe()
+
