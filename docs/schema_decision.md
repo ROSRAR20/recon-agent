@@ -22,13 +22,14 @@
 - **Does `fee` include `tax` or are they additive?**  
   *Tag: [UNVERIFIED - to be confirmed from probe output]*  
   *Formula hypothesis: Does $\text{deduction} = \text{fee}$ or does $\text{deduction} = \text{fee} + \text{tax}$?*  
-  *Reference: Payment entity schema defines `fee` and `tax` in paise [DOCS: https://razorpay.com/docs/api/payments/]. Recon documentation also lists `fee` and `tax` as distinct fields [DOCS: https://razorpay.com/docs/api/settlements/fetch-recon].*
+  *[DOCS sample] In the official example a transfer has amount 100000, fee 296, tax 46, debit 100296, i.e. debit = amount + fee, suggesting fee includes tax. [UNVERIFIED] until a real response confirms.*  
+  *Reference: Payment entity schema defining `fee` and `tax` in paise is [UNVERIFIED]. Recon documentation lists `fee` and `tax` as distinct fields [DOCS: https://razorpay.com/docs/api/settlements/fetch-recon].*
 
 ---
 
 ## 3. Monetary Units & Minor Currency Standard
 - **Design rule (ours): integer paise, no floats:** All internal balances, transaction amounts, fee schedules, invariant checks, and ledger entries strictly use integer minor currency units (paise for INR; 1 INR = 100 paise). Floating-point arithmetic for currency is strictly prohibited across the codebase.
-- **API units: [UNVERIFIED until observed]:** Official documentation specifies transaction amounts, fees, and taxes in currency subunits (paise for INR) [DOCS: https://razorpay.com/docs/api/payments/], [DOCS: https://razorpay.com/docs/api/settlements/fetch-recon]. However, empirical response unit behavior from the live probe remains unverified until observed in actual test-mode payloads.
+- **API units:** [DOCS: https://razorpay.com/docs/api/settlements/fetch-recon] debit, credit, amount, fee and tax are in currency subunits. Payments-entity units remain [UNVERIFIED until observed].
 
 ---
 
@@ -47,9 +48,10 @@
   `[Pending probe output]`
 
 ### Record Linkage Fields
-*(Identifies keys linking entities across ledger and gateway; tagged [UNVERIFIED] until observed in probe responses)*
+- **`entity_id`:** [DOCS: https://razorpay.com/docs/api/settlements/fetch-recon] ID of the settled transaction (`pay_` / `rfnd_` / `trf_` / `adj_`).
+- **`payment_id`:** [DOCS: https://razorpay.com/docs/api/settlements/fetch-recon] Linked payment for refund/transfer, null for payments.
 - **`settlement_id`:** [UNVERIFIED until observed] Links settlement entities to combined recon line items (`setl_...`).
-- **`payment_id` / `entity_id`:** [UNVERIFIED until observed] Links payment records to recon line items, orders, and refund transactions (`pay_...`).
+- **`settlement_utr`:** [DOCS: https://razorpay.com/docs/api/settlements/fetch-recon] Reference number (UTR) for the settlement.
 - **`order_id`:** [UNVERIFIED until observed] Links internal merchant orders to payment capture records and recon line items (`order_...`).
 
 ---
