@@ -11,8 +11,10 @@ import datetime
 import json
 import os
 import random
+import re
 import sys
 import time
+import urllib.parse
 import zoneinfo
 from typing import Any
 
@@ -36,9 +38,97 @@ TIMEOUT_SECONDS = 15
 MAX_RETRIES = 4
 
 
+def sanitize_error(
+    text_or_exc: Any,
+    key_id: str | None = None,
+    key_secret: str | None = None,
+) -> str:
+    """Sanitize error messages or exception strings.
+
+    Removes:
+    1. Anything matching rzp_(test|live)_[A-Za-z0-9]+
+    2. The exact values of RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET from environment
+    3. Any Authorization header text
+    4. Query strings in URLs
+    """
+    text = str(text_or_exc)
+
+    # 1. Remove rzp_(test|live)_[A-Za-z0-9]+
+    text = re.sub(r"rzp_(?:test|live)_[A-Za-z0-9]+", "", text)
+
+    # 2. Remove exact values of RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET
+    env_keys = []
+    if key_id:
+        env_keys.append(key_id)
+    else:
+        k = os.getenv("RAZORPAY_KEY_ID")
+        if k:
+            env_keys.append(k)
+
+    if key_secret:
+        env_keys.append(key_secret)
+    else:
+        s = os.getenv("RAZORPAY_KEY_SECRET")
+        if s:
+            env_keys.append(s)
+
+    for val in env_keys:
+        if val:
+            text = text.replace(val, "")
+
+    # 3. Remove any Authorization header text
+    # e.g., 'Authorization': 'Basic ...', "Authorization": "..."
+    text = re.sub(r"""(?i)['"]?Authorization['"]?\s*:\s*['"][^'"]*['"]""", "", text)
+    # e.g., Authorization: Basic ..., Authorization: ...
+    text = re.sub(r"""(?i)\bAuthorization\s*:[^\r\n,;}\]]*""", "", text)
+    # e.g., Authorization = ...
+    text = re.sub(r"""(?i)\bAuthorization\s*=[^\r\n,;}\]]*""", "", text)
+    # Standalone Basic / Bearer tokens
+    text = re.sub(r"""(?i)\b(?:Basic|Bearer)\s+[A-Za-z0-9\-._~+/=]+""", "", text)
+    # Any residual Authorization keyword
+    text = re.sub(r"""(?i)\bAuthorization\b""", "", text)
+
+    # 4. Remove query strings in URLs
+    # Full URLs or paths: https://domain/path?query or /path?query
+    text = re.sub(r"((?:https?://|/)[^\s\"'<>)\],?#]+)\?[^\s\"'<>)\],}]*", r"\1", text)
+    # Standalone query strings ?key=val...
+    text = re.sub(r"\?[a-zA-Z0-9_.~%+-]+=[^\s\"'<>)\],}]*", "", text)
+
+    # Clean up excess spaces while preserving newlines
+    text = re.sub(r"[ \t]+", " ", text).strip()
+    return text
+
+
+def run_preflight(base_url: str = BASE_URL, timeout: int = TIMEOUT_SECONDS) -> None:
+    """Execute an unauthenticated GET preflight check once before endpoint calls.
+
+    Prints 'network OK (401 expected)' on 401, otherwise prints the sanitized error
+    and continues anyway.
+    """
+    preflight_url = f"{base_url}/v1/payments"
+    try:
+        resp = requests.get(preflight_url, timeout=timeout)
+        if resp.status_code == 401:
+            print("network OK (401 expected)")
+        else:
+            err_msg = f"HTTP {resp.status_code}: {resp.text}"
+            print(sanitize_error(err_msg)[:200])
+    except Exception as exc:
+        err_msg = f"{type(exc).__name__}: {str(exc)}"
+        print(sanitize_error(err_msg)[:200])
+
+
+def get_ist_tz() -> datetime.tzinfo:
+    """Return IST timezone, using zoneinfo if available, else UTC+5:30 fixed offset."""
+    try:
+        return zoneinfo.ZoneInfo("Asia/Kolkata")
+    except Exception:
+        return datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+
+
 def get_ist_periods() -> list[dict[str, Any]]:
     """Derive year and month details for current and previous month in IST."""
-    ist_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+    ist_tz = get_ist_tz()
     now_ist = datetime.datetime.now(ist_tz)
 
     current_year = now_ist.year
@@ -77,12 +167,14 @@ def execute_get_request(
     url: str,
     params: dict[str, Any],
     auth: tuple[str, str],
-) -> requests.Response:
+    max_retries: int = MAX_RETRIES,
+) -> tuple[requests.Response, int]:
     """Execute a single HTTP GET request with exponential backoff plus jitter.
 
-    Retries on HTTP 429 and 5xx status codes up to MAX_RETRIES.
+    Retries on HTTP 429, 5xx, ConnectionError, and Timeout up to max_retries.
+    Returns (response, attempts).
     """
-    for attempt in range(1, MAX_RETRIES + 1):
+    for attempt in range(1, max_retries + 1):
         try:
             response = session.get(
                 url,
@@ -90,16 +182,20 @@ def execute_get_request(
                 auth=auth,
                 timeout=TIMEOUT_SECONDS,
             )
-            if response.status_code in (429, 500, 502, 503, 504) and attempt < MAX_RETRIES:
+            if response.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
                 sleep_sec = (2 ** (attempt - 1)) + random.uniform(0.1, 0.5)
                 time.sleep(sleep_sec)
                 continue
-            return response
-        except requests.exceptions.RequestException:
-            if attempt < MAX_RETRIES:
+            return response, attempt
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            if attempt < max_retries:
                 sleep_sec = (2 ** (attempt - 1)) + random.uniform(0.1, 0.5)
                 time.sleep(sleep_sec)
                 continue
+            exc.attempts = attempt  # type: ignore[attr-defined]
+            raise
+        except requests.exceptions.RequestException as exc:
+            exc.attempts = attempt  # type: ignore[attr-defined]
             raise
 
 
@@ -112,8 +208,7 @@ def sanitize_filename(endpoint: str, label: str) -> str:
 def run_probe() -> None:
     """Execute the read-only probe across all specified endpoints."""
     # Step 1: Load environment variables
-    env_file = os.path.join(REPO_ROOT, ".env")
-    load_dotenv(dotenv_path=env_file)
+    load_dotenv()
     key_id = os.getenv("RAZORPAY_KEY_ID")
     key_secret = os.getenv("RAZORPAY_KEY_SECRET")
 
@@ -127,7 +222,10 @@ def run_probe() -> None:
 
     auth = (key_id, key_secret)
 
-    # Step 3: Prepare output directories
+    # Step 3: Run preflight check
+    run_preflight(BASE_URL, TIMEOUT_SECONDS)
+
+    # Step 4: Prepare output directories
     raw_data_dir = os.path.join(REPO_ROOT, "data", "raw")
     docs_dir = os.path.join(REPO_ROOT, "docs")
     os.makedirs(raw_data_dir, exist_ok=True)
@@ -176,6 +274,8 @@ def run_probe() -> None:
                 "period": label,
                 "params": params,
                 "http_status": None,
+                "attempts": 0,
+                "exception_class": None,
                 "top_level_keys": [],
                 "item_count": 0,
                 "schema": None,
@@ -183,7 +283,8 @@ def run_probe() -> None:
             }
 
             try:
-                response = execute_get_request(session, url, params, auth)
+                response, attempts = execute_get_request(session, url, params, auth)
+                record["attempts"] = attempts
                 record["http_status"] = response.status_code
 
                 try:
@@ -200,13 +301,15 @@ def run_probe() -> None:
                     err_obj = payload.get("error", {}) if isinstance(payload, dict) else {}
                     err_code = err_obj.get("code", f"HTTP_{response.status_code}")
                     err_desc = err_obj.get("description", response.reason)
-                    record["error"] = {"code": err_code, "description": err_desc}
+                    sanitized_desc = sanitize_error(str(err_desc))[:200]
+                    record["error"] = {"code": err_code, "description": sanitized_desc}
                     empty_or_errored.append(
                         {
                             "endpoint": ep,
                             "period": label,
                             "status": response.status_code,
-                            "reason": f"Error: {err_code} - {err_desc}",
+                            "attempts": attempts,
+                            "reason": f"Error: {err_code} - {sanitized_desc}",
                         }
                     )
                 elif isinstance(payload, dict):
@@ -222,6 +325,7 @@ def run_probe() -> None:
                                     "endpoint": ep,
                                     "period": label,
                                     "status": response.status_code,
+                                    "attempts": attempts,
                                     "reason": "Empty items collection",
                                 }
                             )
@@ -232,22 +336,28 @@ def run_probe() -> None:
                     record["item_count"] = len(payload) if isinstance(payload, list) else 1
 
             except Exception as exc:
+                attempts = getattr(exc, "attempts", MAX_RETRIES)
+                exc_class = type(exc).__name__
+                sanitized_msg = sanitize_error(str(exc))[:200]
+                record["attempts"] = attempts
+                record["exception_class"] = exc_class
                 record["error"] = {
-                    "code": "REQUEST_EXCEPTION",
-                    "description": type(exc).__name__,
+                    "code": exc_class,
+                    "description": sanitized_msg,
                 }
                 empty_or_errored.append(
                     {
                         "endpoint": ep,
                         "period": label,
-                        "status": "FAILED",
-                        "reason": f"Exception: {type(exc).__name__}",
+                        "status": exc_class,
+                        "attempts": attempts,
+                        "reason": f"{exc_class}: {sanitized_msg}",
                     }
                 )
 
             results.append(record)
 
-    # Step 4: Write docs/api_probe_report.md
+    # Step 5: Write docs/api_probe_report.md
     write_probe_report(results, empty_or_errored, os.path.join(docs_dir, "api_probe_report.md"))
     print("[*] Probe completed. Report written to docs/api_probe_report.md")
 
@@ -256,10 +366,16 @@ def write_probe_report(
     results: list[dict[str, Any]],
     empty_or_errored: list[dict[str, Any]],
     report_path: str,
+    base_url: str = BASE_URL,
 ) -> None:
     """Generate Markdown report containing status, shape, schema, and empty/error list."""
-    ist_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+    ist_tz = get_ist_tz()
     now_str = datetime.datetime.now(ist_tz).strftime("%Y-%m-%d %H:%M:%S IST")
+
+    base_host = urllib.parse.urlsplit(base_url).netloc
+    http_proxy_set = "yes" if (os.getenv("HTTP_PROXY") or os.getenv("http_proxy")) else "no"
+    https_proxy_set = "yes" if (os.getenv("HTTPS_PROXY") or os.getenv("https_proxy")) else "no"
+    all_proxy_set = "yes" if (os.getenv("ALL_PROXY") or os.getenv("all_proxy")) else "no"
 
     lines = [
         "# Razorpay API Probe Report",
@@ -267,18 +383,31 @@ def write_probe_report(
         f"**Timestamp:** {now_str}",
         "**Environment:** TEST Mode",
         "**Mode:** Read-only probe (HTTP GET only)",
+        f"**Base URL Host:** {base_host}",
+        f"**HTTP_PROXY:** {http_proxy_set}",
+        f"**HTTPS_PROXY:** {https_proxy_set}",
+        f"**ALL_PROXY:** {all_proxy_set}",
         "",
         "## Endpoints Summary",
         "",
-        "| Endpoint | Period | Status | Top-Level Keys | Item Count |",
-        "| :--- | :--- | :--- | :--- | :--- |",
+        "| Endpoint | Period | Status | Attempts | Top-Level Keys | Item Count |",
+        "| :--- | :--- | :--- | :--- | :--- | :--- |",
     ]
 
     for r in results:
-        status_str = str(r["http_status"]) if r["http_status"] is not None else "ERROR"
+        if r["http_status"] is not None:
+            status_str = str(r["http_status"])
+        elif r.get("exception_class"):
+            status_str = r["exception_class"]
+        elif r.get("error", {}).get("code"):
+            status_str = r["error"]["code"]
+        else:
+            status_str = "ERROR"
+
         keys_str = ", ".join(r["top_level_keys"]) if r["top_level_keys"] else "-"
+        attempts_val = r.get("attempts", 1)
         lines.append(
-            f"| `{r['endpoint']}` | {r['period']} | {status_str} | `{keys_str}` | {r['item_count']} |"
+            f"| `{r['endpoint']}` | {r['period']} | {status_str} | {attempts_val} | `{keys_str}` | {r['item_count']} |"
         )
 
     lines.extend([
@@ -303,10 +432,11 @@ def write_probe_report(
     ])
 
     if empty_or_errored:
-        lines.append("| Endpoint | Period | Status | Detail |")
-        lines.append("| :--- | :--- | :--- | :--- |")
+        lines.append("| Endpoint | Period | Status | Attempts | Detail |")
+        lines.append("| :--- | :--- | :--- | :--- | :--- |")
         for e in empty_or_errored:
-            lines.append(f"| `{e['endpoint']}` | {e['period']} | {e['status']} | {e['reason']} |")
+            attempts_val = e.get("attempts", 1)
+            lines.append(f"| `{e['endpoint']}` | {e['period']} | {e['status']} | {attempts_val} | {e['reason']} |")
     else:
         lines.append("No endpoints returned empty collections or errors.")
 
@@ -317,4 +447,3 @@ def write_probe_report(
 
 if __name__ == "__main__":
     run_probe()
-
