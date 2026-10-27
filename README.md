@@ -25,6 +25,12 @@ While modern Large Language Models (LLMs) demonstrate strong qualitative reasoni
 - **NO real merchant data:** Operates exclusively on synthetic scenarios and Razorpay test-mode API keys.
 - **NO production-readiness claims:** This is an experimental prototype and evaluation testbed, not a production financial accounting system.
 
+### Data Strategy & Schema Decision
+- **Test-Mode API Probe Observation:** Probed endpoints (`/v1/settlements/recon/combined`, `/v1/settlements`, `/v1/payments`, `/v1/orders`, `/v1/refunds`) returned HTTP 200 with empty items collections for 2026-09 and 2026-10 [OBSERVED]. This account has no transactions [OBSERVED], so this empty response is not evidence about whether test activity yields recon rows [UNVERIFIED].
+- **Recon Schema:** The recon item field list is derived from official documentation [DOCS: https://razorpay.com/docs/api/settlements/fetch-recon], while payment, order, refund, and settlement probe responses were empty [OBSERVED].
+- **Fee and Tax Semantics:** Fee/tax relationship remains [UNVERIFIED]; official documentation example arithmetic ($\text{amount}=100000$, $\text{fee}=296$, $\text{tax}=46$, $\text{debit}=100296$, where $\text{debit} = \text{amount} + \text{fee}$) is included as [DOCS sample] only.
+- **Data Source Strategy:** **SYNTHETIC** is selected for recon, settlements, and bank statements, with **HYBRID** noted as an optional extension if a real payments/orders slice is added later.
+
 ---
 
 ## 3. Architecture
