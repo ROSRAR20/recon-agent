@@ -1,6 +1,6 @@
 # Razorpay API Probe Report
 
-**Timestamp:** 2026-10-27 19:41:59 IST
+**Timestamp:** 2026-10-27 20:06:17 IST
 **Environment:** TEST Mode
 **Mode:** Read-only probe (HTTP GET only)
 **Base URL Host:** api.razorpay.com
