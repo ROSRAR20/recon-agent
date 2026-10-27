@@ -21,3 +21,5 @@ htmlcov/
 # Raw financial data (gitignored to prevent logging or tracking raw payloads)
 data/raw/
 
+# Synthetic generated data
+data/synth/
