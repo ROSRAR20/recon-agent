@@ -112,3 +112,4 @@ Fields strictly match the documented Razorpay recon endpoint `[DOCS: https://raz
 - **I6 (Determinism):** Same seed produces bit-identical files; distinct seeds diverge.
 - **I7 (Architectural Boundary):** No module outside `src/recon_agent/synth/`, `tests/`, and `scripts/generate.py` imports `recon_agent.synth`.
 - **I8 (Positive Settlement Batch Net):** Every settlement batch satisfies $\text{net} > 0$.
+

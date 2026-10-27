@@ -585,3 +585,4 @@ class SyntheticDataGenerator:
         paths["manifest"] = manifest_path
 
         return paths
+

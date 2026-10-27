@@ -28,3 +28,4 @@ def mul_div_round(x: int, num: int, den: int) -> int:
         raise ValueError("mul_div_round expects non-negative integers")
 
     return (2 * x * num + den) // (2 * den)
+
