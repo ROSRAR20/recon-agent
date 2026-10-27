@@ -69,3 +69,4 @@ def test_no_http_methods_other_than_get_in_scripts_and_src():
         f"Detected forbidden HTTP methods (only GET is permitted):\n"
         + "\n".join(violations)
     )
+

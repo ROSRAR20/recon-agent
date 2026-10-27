@@ -77,3 +77,4 @@ def extract_schema(item: Any) -> Any:
         return [extract_schema(item[0])]
 
     return type(item).__name__
+

@@ -128,3 +128,4 @@ $$\text{Agreement} = \frac{N_{\text{identical\_across\_all\_3\_runs}}}{N_{\text{
 ## 5. Honest Limitations Stub
 
 > **Methodological Note:** Synthetic errors are self-labeled. Therefore, measured recall is inherently evaluated against our own injected error distributions and may overestimate performance against unforeseen external real-world edge cases. Field validation against external audit datasets remains a future milestone.
+

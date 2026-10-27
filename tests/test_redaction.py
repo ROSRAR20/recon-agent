@@ -88,3 +88,4 @@ def test_extract_schema_contains_strictly_no_values():
     ]
     for val in forbidden_values:
         assert val not in schema_str
+

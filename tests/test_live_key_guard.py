@@ -33,3 +33,4 @@ def test_guard_rejects_invalid_or_missing_keys(invalid_key):
     """Guard must reject empty, None, or improperly formatted key IDs."""
     with pytest.raises(LiveKeySecurityError):
         validate_key_id(invalid_key)
+

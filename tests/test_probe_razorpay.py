@@ -323,3 +323,4 @@ def test_write_probe_report_headers_and_status(tmp_path, monkeypatch):
 
     # Error table includes attempts and detail
     assert "| `/v1/payments` | 2026-10 | ConnectionError | 4 | ConnectionError: Failed to connect |" in content
+
