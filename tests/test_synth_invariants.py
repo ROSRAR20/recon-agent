@@ -701,3 +701,137 @@ def test_utrs_unique_across_dataset() -> None:
         assert set(recon_utrs).issubset(set(settlement_utrs)), "Recon UTR not found in settlements"
 
 
+# =========================================================================
+# Day 3B Invariant Tests: Boundary Checks & Twin Dataset Byte Identity
+# =========================================================================
+
+
+def test_injection_manifest_boundary() -> None:
+    """Verify 'injection_manifest.jsonl' never appears in code outside synth/, tests/, scripts/, docs/."""
+    allowed_dirs = {"synth", "tests", "scripts", "docs", ".gemini", ".git", ".pytest_cache", ".venv"}
+    violations = []
+
+    for root, dirs, files in os.walk(REPO_ROOT):
+        # Exclude hidden or build directories
+        dirs[:] = [d for d in dirs if d not in {".git", ".venv", "__pycache__", ".pytest_cache"}]
+
+        rel_root = os.path.relpath(root, REPO_ROOT)
+        top_dir = rel_root.split(os.sep)[0] if rel_root != "." else "."
+
+        # Check if inside allowed path
+        norm_rel = rel_root.replace("\\", "/")
+        is_allowed = (
+            any(norm_rel.startswith(ad) or norm_rel == ad for ad in allowed_dirs)
+            or "src/recon_agent/synth" in norm_rel
+        )
+
+        if not is_allowed:
+            for file_name in files:
+                if file_name.endswith((".py", ".json", ".md", ".sh", ".ps1")):
+                    f_path = os.path.join(root, file_name)
+                    with open(f_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                        if "injection_manifest.jsonl" in content:
+                            violations.append(f_path)
+
+    assert not violations, (
+        "Boundary violation: 'injection_manifest.jsonl' detected outside permitted synth/tests/scripts/docs paths:\n"
+        + "\n".join(violations)
+    )
+
+
+def test_twin_dataset_byte_identity_except_free_text(tmp_path: Any) -> None:
+    """Twin dataset in <split>/injected/ is byte-identical to base except recon_items.description and notes."""
+    from src.recon_agent.synth.text_inject import (
+        REQUIRED_ATTACK_TYPES,
+        apply_text_injections,
+        write_twin_dataset,
+    )
+
+    config = create_config("small", "dev", seed=1, inject_errors=True)
+    generator = SyntheticDataGenerator(config)
+    data = generator.generate()
+
+    # Write base dataset
+    base_dir = str(tmp_path / "base")
+    generator.write_to_directory(base_dir, data=data)
+
+    # Apply text injection and write twin dataset
+    twin_data, inj_manifest = apply_text_injections(data, seed=config.seed)
+    injected_dir = str(tmp_path / "base" / "injected")
+    write_twin_dataset(twin_data, inj_manifest, injected_dir)
+
+    # 1. Compare auxiliary files byte-for-byte
+    identical_files = [
+        "payments.jsonl",
+        "settlements.jsonl",
+        "orders_ledger.csv",
+        "bank_statement.csv",
+        "rate_card.json",
+        "manifest.json",
+        "labels.jsonl",
+    ]
+    for fname in identical_files:
+        base_f = os.path.join(base_dir, fname)
+        twin_f = os.path.join(injected_dir, fname)
+        assert os.path.exists(twin_f), f"Missing twin file: {fname}"
+        with open(base_f, "rb") as f1, open(twin_f, "rb") as f2:
+            assert f1.read() == f2.read(), f"File {fname} is not byte-identical in twin dataset!"
+
+    # 2. Compare recon_items.jsonl line-by-line
+    base_recon = []
+    with open(os.path.join(base_dir, "recon_items.jsonl"), "r", encoding="utf-8") as f:
+        for line in f:
+            base_recon.append(json.loads(line))
+
+    twin_recon = []
+    with open(os.path.join(injected_dir, "recon_items.jsonl"), "r", encoding="utf-8") as f:
+        for line in f:
+            twin_recon.append(json.loads(line))
+
+    assert len(base_recon) == len(twin_recon), "recon_items count mismatch between base and twin"
+
+    attacked_entity_ids = {entry["item_entity_id"] for entry in inj_manifest}
+    attack_count = 0
+
+    for b_item, t_item in zip(base_recon, twin_recon):
+        eid = b_item["entity_id"]
+        assert eid == t_item["entity_id"]
+
+        # Check all non-free-text fields are strictly identical
+        for k in b_item:
+            if k not in ("description", "notes"):
+                assert b_item[k] == t_item[k], f"Non-free-text field '{k}' mutated on {eid}!"
+
+        # Check free-text fields
+        if eid in attacked_entity_ids:
+            attack_count += 1
+            # Either description or notes mutated
+            assert (b_item["description"] != t_item["description"]) or (b_item["notes"] != t_item["notes"]), (
+                f"Attacked item {eid} was not mutated in free text fields"
+            )
+        else:
+            assert b_item["description"] == t_item["description"], f"Unattacked description mutated on {eid}"
+            assert b_item["notes"] == t_item["notes"], f"Unattacked notes mutated on {eid}"
+
+    assert attack_count == len(inj_manifest), "Mismatch in applied attack counts"
+
+    # 3. Verify injection_manifest.jsonl presence and schema
+    manifest_f = os.path.join(injected_dir, "injection_manifest.jsonl")
+    assert os.path.exists(manifest_f), "Missing injection_manifest.jsonl in injected/"
+    manifest_rows = []
+    with open(manifest_f, "r", encoding="utf-8") as f:
+        for line in f:
+            manifest_rows.append(json.loads(line))
+
+    assert len(manifest_rows) == len(inj_manifest)
+    observed_attack_types = set()
+    for row in manifest_rows:
+        for req_k in ("case_id", "item_entity_id", "field", "attack_type", "template_id"):
+            assert req_k in row, f"Missing required key {req_k} in injection_manifest row"
+        observed_attack_types.add(row["attack_type"])
+
+    assert observed_attack_types == set(REQUIRED_ATTACK_TYPES)
+
+
+

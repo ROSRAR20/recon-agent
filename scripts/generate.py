@@ -12,6 +12,11 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from src.recon_agent.synth import SyntheticDataGenerator, create_config
+from src.recon_agent.synth.text_inject import (
+    REQUIRED_ATTACK_TYPES,
+    apply_text_injections,
+    write_twin_dataset,
+)
 
 REQUIRED_ERROR_CLASSES = [
     "DUPLICATE_PAYMENT",
@@ -36,7 +41,11 @@ REQUIRED_HARD_NEGATIVES = [
 ]
 
 
-def verify_floors(error_counts: dict[str, int], hard_neg_counts: dict[str, int]) -> None:
+def verify_floors(
+    error_counts: dict[str, int],
+    hard_neg_counts: dict[str, int],
+    attack_counts: dict[str, int] | None = None,
+) -> None:
     """Verify that in full profile, all classes meet minimum threshold floors."""
     errors = []
     for cls_name in REQUIRED_ERROR_CLASSES:
@@ -49,11 +58,21 @@ def verify_floors(error_counts: dict[str, int], hard_neg_counts: dict[str, int])
         if cnt < 30:
             errors.append(f"Hard negative {hn_name} count {cnt} < 30 floor")
 
+    if attack_counts is not None:
+        for atk_name in REQUIRED_ATTACK_TYPES:
+            cnt = attack_counts.get(atk_name, 0)
+            if cnt < 30:
+                errors.append(f"Attack type {atk_name} count {cnt} < 30 floor")
+
     if errors:
         for err in errors:
             print(f"[ERROR] Floor violation: {err}", file=sys.stderr)
         sys.exit(1)
-    print("[OK] All error classes (>= 50) and hard-negative types (>= 30) meet required volume floors.")
+    msg = "[OK] All error classes (>= 50) and hard-negative types (>= 30)"
+    if attack_counts is not None:
+        msg += " and attack types (>= 30)"
+    msg += " meet required volume floors."
+    print(msg)
 
 
 def main() -> None:
@@ -123,20 +142,39 @@ def main() -> None:
         )
         data = generator.generate()
         counts = data["manifest"]["counts"]
+        attack_counts: dict[str, int] = {}
+        if inject_errors:
+            twin_data, inj_manifest = apply_text_injections(data, seed=config.seed)
+            for entry in inj_manifest:
+                atk = entry["attack_type"]
+                attack_counts[atk] = attack_counts.get(atk, 0) + 1
+            counts["attack_type_counts"] = attack_counts
+
         print("[*] Dry-run complete. Counts summary:")
         print(json.dumps(counts, indent=2))
 
         if args.profile == "full" and inject_errors:
             err_counts = counts.get("error_class_counts", {})
             hn_counts = counts.get("hard_negative_counts", {})
-            verify_floors(err_counts, hn_counts)
+            verify_floors(err_counts, hn_counts, attack_counts)
         return
 
     print(
         f"[*] Generating synthetic dataset -> {target_dir} "
         f"(Profile: {args.profile}, Split: {args.split}, Seed: {config.seed}, Inject: {inject_errors})..."
     )
-    paths = generator.write_to_directory(target_dir)
+    data = generator.generate()
+    paths = generator.write_to_directory(target_dir, data=data)
+    attack_counts = {}
+    if inject_errors:
+        twin_data, inj_manifest = apply_text_injections(data, seed=config.seed)
+        injected_dir = os.path.join(target_dir, "injected")
+        twin_paths = write_twin_dataset(twin_data, inj_manifest, injected_dir)
+        paths.update({f"twin_{k}": v for k, v in twin_paths.items()})
+        for entry in inj_manifest:
+            atk = entry["attack_type"]
+            attack_counts[atk] = attack_counts.get(atk, 0) + 1
+
     print(f"[*] Successfully generated {len(paths)} dataset files:")
     for name, path in paths.items():
         size_bytes = os.path.getsize(path)
@@ -147,7 +185,7 @@ def main() -> None:
             manifest = json.load(f)
         err_counts = manifest["counts"].get("error_class_counts", {})
         hn_counts = manifest["counts"].get("hard_negative_counts", {})
-        verify_floors(err_counts, hn_counts)
+        verify_floors(err_counts, hn_counts, attack_counts)
 
 
 if __name__ == "__main__":

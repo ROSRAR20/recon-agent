@@ -58,8 +58,8 @@ def get_working_days(start_date_str: str, count: int) -> list[datetime.date]:
     return days
 
 
-def finalize_bank_statements(data: dict[str, Any]) -> None:
-    """Sort each merchant's bank rows by (date, original sequence), reassign statement_ids,
+def finalize_bank_statements(data: dict[str, Any], rng_order: random.Random | None = None) -> None:
+    """Sort each merchant's bank rows by (date, random order within merchant/date), reassign statement_ids,
     and recompute continuous running balances per merchant.
     """
     initial_balances = data.get("_initial_balances", {})
@@ -67,8 +67,15 @@ def finalize_bank_statements(data: dict[str, Any]) -> None:
     if not bank_statements:
         return
 
-    # Sort all bank rows by (date, merchant_id, _orig_seq)
-    bank_statements.sort(key=lambda r: (r["date"], r["merchant_id"], r.get("_orig_seq", 0)))
+    if rng_order is None:
+        rng_order = random.Random(99999)
+
+    # Assign dedicated random tiebreak per bank row within (merchant, date)
+    for r in bank_statements:
+        r["_tiebreak"] = rng_order.random()
+
+    # Sort all bank rows by (date, merchant_id, _tiebreak)
+    bank_statements.sort(key=lambda r: (r["date"], r["merchant_id"], r["_tiebreak"]))
 
     stmt_map: dict[str, str] = {}
     merchant_balances = dict(initial_balances)
@@ -83,6 +90,7 @@ def finalize_bank_statements(data: dict[str, Any]) -> None:
         merchant_balances[m_id] = merchant_balances.get(m_id, 50000000) + r["credit"] - r["debit"]
         r["balance"] = merchant_balances[m_id]
         r.pop("_orig_seq", None)
+        r.pop("_tiebreak", None)
 
     # Remap statement IDs in labels
     for lbl in data.get("labels", []):
@@ -542,10 +550,11 @@ class SyntheticDataGenerator:
                 )
 
         # Sort datasets chronologically where appropriate
-        payments.sort(key=lambda x: x["created_at"])
+        rng_order = random.Random(self.config.seed * 1000 + 99)
+        payments.sort(key=lambda x: (x["created_at"], rng_order.random()))
+        recon_items.sort(key=lambda x: (x["created_at"], rng_order.random()))
         orders_ledger.sort(key=lambda x: x["created_at"])
         settlements.sort(key=lambda x: (x["settled_at"], x["settlement_id"]))
-        recon_items.sort(key=lambda x: (x["settled_at"], x["created_at"], x["entity_id"]))
 
         # Build manifest
         captured_count = sum(1 for p in payments if p["status"] == "captured")
@@ -578,6 +587,10 @@ class SyntheticDataGenerator:
             "netbanking_bps": self.config.method_fee_bps["netbanking"],
             "gst_bps": self.config.gst_bps,
             "fee_includes_tax": self.config.fee_includes_tax,
+            "payment_settlement_lag_days": self.config.payment_settlement_lag_days,
+            "refund_settlement_lag_days": self.config.refund_settlement_lag_days,
+            "missing_after_days": 7,
+            "rounding_tolerance_paise": 2,
         }
 
         data = {
@@ -622,18 +635,17 @@ class SyntheticDataGenerator:
             manifest["counts"]["hard_negative_counts"] = hard_negative_counts
 
             # Re-sort affected collections to maintain invariant order
-            payments.sort(key=lambda x: x["created_at"])
             orders_ledger.sort(key=lambda x: x["created_at"])
             settlements.sort(key=lambda x: (x["settled_at"], x["settlement_id"]))
-            recon_items.sort(key=lambda x: (x["settled_at"], x["created_at"], x["entity_id"]))
         else:
-            finalize_bank_statements(data)
+            finalize_bank_statements(data, rng_order)
 
         return data
 
-    def write_to_directory(self, out_dir: str) -> dict[str, str]:
+    def write_to_directory(self, out_dir: str, data: dict[str, Any] | None = None) -> dict[str, str]:
         """Generate and save all dataset files to specified directory."""
-        data = self.generate()
+        if data is None:
+            data = self.generate()
         os.makedirs(out_dir, exist_ok=True)
         paths: dict[str, str] = {}
 

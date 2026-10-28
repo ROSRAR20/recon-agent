@@ -399,9 +399,14 @@ def inject_errors_and_labels(
             expected_action="flag_cutoff_drift",
         )
 
-    # 6. SHORT_BANK_CREDIT (6% of eligible batches)
+    # 6. SHORT_BANK_CREDIT (6% of eligible batches; restricted to batches with UTR in narration)
+    variants = data.get("bank_narration_variants", {})
     eligible_short_batches = [
-        s for s in data["settlements"] if s["settlement_id"] not in used_batches
+        s
+        for s in data["settlements"]
+        if s["settlement_id"] not in used_batches
+        and bank_rows_by_settlement.get(s["settlement_id"]) is not None
+        and variants.get(bank_rows_by_settlement[s["settlement_id"]]["statement_id"]) in ("clean", "noisy")
     ]
     rng_sho.shuffle(eligible_short_batches)
     short_count = int(round(len(data["settlements"]) * get_rate("SHORT_BANK_CREDIT", 0.060)))
@@ -430,13 +435,30 @@ def inject_errors_and_labels(
 
     # 7. ORPHAN_BANK_CREDIT (extra rows = 6% of the number of batches; 70/20/10 narration mix)
     merchants = sorted(list({s["merchant_id"] for s in data["settlements"]}))
+    settlement_dates = sorted(list({
+        datetime.datetime.fromtimestamp(s["settled_at"], tz=IST_TZ).date()
+        for s in data["settlements"]
+    }))
+    if not settlement_dates:
+        settlement_dates = working_days[:config.working_days]
     orphan_count = int(round(len(data["settlements"]) * get_rate("ORPHAN_BANK_CREDIT", 0.060)))
 
     for _ in range(orphan_count):
         fake_utr = _gen_utr(rng_orp, seen_utrs)
         m_id = rng_orp.choice(merchants)
-        rnd_date = rng_orp.choice(working_days)
-        orphan_amt = rng_orp.randint(50000, 500000)
+        rnd_date = rng_orp.choice(settlement_dates)
+
+        # Sample from merchant's actual settlement nets (+/-30% noise)
+        m_settlement_amounts = [s["amount"] for s in data["settlements"] if s["merchant_id"] == m_id]
+        if m_settlement_amounts:
+            base_amt = rng_orp.choice(m_settlement_amounts)
+            noise_pct = rng_orp.randint(0, 30)
+            delta = mul_div_round(base_amt, noise_pct, 100)
+            sign = rng_orp.choice([1, -1])
+            orphan_amt = max(100, base_amt + sign * delta)
+        else:
+            orphan_amt = rng_orp.randint(50000, 500000)
+
         stmt_id = f"stmt_orp_{len(data['bank_statement']) + 1:07d}"
 
         orp_roll = rng_orp.random()
@@ -690,9 +712,13 @@ def inject_errors_and_labels(
             )
 
     # =========================================================================
-    # Finalize Bank Statements: Sort, Reassign IDs, Continuous Balances
+    # Finalize Canonical Ordering: Sort Payments, Recon Items, and Bank Statements
     # =========================================================================
     data["labels"] = labels
-    finalize_bank_statements(data)
+
+    rng_order = random.Random(config.seed * 1000 + 99)
+    data["payments"].sort(key=lambda x: (x["created_at"], rng_order.random()))
+    data["recon_items"].sort(key=lambda x: (x["created_at"], rng_order.random()))
+    finalize_bank_statements(data, rng_order)
 
     return labels

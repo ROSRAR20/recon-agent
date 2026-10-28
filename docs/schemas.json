@@ -163,14 +163,22 @@
       "upi_bps",
       "netbanking_bps",
       "gst_bps",
-      "fee_includes_tax"
+      "fee_includes_tax",
+      "payment_settlement_lag_days",
+      "refund_settlement_lag_days",
+      "missing_after_days",
+      "rounding_tolerance_paise"
     ],
     "types": {
       "card_bps": ["int"],
       "upi_bps": ["int"],
       "netbanking_bps": ["int"],
       "gst_bps": ["int"],
-      "fee_includes_tax": ["bool"]
+      "fee_includes_tax": ["bool"],
+      "payment_settlement_lag_days": ["int"],
+      "refund_settlement_lag_days": ["int"],
+      "missing_after_days": ["int"],
+      "rounding_tolerance_paise": ["int"]
     }
   },
   "manifest.json": {
