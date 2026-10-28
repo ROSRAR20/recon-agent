@@ -181,3 +181,4 @@ def test_schema_conformance(tmp_path: Any, inject_errors: bool) -> None:
                 validate_type(item[field], allowed, f"label.{field}")
     else:
         assert "labels" not in paths
+
