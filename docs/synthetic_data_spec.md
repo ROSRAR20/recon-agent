@@ -54,7 +54,7 @@ All parameters, entity schemas, and behavioral distributions are explicitly tagg
 | `failed_rate_bps` | 600 bps (~6%) | `[ASSUMED]` | Transaction attempts failing authorization. |
 | `refund_rate_bps` | 400 bps (~4%) | `[ASSUMED]` | Captured transactions subsequently refunded. |
 | `refund_split` | 70% full / 30% partial | `[ASSUMED]` | Ratio of full vs. partial refund amounts. |
-| `adjustment_prob` | ~0.3% per batch | `[ASSUMED]` | Rare dispute or goodwill fee adjustment item. |
+| `adjustment_prob` | ~3.2% per batch | `[ASSUMED]` | Rare dispute or goodwill fee adjustment item (yielding >= 30 in full profile). |
 | `bank_narration_mix` | 70% clean / 20% noisy / 10% no UTR | `[ASSUMED]` | Bank statement narration realistic format variation. |
 | `unrelated_bank_rows` | ~30 rows / merchant-month | `[ASSUMED]` | External bank statement noise (payroll, rent, utility). |
 
@@ -82,7 +82,7 @@ Fields strictly match the documented Razorpay recon endpoint `[DOCS: https://raz
 - `description`: string / null `[DOCS]`
 - `notes`: object / null `[DOCS]`
 - `payment_id`: string / null `[DOCS]`
-- `settlement_utr`: string (16 alphanumeric) `[DOCS]`
+- `settlement_utr`: string (16 alphanumeric) `[DOCS sample / ASSUMED]`
 - `order_id`: string / null `[DOCS]`
 - `order_receipt`: string / null `[DOCS]`
 - `method`: string / null `[DOCS]`
@@ -93,23 +93,54 @@ Fields strictly match the documented Razorpay recon endpoint `[DOCS: https://raz
 - `merchant_id`: string `[ASSUMED: internal evaluation routing only, NOT a Razorpay field]`
 
 ### 2. Auxiliary Datasets `[ASSUMED SHAPES]`
-- `payments.jsonl`: Gateway transactions including failed payment attempts (`payment_id`, `order_id`, `amount`, `status`, etc.).
-- `orders_ledger.csv`: Internal merchant order management ledger (`order_id`, `expected_amount`, `status`, `refund_id`, `refund_amount`).
-- `settlements.jsonl`: Lump-sum gateway payout batches (`settlement_id`, `amount`, `utr`, `status`, `settled_at`).
-- `bank_statement.csv`: Merchant bank statement records containing settlement credits with noisy narrations and unrelated non-gateway transactions.
-- `rate_card.json`: Active fee schedules and tax basis points.
-- `manifest.json`: Deterministic seed, configuration hash (SHA-256), generator version, and dataset row counts.
+- `payments.jsonl`: Gateway transactions including failed payment attempts (`payment_id`, `order_id`, `merchant_id`, `amount`, `status`, etc.) `[ASSUMED]`.
+- `orders_ledger.csv`: Internal merchant order management ledger (`order_id`, `merchant_id`, `booked_date`, `created_at`, `expected_amount`, `currency`, `order_receipt`, `status`, `payment_id`, `refund_id`, `refund_amount`) `[ASSUMED]`. In clean data, `booked_date == IST date of payment capture` `[ASSUMED]`.
+- `settlements.jsonl`: Lump-sum gateway payout batches (`settlement_id`, `merchant_id`, `amount`, `utr`, `status`, `created_at`, `settled_at`) `[ASSUMED]`.
+- `bank_statement.csv`: Merchant bank statement records containing settlement credits with noisy narrations and unrelated non-gateway transactions extending up to `as_of` `[ASSUMED]`.
+- `rate_card.json`: Active fee schedules and tax basis points `[ASSUMED]`.
+- `manifest.json`: Deterministic seed, configuration hash (SHA-256), generator version, `as_of` timestamp (`last_settlement_date + 10 calendar days`), and dataset row/class counts `[ASSUMED]`.
+- `labels.jsonl`: Evaluation ground-truth labels (`case_id`, `merchant_id`, `error_class`, `hard_negative_type`, `entity_ids`, `settlement_id`, `expected_action`) `[ASSUMED]`.
 
 ---
 
-## 5. Invariants Tested
+## 5. Error Injection Classes `[ASSUMED ERROR MODELS]`
+
+Each entity receives at most one error class. Batch-level classes select only batches free of entity-level errors. All injections preserve settlement conservation (I2) except `SHORT_BANK_CREDIT`:
+
+1. `DUPLICATE_PAYMENT` (1.0% of captured orders) `[ASSUMED]`: Second captured payment for same order and amount with new `payment_id`, settled in same batch; ledger unchanged. I2 preserved.
+2. `MISSING_SETTLEMENT` (0.8% of captured payments, eligible where settle date + 7 days $\le$ `as_of`) `[ASSUMED]`: Captured payment excluded from recon, settlement, and bank credit. I2 preserved.
+3. `FEE_TAX_MISMATCH` (1.2% of card/netbanking payments; never UPI) `[ASSUMED]`: 60% fee_off (+5% to +25%, $\ge +10$ paise vs rate card), 40% tax_off ($\ge 5$ paise). Credit follows the erroneous value so settlement and bank tie. I2 preserved.
+4. `PARTIAL_REFUND_MISMATCH` (15% of refund items) `[ASSUMED]`: 80% refund debit differs from ledger `refund_amount` by $\ge 100$ paise; 20% refund with no ledger entry. I2 preserved.
+5. `CUTOFF_DRIFT` (1.5% of payments, Mon–Thu orders) `[ASSUMED]`: Created 23:40–23:59 IST on day D, captured 00:05–00:35 on D+1; recon `created_at` on D+1, ledger `booked_date = D`; item moves to D+1 cohort. I2 preserved.
+6. `SHORT_BANK_CREDIT` (6% of eligible batches) `[ASSUMED]`: Bank credit = settlement net minus 1%–5% of net ($\ge 100$ paise); same UTR. I2 violated here only.
+7. `ORPHAN_BANK_CREDIT` (extra rows = 6% of batch count) `[ASSUMED]`: Razorpay-style bank credit matching no settlement.
+
+---
+
+## 6. Hard Negatives `[ASSUMED BEHAVIORAL MODELS]`
+
+Hard negatives represent legitimate operational variations that must NOT be flagged as errors (labeled with `expected_action: "benign_ignore"`):
+
+1. `ROUNDING` (3% of card/netbanking items) `[ASSUMED]`: Fee or tax off by $\pm 1$ or $\pm 2$ paise due to rounding variance; credit adjusted so I2 holds.
+2. `LEGIT_ADJUSTMENT` `[ASSUMED]`: Fee dispute credits or manual adjustments that are documented in recon (`type == "adjustment"`).
+3. `LATE_SETTLEMENT` (2%–3% of eligible batches) `[ASSUMED]`: Captured Friday settles Tuesday (standard C+2) or delayed settlement batch shifted by 1–2 working days; I2 holds.
+4. `RETRY_AFTER_FAIL` (50% of failed attempts) `[ASSUMED]`: Failed attempt shares `order_id` with a subsequent captured payment.
+5. `MULTI_MERCHANT_SAME_UTR` `[ASSUMED]`: Rare bank-side batching of payouts across merchants under the same settlement UTR.
+6. `NOISY_BANK_NARRATION` `[ASSUMED]`: Lowercase, trailing spaces, or truncated UTR in bank narration.
+7. `UNRELATED_BANK_CREDIT` `[ASSUMED]`: External other-gateway payouts (Stripe, Paytm), payroll, or interest credits present in bank statement.
+
+---
+
+## 7. Invariants Tested
 
 - **I1 (Item Arithmetic):** $\text{base\_fee} = \text{mul\_div\_round}(\text{amount}, \text{rate\_bps}, 10000)$, $\text{tax} = \text{mul\_div\_round}(\text{base\_fee}, 1800, 10000)$, $\text{credit} = \text{amount} - \text{fee}$ (or $\text{amount} - \text{fee} - \text{tax}$). For refunds: $\text{debit} = \text{amount}, \text{credit} = 0, \text{fee} = 0, \text{tax} = 0$.
-- **I2 (Settlement Conservation):** $\sum \text{credit} - \sum \text{debit} = \text{settlement\_net} = \text{bank\_credit\_amount}$.
+- **I2 (Settlement Conservation):** $\sum \text{credit} - \sum \text{debit} = \text{settlement\_net} = \text{bank\_credit\_amount}$ (holds for all clean batches and all injections except `SHORT_BANK_CREDIT`).
 - **I3 (Referential Integrity):** Every captured payment has exactly one recon payment item; every recon item links to a valid `settlement_id`.
 - **I4 (Ledger Consistency):** Order expected amount equals payment amount; refund amounts align with orders ledger.
 - **I5 (Type & ID Hygiene):** Strictly zero floating-point numbers in emitted JSON files; all identifiers conform to unique `prefix + 14 base62` characters.
 - **I6 (Determinism):** Same seed produces bit-identical files; distinct seeds diverge.
 - **I7 (Architectural Boundary):** No module outside `src/recon_agent/synth/`, `tests/`, and `scripts/generate.py` imports `recon_agent.synth`.
 - **I8 (Positive Settlement Batch Net):** Every settlement batch satisfies $\text{net} > 0$.
+- **I9 (Schema Conformance):** All emitted files conform to column, type, and nullability rules defined in `docs/schemas.json`.
+- **I10 (Disjointness of Error Entities):** Each entity participates in at most one error class.
 

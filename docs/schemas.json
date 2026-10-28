@@ -1,0 +1,214 @@
+{
+  "recon_items.jsonl": {
+    "format": "jsonl",
+    "required_keys": [
+      "entity_id",
+      "type",
+      "debit",
+      "credit",
+      "amount",
+      "currency",
+      "fee",
+      "tax",
+      "on_hold",
+      "settled",
+      "created_at",
+      "settled_at",
+      "settlement_id",
+      "description",
+      "notes",
+      "payment_id",
+      "settlement_utr",
+      "order_id",
+      "order_receipt",
+      "method",
+      "card_network",
+      "card_issuer",
+      "card_type",
+      "dispute_id",
+      "merchant_id"
+    ],
+    "types": {
+      "entity_id": ["str"],
+      "type": ["str"],
+      "debit": ["int"],
+      "credit": ["int"],
+      "amount": ["int"],
+      "currency": ["str"],
+      "fee": ["int"],
+      "tax": ["int"],
+      "on_hold": ["bool"],
+      "settled": ["bool"],
+      "created_at": ["int"],
+      "settled_at": ["int"],
+      "settlement_id": ["str"],
+      "description": ["str", "NoneType"],
+      "notes": ["dict", "NoneType"],
+      "payment_id": ["str", "NoneType"],
+      "settlement_utr": ["str", "NoneType"],
+      "order_id": ["str", "NoneType"],
+      "order_receipt": ["str", "NoneType"],
+      "method": ["str", "NoneType"],
+      "card_network": ["str", "NoneType"],
+      "card_issuer": ["str", "NoneType"],
+      "card_type": ["str", "NoneType"],
+      "dispute_id": ["str", "NoneType"],
+      "merchant_id": ["str"]
+    }
+  },
+  "payments.jsonl": {
+    "format": "jsonl",
+    "required_keys": [
+      "payment_id",
+      "order_id",
+      "merchant_id",
+      "amount",
+      "currency",
+      "status",
+      "method",
+      "created_at",
+      "captured_at",
+      "error_code",
+      "error_description"
+    ],
+    "types": {
+      "payment_id": ["str"],
+      "order_id": ["str"],
+      "merchant_id": ["str"],
+      "amount": ["int"],
+      "currency": ["str"],
+      "status": ["str"],
+      "method": ["str"],
+      "created_at": ["int"],
+      "captured_at": ["int", "NoneType"],
+      "error_code": ["str", "NoneType"],
+      "error_description": ["str", "NoneType"]
+    }
+  },
+  "orders_ledger.csv": {
+    "format": "csv",
+    "required_columns": [
+      "order_id",
+      "merchant_id",
+      "booked_date",
+      "created_at",
+      "expected_amount",
+      "currency",
+      "order_receipt",
+      "status",
+      "payment_id",
+      "refund_id",
+      "refund_amount"
+    ],
+    "column_types": {
+      "order_id": "str",
+      "merchant_id": "str",
+      "booked_date": "date_iso",
+      "created_at": "int",
+      "expected_amount": "int",
+      "currency": "str",
+      "order_receipt": "str",
+      "status": "str",
+      "payment_id": "str",
+      "refund_id": "str_optional",
+      "refund_amount": "int"
+    }
+  },
+  "settlements.jsonl": {
+    "format": "jsonl",
+    "required_keys": [
+      "settlement_id",
+      "merchant_id",
+      "amount",
+      "utr",
+      "status",
+      "created_at",
+      "settled_at"
+    ],
+    "types": {
+      "settlement_id": ["str"],
+      "merchant_id": ["str"],
+      "amount": ["int"],
+      "utr": ["str"],
+      "status": ["str"],
+      "created_at": ["int"],
+      "settled_at": ["int"]
+    }
+  },
+  "bank_statement.csv": {
+    "format": "csv",
+    "required_columns": [
+      "statement_id",
+      "merchant_id",
+      "date",
+      "description",
+      "debit",
+      "credit",
+      "balance"
+    ],
+    "column_types": {
+      "statement_id": "str",
+      "merchant_id": "str",
+      "date": "date_iso",
+      "description": "str",
+      "debit": "int",
+      "credit": "int",
+      "balance": "int"
+    }
+  },
+  "rate_card.json": {
+    "format": "json",
+    "required_keys": [
+      "card_bps",
+      "upi_bps",
+      "netbanking_bps",
+      "gst_bps",
+      "fee_includes_tax"
+    ],
+    "types": {
+      "card_bps": ["int"],
+      "upi_bps": ["int"],
+      "netbanking_bps": ["int"],
+      "gst_bps": ["int"],
+      "fee_includes_tax": ["bool"]
+    }
+  },
+  "manifest.json": {
+    "format": "json",
+    "required_keys": [
+      "seed",
+      "config_hash",
+      "generator_version",
+      "as_of",
+      "counts"
+    ],
+    "types": {
+      "seed": ["int"],
+      "config_hash": ["str"],
+      "generator_version": ["str"],
+      "as_of": ["str"],
+      "counts": ["dict"]
+    }
+  },
+  "labels.jsonl": {
+    "format": "jsonl",
+    "required_keys": [
+      "case_id",
+      "merchant_id",
+      "error_class",
+      "hard_negative_type",
+      "entity_ids",
+      "settlement_id",
+      "expected_action"
+    ],
+    "types": {
+      "case_id": ["str"],
+      "merchant_id": ["str"],
+      "error_class": ["str", "NoneType"],
+      "hard_negative_type": ["str", "NoneType"],
+      "entity_ids": ["list"],
+      "settlement_id": ["str", "NoneType"],
+      "expected_action": ["str"]
+    }
+  }
+}

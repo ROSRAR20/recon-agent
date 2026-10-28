@@ -69,10 +69,12 @@ class SyntheticDataGenerator:
 
     def generate(self) -> dict[str, Any]:
         """Execute full data generation pipeline and return structured datasets."""
+        from src.recon_agent.synth.inject import inject_errors_and_labels
+
         # 1. Merchants & Calendar
         merchants = [f"mer_{i+1:02d}" for i in range(self.config.num_merchants)]
         # Generate extra working days so settlements past day 22 have defined dates
-        working_days = get_working_days(self.config.start_date, self.config.working_days + 15)
+        working_days = get_working_days(self.config.start_date, self.config.working_days + 25)
 
         payments: list[dict[str, Any]] = []
         orders_ledger: list[dict[str, Any]] = []
@@ -153,6 +155,7 @@ class SyntheticDataGenerator:
                             {
                                 "order_id": order_id,
                                 "merchant_id": merchant_id,
+                                "booked_date": work_date.isoformat(),
                                 "created_at": tx_timestamp,
                                 "expected_amount": amount,
                                 "currency": "INR",
@@ -168,6 +171,8 @@ class SyntheticDataGenerator:
 
                     # Captured payment
                     captured_at = tx_timestamp + self.rng.randint(2, 60)
+                    capture_date = datetime.datetime.fromtimestamp(captured_at, tz=IST_TZ).date()
+
                     payments.append(
                         {
                             "payment_id": payment_id,
@@ -294,6 +299,7 @@ class SyntheticDataGenerator:
                         {
                             "order_id": order_id,
                             "merchant_id": merchant_id,
+                            "booked_date": capture_date.isoformat(),
                             "created_at": tx_timestamp,
                             "expected_amount": amount,
                             "currency": "INR",
@@ -321,7 +327,7 @@ class SyntheticDataGenerator:
                 if not payments_in_batch and not refunds_in_batch:
                     continue
 
-                # Legitimate adjustment (~0.3% chance per batch)
+                # Legitimate adjustment (~2.6% chance per batch)
                 adjustment_items: list[dict[str, Any]] = []
                 if payments_in_batch and self.rng.randint(1, 10000) <= self.config.adjustment_prob_bps:
                     adj_id = _gen_base62_id(self.rng, "adj_", self.seen_ids)
@@ -440,19 +446,34 @@ class SyntheticDataGenerator:
                     }
                 )
 
-            # Add ~30 unrelated bank rows per merchant-month (salary, rent, other gateway)
-            unrelated_descriptions = [
-                ("OFFICE RENT LEASE AUG", 1500000, 0),
-                ("EMPLOYEE PAYROLL HDFC", 3500000, 0),
-                ("ELECTRICITY UTILITY BESCOM", 45000, 0),
-                ("CLOUD SERVICES AWS INDIA", 120000, 0),
-                ("VENDOR PAYOUT TECH CORPS", 280000, 0),
-                ("STRIPE PAYMENTS SETTLEMENT", 0, 1850000),
-                ("PAYTM PG SETTLEMENT", 0, 920000),
-                ("INTEREST CREDIT FIXED DEP", 0, 35000),
-            ]
+        # Derive as_of date: last settlement date + 10 calendar days
+        if settlements:
+            last_settle_date = max(
+                datetime.datetime.fromtimestamp(s["settled_at"], tz=IST_TZ).date()
+                for s in settlements
+            )
+            as_of_date = last_settle_date + datetime.timedelta(days=10)
+        else:
+            as_of_date = datetime.date.fromisoformat(self.config.start_date) + datetime.timedelta(days=35)
+        as_of_str = as_of_date.isoformat()
+
+        # Generate unrelated bank rows up to as_of
+        all_bank_days = [
+            d for d in working_days if d <= as_of_date
+        ]
+        unrelated_descriptions = [
+            ("OFFICE RENT LEASE AUG", 1500000, 0),
+            ("EMPLOYEE PAYROLL HDFC", 3500000, 0),
+            ("ELECTRICITY UTILITY BESCOM", 45000, 0),
+            ("CLOUD SERVICES AWS INDIA", 120000, 0),
+            ("VENDOR PAYOUT TECH CORPS", 280000, 0),
+            ("STRIPE PAYMENTS SETTLEMENT", 0, 1850000),
+            ("PAYTM PG SETTLEMENT", 0, 920000),
+            ("INTEREST CREDIT FIXED DEP", 0, 35000),
+        ]
+        for m_idx, merchant_id in enumerate(merchants):
             for _ in range(self.config.unrelated_bank_rows_per_merchant):
-                rnd_day = self.rng.choice(working_days[: self.config.working_days])
+                rnd_day = self.rng.choice(all_bank_days)
                 desc, d_amt, c_amt = self.rng.choice(unrelated_descriptions)
                 noise_amt = self.rng.randint(-5000, 5000)
                 if d_amt > 0:
@@ -462,7 +483,6 @@ class SyntheticDataGenerator:
                     d_final = 0
                     c_final = max(1000, c_amt + noise_amt)
 
-                running_bank_balance = running_bank_balance + c_final - d_final
                 stmt_id = f"stmt_{len(bank_statements) + 1:07d}"
                 bank_statements.append(
                     {
@@ -472,7 +492,7 @@ class SyntheticDataGenerator:
                         "description": desc,
                         "debit": d_final,
                         "credit": c_final,
-                        "balance": running_bank_balance,
+                        "balance": 15000000 + c_final - d_final,
                     }
                 )
 
@@ -504,6 +524,7 @@ class SyntheticDataGenerator:
             "seed": self.config.seed,
             "config_hash": self.config.config_hash(),
             "generator_version": self.config.generator_version,
+            "as_of": as_of_str,
             "counts": counts,
         }
 
@@ -515,7 +536,7 @@ class SyntheticDataGenerator:
             "fee_includes_tax": self.config.fee_includes_tax,
         }
 
-        return {
+        data = {
             "recon_items": recon_items,
             "payments": payments,
             "orders_ledger": orders_ledger,
@@ -523,7 +544,45 @@ class SyntheticDataGenerator:
             "bank_statement": bank_statements,
             "rate_card": rate_card,
             "manifest": manifest,
+            "labels": [],
         }
+
+        # Apply error injection and generate labels if enabled
+        if self.config.inject_errors:
+            labels = inject_errors_and_labels(
+                data=data,
+                config=self.config,
+                seen_ids=self.seen_ids,
+                seen_utrs=self.seen_utrs,
+                working_days=working_days,
+                as_of_date=as_of_date,
+            )
+            data["labels"] = labels
+
+            # Update manifest counts with error class counts and hard negative counts
+            error_class_counts: dict[str, int] = {}
+            hard_negative_counts: dict[str, int] = {}
+            for lbl in labels:
+                if lbl["error_class"]:
+                    error_class_counts[lbl["error_class"]] = (
+                        error_class_counts.get(lbl["error_class"], 0) + 1
+                    )
+                if lbl["hard_negative_type"]:
+                    hard_negative_counts[lbl["hard_negative_type"]] = (
+                        hard_negative_counts.get(lbl["hard_negative_type"], 0) + 1
+                    )
+
+            manifest["counts"]["error_class_counts"] = error_class_counts
+            manifest["counts"]["hard_negative_counts"] = hard_negative_counts
+
+            # Re-sort affected collections to maintain invariant order
+            payments.sort(key=lambda x: x["created_at"])
+            orders_ledger.sort(key=lambda x: x["created_at"])
+            settlements.sort(key=lambda x: (x["settled_at"], x["settlement_id"]))
+            recon_items.sort(key=lambda x: (x["settled_at"], x["created_at"], x["entity_id"]))
+            bank_statements.sort(key=lambda x: (x["date"], x["statement_id"]))
+
+        return data
 
     def write_to_directory(self, out_dir: str) -> dict[str, str]:
         """Generate and save all dataset files to specified directory."""
@@ -584,5 +643,12 @@ class SyntheticDataGenerator:
             json.dump(data["manifest"], f, indent=2)
         paths["manifest"] = manifest_path
 
-        return paths
+        # 8. labels.jsonl (if generated)
+        if data.get("labels"):
+            labels_path = os.path.join(out_dir, "labels.jsonl")
+            with open(labels_path, "w", encoding="utf-8") as f:
+                for item in data["labels"]:
+                    f.write(json.dumps(item, separators=(",", ":")) + "\n")
+            paths["labels"] = labels_path
 
+        return paths
