@@ -35,7 +35,7 @@ class SynthConfig:
     partial_refund_pct: int = 30  # 30% partial refunds
     payment_settlement_lag_days: int = 2  # C+2 working days
     refund_settlement_lag_days: int = 1  # R+1 working day
-    adjustment_prob_bps: int = 320  # ~3.2% of batches (yielding >= 30 in full profile)
+    adjustment_prob_bps: int = 400  # ~4.0% of batches (yielding >= 30 in full profile) [ASSUMED]
     unrelated_bank_rows_per_merchant: int = 30
     lognormal_mu: float = 9.5
     lognormal_sigma: float = 1.0

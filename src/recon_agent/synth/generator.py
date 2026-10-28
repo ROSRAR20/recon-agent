@@ -58,6 +58,43 @@ def get_working_days(start_date_str: str, count: int) -> list[datetime.date]:
     return days
 
 
+def finalize_bank_statements(data: dict[str, Any]) -> None:
+    """Sort each merchant's bank rows by (date, original sequence), reassign statement_ids,
+    and recompute continuous running balances per merchant.
+    """
+    initial_balances = data.get("_initial_balances", {})
+    bank_statements = data.get("bank_statement", [])
+    if not bank_statements:
+        return
+
+    # Sort all bank rows by (date, merchant_id, _orig_seq)
+    bank_statements.sort(key=lambda r: (r["date"], r["merchant_id"], r.get("_orig_seq", 0)))
+
+    stmt_map: dict[str, str] = {}
+    merchant_balances = dict(initial_balances)
+
+    for idx, r in enumerate(bank_statements):
+        old_id = r["statement_id"]
+        new_id = f"stmt_{idx + 1:07d}"
+        r["statement_id"] = new_id
+        stmt_map[old_id] = new_id
+
+        m_id = r["merchant_id"]
+        merchant_balances[m_id] = merchant_balances.get(m_id, 50000000) + r["credit"] - r["debit"]
+        r["balance"] = merchant_balances[m_id]
+        r.pop("_orig_seq", None)
+
+    # Remap statement IDs in labels
+    for lbl in data.get("labels", []):
+        lbl["entity_ids"] = [stmt_map.get(eid, eid) for eid in lbl["entity_ids"]]
+
+    # Remap statement IDs in bank_narration_variants side table
+    if "bank_narration_variants" in data:
+        data["bank_narration_variants"] = {
+            stmt_map.get(k, k): v for k, v in data["bank_narration_variants"].items()
+        }
+
+
 class SyntheticDataGenerator:
     """Clean deterministic generator for recon-agent synthetic datasets."""
 
@@ -83,6 +120,8 @@ class SyntheticDataGenerator:
         bank_statements: list[dict[str, Any]] = []
 
         total_adjustment_count = 0
+        initial_balances = {m_id: 50000000 + m_idx * 5000000 for m_idx, m_id in enumerate(merchants)}
+        bank_narration_variants: dict[str, str] = {}
 
         # Method choices and weights
         methods = ["card", "upi", "netbanking"]
@@ -420,8 +459,10 @@ class SyntheticDataGenerator:
                 # Narration mix: 70% clean UTR, 20% noisy UTR, 10% no UTR
                 narration_roll = self.rng.random()
                 if narration_roll < 0.70:
+                    variant = "clean"
                     narration = f"CMS/RAZORPAY/{settlement_utr}/SETTLEMENT"
                 elif narration_roll < 0.90:
+                    variant = "noisy"
                     noise_choice = self.rng.choice(["lower", "spaces", "trunc"])
                     if noise_choice == "lower":
                         narration = f"cms/razorpay/{settlement_utr.lower()}/settlement"
@@ -430,10 +471,11 @@ class SyntheticDataGenerator:
                     else:
                         narration = f"RAZORPAY CMS {settlement_utr[:12]}"
                 else:
+                    variant = "no_utr"
                     narration = "RAZORPAY PAYMENT SERVICES PRIVATE LIMITED CR"
 
-                stmt_id = f"stmt_{len(bank_statements) + 1:07d}"
-                running_bank_balance += settlement_net
+                stmt_id = f"stmt_gen_{len(bank_statements) + 1:07d}"
+                bank_narration_variants[stmt_id] = variant
                 bank_statements.append(
                     {
                         "statement_id": stmt_id,
@@ -442,7 +484,8 @@ class SyntheticDataGenerator:
                         "description": narration,
                         "debit": 0,
                         "credit": settlement_net,
-                        "balance": running_bank_balance,
+                        "balance": 0,
+                        "_orig_seq": len(bank_statements),
                     }
                 )
 
@@ -483,7 +526,8 @@ class SyntheticDataGenerator:
                     d_final = 0
                     c_final = max(1000, c_amt + noise_amt)
 
-                stmt_id = f"stmt_{len(bank_statements) + 1:07d}"
+                stmt_id = f"stmt_gen_{len(bank_statements) + 1:07d}"
+                bank_narration_variants[stmt_id] = "unrelated"
                 bank_statements.append(
                     {
                         "statement_id": stmt_id,
@@ -492,7 +536,8 @@ class SyntheticDataGenerator:
                         "description": desc,
                         "debit": d_final,
                         "credit": c_final,
-                        "balance": 15000000 + c_final - d_final,
+                        "balance": 0,
+                        "_orig_seq": len(bank_statements),
                     }
                 )
 
@@ -501,7 +546,6 @@ class SyntheticDataGenerator:
         orders_ledger.sort(key=lambda x: x["created_at"])
         settlements.sort(key=lambda x: (x["settled_at"], x["settlement_id"]))
         recon_items.sort(key=lambda x: (x["settled_at"], x["created_at"], x["entity_id"]))
-        bank_statements.sort(key=lambda x: (x["date"], x["statement_id"]))
 
         # Build manifest
         captured_count = sum(1 for p in payments if p["status"] == "captured")
@@ -545,6 +589,8 @@ class SyntheticDataGenerator:
             "rate_card": rate_card,
             "manifest": manifest,
             "labels": [],
+            "_initial_balances": initial_balances,
+            "bank_narration_variants": bank_narration_variants,
         }
 
         # Apply error injection and generate labels if enabled
@@ -580,7 +626,8 @@ class SyntheticDataGenerator:
             orders_ledger.sort(key=lambda x: x["created_at"])
             settlements.sort(key=lambda x: (x["settled_at"], x["settlement_id"]))
             recon_items.sort(key=lambda x: (x["settled_at"], x["created_at"], x["entity_id"]))
-            bank_statements.sort(key=lambda x: (x["date"], x["statement_id"]))
+        else:
+            finalize_bank_statements(data)
 
         return data
 

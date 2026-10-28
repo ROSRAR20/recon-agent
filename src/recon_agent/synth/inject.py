@@ -5,7 +5,7 @@ import random
 from typing import Any
 
 from src.recon_agent.synth.config import SynthConfig
-from src.recon_agent.synth.generator import IST_TZ, _gen_base62_id, _gen_utr
+from src.recon_agent.synth.generator import IST_TZ, _gen_base62_id, _gen_utr, finalize_bank_statements
 from src.recon_agent.synth.math_utils import mul_div_round
 
 
@@ -19,10 +19,19 @@ def inject_errors_and_labels(
 ) -> list[dict[str, Any]]:
     """Inject controlled errors and generate comprehensive ground-truth evaluation labels.
 
-    Uses a dedicated, isolated RNG stream seeded distinctly from clean generation
-    so enabling/disabling injection does not perturb clean data structure.
+    Uses dedicated per-class RNG streams: random.Random(seed * 1000 + class_index).
     """
-    rng = random.Random(config.seed + 10000)
+    # Per-class RNG streams
+    rng_dup = random.Random(config.seed * 1000 + 1)
+    rng_mis = random.Random(config.seed * 1000 + 2)
+    rng_fee = random.Random(config.seed * 1000 + 3)
+    rng_ref = random.Random(config.seed * 1000 + 4)
+    rng_cut = random.Random(config.seed * 1000 + 5)
+    rng_sho = random.Random(config.seed * 1000 + 6)
+    rng_orp = random.Random(config.seed * 1000 + 7)
+    rng_rnd = random.Random(config.seed * 1000 + 8)
+    rng_lat = random.Random(config.seed * 1000 + 9)
+    rng_ret = random.Random(config.seed * 1000 + 10)
 
     used_entities: set[str] = set()
     used_batches: set[str] = set()
@@ -86,7 +95,7 @@ def inject_errors_and_labels(
     # Error Injection Classes (7 classes)
     # =========================================================================
 
-    # 1. DUPLICATE_PAYMENT (1.0% of captured orders)
+    # 1. DUPLICATE_PAYMENT (1.0% of captured orders, random 1-300s gap)
     captured_orders = [
         o
         for o in data["orders_ledger"]
@@ -94,7 +103,7 @@ def inject_errors_and_labels(
         and o["order_id"] not in used_entities
         and o["payment_id"] not in used_entities
     ]
-    rng.shuffle(captured_orders)
+    rng_dup.shuffle(captured_orders)
     dup_count = int(round(len(captured_orders) * get_rate("DUPLICATE_PAYMENT", 0.010)))
 
     for order in captured_orders[:dup_count]:
@@ -109,11 +118,12 @@ def inject_errors_and_labels(
         if not bk_row:
             continue
 
-        p2_id = _gen_base62_id(rng, "pay_", seen_ids)
+        p2_id = _gen_base62_id(rng_dup, "pay_", seen_ids)
         p2 = dict(p1)
         p2["payment_id"] = p2_id
-        p2["created_at"] = p1["created_at"] + 1
-        p2["captured_at"] = (p1["captured_at"] or p1["created_at"]) + 1
+        gap = rng_dup.randint(1, 300)
+        p2["created_at"] = p1["created_at"] + gap
+        p2["captured_at"] = (p1["captured_at"] or p1["created_at"]) + gap
         data["payments"].append(p2)
         payments_by_id[p2_id] = p2
 
@@ -155,7 +165,7 @@ def inject_errors_and_labels(
         if settle_date + datetime.timedelta(days=7) <= as_of_date:
             eligible_missing.append((p, r, stl))
 
-    rng.shuffle(eligible_missing)
+    rng_mis.shuffle(eligible_missing)
     missing_count = int(round(len(eligible_missing) * get_rate("MISSING_SETTLEMENT", 0.008)))
 
     for p, r, stl in eligible_missing[:missing_count]:
@@ -191,7 +201,7 @@ def inject_errors_and_labels(
         and r["entity_id"] not in used_entities
         and r["settlement_id"] not in used_batches
     ]
-    rng.shuffle(eligible_feetax)
+    rng_fee.shuffle(eligible_feetax)
     feetax_count = int(round(len(eligible_feetax) * get_rate("FEE_TAX_MISMATCH", 0.012)))
 
     for idx, r in enumerate(eligible_feetax[:feetax_count]):
@@ -203,7 +213,7 @@ def inject_errors_and_labels(
         is_fee_off = (idx % 10) < 6  # 60% fee_off, 40% tax_off
         if is_fee_off:
             # Fee raised by 5-25%, at least +10 paise vs rate card
-            delta_fee = max(10, mul_div_round(r["fee"], rng.randint(500, 2500), 10000))
+            delta_fee = max(10, mul_div_round(r["fee"], rng_fee.randint(500, 2500), 10000))
             if stl["amount"] - delta_fee <= 0 or r["credit"] - delta_fee <= 0:
                 continue
             r["fee"] += delta_fee
@@ -213,7 +223,7 @@ def inject_errors_and_labels(
             bk_row["balance"] -= delta_fee
         else:
             # Tax differs from expected tax by at least 5 paise
-            delta_tax = max(5, mul_div_round(max(1, r["tax"]), rng.randint(1000, 3000), 10000))
+            delta_tax = max(5, mul_div_round(max(1, r["tax"]), rng_fee.randint(1000, 3000), 10000))
             if stl["amount"] - delta_tax <= 0 or r["credit"] - delta_tax <= 0:
                 continue
             r["tax"] += delta_tax
@@ -236,7 +246,7 @@ def inject_errors_and_labels(
             expected_action="flag_fee_tax_mismatch",
         )
 
-    # 4. PARTIAL_REFUND_MISMATCH (15% of refund items)
+    # 4. PARTIAL_REFUND_MISMATCH (15% of refund items; random sign; resulting refund in [1, payment_amount]; |diff| >= 100)
     eligible_refunds = [
         r
         for r in data["recon_items"]
@@ -244,26 +254,50 @@ def inject_errors_and_labels(
         and r["entity_id"] not in used_entities
         and r["settlement_id"] not in used_batches
     ]
-    rng.shuffle(eligible_refunds)
+    rng_ref.shuffle(eligible_refunds)
     refund_mismatch_count = int(round(len(eligible_refunds) * get_rate("PARTIAL_REFUND_MISMATCH", 0.150)))
 
     for idx, r in enumerate(eligible_refunds[:refund_mismatch_count]):
         stl = settlements_by_id.get(r["settlement_id"])
         bk_row = bank_rows_by_settlement.get(r["settlement_id"])
         order = orders_by_id.get(r["order_id"])
-        if not stl or not bk_row or not order:
+        p_cap = payments_by_id.get(r["payment_id"])
+        if not stl or not bk_row or not order or not p_cap:
             continue
 
         is_debit_diff = (idx % 10) < 8  # 80% debit differs by >= 100 paise; 20% missing in ledger
         if is_debit_diff:
-            diff_paise = max(100, mul_div_round(r["amount"], rng.randint(15, 35), 100))
-            if stl["amount"] - diff_paise <= 0:
+            p_amt = p_cap["amount"]
+            r_amt = r["amount"]
+
+            available_signs: list[int] = []
+            if p_amt - r_amt >= 100:
+                available_signs.append(+1)
+            if r_amt - 1 >= 100:
+                available_signs.append(-1)
+
+            if not available_signs:
                 continue
-            r["amount"] += diff_paise
-            r["debit"] += diff_paise
-            stl["amount"] -= diff_paise
-            bk_row["credit"] -= diff_paise
-            bk_row["balance"] -= diff_paise
+
+            sign = rng_ref.choice(available_signs)
+            if sign == +1:
+                max_diff = p_amt - r_amt
+                diff_paise = rng_ref.randint(100, max(100, min(max_diff, mul_div_round(r_amt, 35, 100))))
+                r_new = r_amt + diff_paise
+            else:
+                max_diff = r_amt - 1
+                diff_paise = rng_ref.randint(100, max(100, min(max_diff, mul_div_round(r_amt, 35, 100))))
+                r_new = r_amt - diff_paise
+
+            delta_debit = r_new - r_amt
+            if stl["amount"] - delta_debit <= 0:
+                continue
+
+            r["amount"] = r_new
+            r["debit"] = r_new
+            stl["amount"] -= delta_debit
+            bk_row["credit"] -= delta_debit
+            bk_row["balance"] -= delta_debit
         else:
             # Refund exists in recon/settlement but has no ledger entry
             order["refund_id"] = ""
@@ -298,7 +332,7 @@ def inject_errors_and_labels(
             continue
         eligible_cutoff.append((p, r, order, tx_dt))
 
-    rng.shuffle(eligible_cutoff)
+    rng_cut.shuffle(eligible_cutoff)
     cutoff_count = int(round(len(eligible_cutoff) * get_rate("CUTOFF_DRIFT", 0.015)))
 
     for p, r, order, tx_dt in eligible_cutoff[:cutoff_count]:
@@ -331,8 +365,8 @@ def inject_errors_and_labels(
             continue
 
         # Modify timing: created 23:40-23:59 on day D, captured 00:05-00:35 on D+1
-        time_D = datetime.datetime.combine(day_D, datetime.time(23, rng.randint(40, 59), rng.randint(0, 59)), tzinfo=IST_TZ)
-        time_D1 = datetime.datetime.combine(day_D1, datetime.time(0, rng.randint(5, 35), rng.randint(0, 59)), tzinfo=IST_TZ)
+        time_D = datetime.datetime.combine(day_D, datetime.time(23, rng_cut.randint(40, 59), rng_cut.randint(0, 59)), tzinfo=IST_TZ)
+        time_D1 = datetime.datetime.combine(day_D1, datetime.time(0, rng_cut.randint(5, 35), rng_cut.randint(0, 59)), tzinfo=IST_TZ)
 
         order["booked_date"] = day_D.isoformat()
         order["created_at"] = int(time_D.timestamp())
@@ -369,7 +403,7 @@ def inject_errors_and_labels(
     eligible_short_batches = [
         s for s in data["settlements"] if s["settlement_id"] not in used_batches
     ]
-    rng.shuffle(eligible_short_batches)
+    rng_sho.shuffle(eligible_short_batches)
     short_count = int(round(len(data["settlements"]) * get_rate("SHORT_BANK_CREDIT", 0.060)))
 
     for stl in eligible_short_batches[:short_count]:
@@ -377,7 +411,7 @@ def inject_errors_and_labels(
         if not bk_row or stl["amount"] <= 200:
             continue
 
-        short_pct = rng.randint(100, 500)  # 1.00% to 5.00%
+        short_pct = rng_sho.randint(100, 500)  # 1.00% to 5.00%
         short_paise = max(100, mul_div_round(stl["amount"], short_pct, 10000))
         bk_row["credit"] = stl["amount"] - short_paise
         bk_row["balance"] -= short_paise
@@ -394,18 +428,37 @@ def inject_errors_and_labels(
             expected_action="flag_short_bank_credit",
         )
 
-    # 7. ORPHAN_BANK_CREDIT (extra rows = 6% of the number of batches)
+    # 7. ORPHAN_BANK_CREDIT (extra rows = 6% of the number of batches; 70/20/10 narration mix)
     merchants = sorted(list({s["merchant_id"] for s in data["settlements"]}))
     orphan_count = int(round(len(data["settlements"]) * get_rate("ORPHAN_BANK_CREDIT", 0.060)))
 
     for _ in range(orphan_count):
-        fake_utr = _gen_utr(rng, seen_utrs)
-        m_id = rng.choice(merchants)
-        rnd_date = rng.choice(working_days)
-        orphan_amt = rng.randint(50000, 500000)
-        stmt_id = f"stmt_{len(data['bank_statement']) + 1:07d}"
+        fake_utr = _gen_utr(rng_orp, seen_utrs)
+        m_id = rng_orp.choice(merchants)
+        rnd_date = rng_orp.choice(working_days)
+        orphan_amt = rng_orp.randint(50000, 500000)
+        stmt_id = f"stmt_orp_{len(data['bank_statement']) + 1:07d}"
 
-        narration = f"CMS/RAZORPAY/{fake_utr}/SETTLEMENT"
+        orp_roll = rng_orp.random()
+        if orp_roll < 0.70:
+            orp_variant = "clean"
+            narration = f"CMS/RAZORPAY/{fake_utr}/SETTLEMENT"
+        elif orp_roll < 0.90:
+            orp_variant = "noisy"
+            noise_choice = rng_orp.choice(["lower", "spaces", "trunc"])
+            if noise_choice == "lower":
+                narration = f"cms/razorpay/{fake_utr.lower()}/settlement"
+            elif noise_choice == "spaces":
+                narration = f"CMS / RAZORPAY / {fake_utr} / SETTLEMENT"
+            else:
+                narration = f"RAZORPAY CMS {fake_utr[:12]}"
+        else:
+            orp_variant = "no_utr"
+            narration = "RAZORPAY PAYMENT SERVICES PRIVATE LIMITED CR"
+
+        if "bank_narration_variants" in data:
+            data["bank_narration_variants"][stmt_id] = orp_variant
+
         data["bank_statement"].append(
             {
                 "statement_id": stmt_id,
@@ -414,7 +467,8 @@ def inject_errors_and_labels(
                 "description": narration,
                 "debit": 0,
                 "credit": orphan_amt,
-                "balance": 15000000 + orphan_amt,
+                "balance": 0,
+                "_orig_seq": len(data["bank_statement"]),
             }
         )
 
@@ -428,10 +482,10 @@ def inject_errors_and_labels(
         )
 
     # =========================================================================
-    # Hard Negatives (7 types)
+    # Hard Negatives (9 types)
     # =========================================================================
 
-    # 1. ROUNDING (3% of card/netbanking items)
+    # 1. ROUNDING (3% of card/netbanking items; <= 2 paise)
     eligible_rounding = [
         r
         for r in data["recon_items"]
@@ -440,7 +494,7 @@ def inject_errors_and_labels(
         and r["entity_id"] not in used_entities
         and r["settlement_id"] not in used_batches
     ]
-    rng.shuffle(eligible_rounding)
+    rng_rnd.shuffle(eligible_rounding)
     rounding_count = int(round(len(eligible_rounding) * get_rate("ROUNDING", 0.030)))
 
     for r in eligible_rounding[:rounding_count]:
@@ -449,7 +503,7 @@ def inject_errors_and_labels(
         if not stl or not bk_row:
             continue
 
-        delta = rng.choice([-2, -1, 1, 2])
+        delta = rng_rnd.choice([-2, -1, 1, 2])
         if stl["amount"] - delta <= 0 or r["credit"] - delta <= 0:
             continue
 
@@ -482,11 +536,11 @@ def inject_errors_and_labels(
                 expected_action="benign_ignore",
             )
 
-    # 3. LATE_SETTLEMENT (batches shifted by 1-2 working days, remaining consistent)
+    # 3. LATE_SETTLEMENT (guaranteed actual 1-2 working-day shift; skip if cannot apply)
     eligible_late_batches = [
         s for s in data["settlements"] if s["settlement_id"] not in used_batches
     ]
-    rng.shuffle(eligible_late_batches)
+    rng_lat.shuffle(eligible_late_batches)
     late_count = int(round(len(data["settlements"]) * get_rate("LATE_SETTLEMENT", 0.035)))
 
     for stl in eligible_late_batches[:late_count]:
@@ -494,14 +548,19 @@ def inject_errors_and_labels(
         if not bk_row:
             continue
 
-        shift_days = rng.choice([1, 2])
         old_dt = datetime.datetime.fromtimestamp(stl["settled_at"], tz=IST_TZ).date()
         try:
             old_idx = working_days.index(old_dt)
-            new_idx = min(old_idx + shift_days, len(working_days) - 1)
-            new_date = working_days[new_idx]
         except ValueError:
-            new_date = old_dt + datetime.timedelta(days=shift_days)
+            continue
+
+        shift_days = rng_lat.choice([1, 2])
+        new_idx = old_idx + shift_days
+        if new_idx >= len(working_days):
+            continue
+        new_date = working_days[new_idx]
+        if new_date > as_of_date:
+            continue
 
         new_settle_dt = datetime.datetime.combine(new_date, datetime.time(18, 0, 0), tzinfo=IST_TZ)
         new_timestamp = int(new_settle_dt.timestamp())
@@ -525,111 +584,57 @@ def inject_errors_and_labels(
             expected_action="benign_ignore",
         )
 
-    # 4. RETRY_AFTER_FAIL (failed attempt followed by success for same order)
-    failed_payments = [p for p in data["payments"] if p["status"] == "failed"]
-    captured_by_merchant: dict[str, list[dict[str, Any]]] = {}
-    for p in data["payments"]:
-        if p["status"] == "captured":
-            captured_by_merchant.setdefault(p["merchant_id"], []).append(p)
+    # 4. RETRY_AFTER_FAIL (same order, equal amount, created 30-600s before captured payment, max 1 failed per captured order)
+    captured_orders_for_retry = [
+        o for o in data["orders_ledger"]
+        if o["status"] in ("captured", "refunded")
+        and o["order_id"] not in used_entities
+    ]
+    rng_ret.shuffle(captured_orders_for_retry)
+    retry_count = int(round(len(captured_orders_for_retry) * get_rate("RETRY_AFTER_FAIL", 0.030)))
 
-    rng.shuffle(failed_payments)
-    retry_count = len(failed_payments) // 2
+    retry_failed_pids: set[str] = set()
+    for order in captured_orders_for_retry[:retry_count]:
+        p_cap = payments_by_id[order["payment_id"]]
+        fail_id = _gen_base62_id(rng_ret, "pay_", seen_ids)
+        gap = rng_ret.randint(30, 600)
 
-    for p_fail in failed_payments[:retry_count]:
-        c_list = captured_by_merchant.get(p_fail["merchant_id"], [])
-        if not c_list:
-            continue
-        target_captured = rng.choice(c_list)
-        p_fail["order_id"] = target_captured["order_id"]
+        p_fail = {
+            "payment_id": fail_id,
+            "order_id": order["order_id"],
+            "merchant_id": order["merchant_id"],
+            "amount": order["expected_amount"],  # Exactly equals order expected amount (satisfies I4)
+            "currency": "INR",
+            "status": "failed",
+            "method": p_cap["method"],
+            "created_at": p_cap["created_at"] - gap,
+            "captured_at": None,
+            "error_code": "BAD_REQUEST_ERROR",
+            "error_description": "Payment authorization failed",
+        }
+        data["payments"].append(p_fail)
+        payments_by_id[fail_id] = p_fail
+        retry_failed_pids.add(fail_id)
 
         add_label(
-            merchant_id=p_fail["merchant_id"],
+            merchant_id=order["merchant_id"],
             error_class=None,
             hard_negative_type="RETRY_AFTER_FAIL",
-            entity_ids=[p_fail["payment_id"], target_captured["payment_id"], target_captured["order_id"]],
+            entity_ids=[fail_id, p_cap["payment_id"], order["order_id"]],
             settlement_id=None,
             expected_action="benign_ignore",
         )
 
-    # 5. MULTI_MERCHANT_SAME_UTR (bank-side batching of payouts across merchants under same UTR)
-    # Group available settlement batches by date
-    batches_by_date: dict[str, list[dict[str, Any]]] = {}
-    for s in data["settlements"]:
-        if s["settlement_id"] not in used_batches:
-            dt_str = datetime.datetime.fromtimestamp(s["settled_at"], tz=IST_TZ).date().isoformat()
-            batches_by_date.setdefault(dt_str, []).append(s)
-
-    # Collect distinct merchant pairs on same date
-    eligible_multi_pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    for dt_str, b_list in batches_by_date.items():
-        if len(b_list) >= 2:
-            for i in range(len(b_list) - 1):
-                s1 = b_list[i]
-                s2 = b_list[i + 1]
-                if s1["merchant_id"] != s2["merchant_id"]:
-                    eligible_multi_pairs.append((s1, s2))
-
-    rng.shuffle(eligible_multi_pairs)
-    # Target at least 25 pairs (= 50 labels) in full profile, or proportional in small profile
-    target_multi_pairs = min(
-        len(eligible_multi_pairs),
-        max(5, int(round(25 * get_rate("MULTI_MERCHANT_SAME_UTR", 1.0))))
-    )
-
-    for s1, s2 in eligible_multi_pairs[:target_multi_pairs]:
-        if s1["settlement_id"] in used_batches or s2["settlement_id"] in used_batches:
-            continue
-        bk1 = bank_rows_by_settlement.get(s1["settlement_id"])
-        bk2 = bank_rows_by_settlement.get(s2["settlement_id"])
-        if not bk1 or not bk2:
-            continue
-
-        shared_utr = s1["utr"]
-        s2["utr"] = shared_utr
-
-        # Update recon items for s2
-        for r in data["recon_items"]:
-            if r["settlement_id"] == s2["settlement_id"]:
-                r["settlement_utr"] = shared_utr
-
-        # Update bank narration for s2
-        bk2["description"] = f"CMS/RAZORPAY/{shared_utr}/SETTLEMENT"
-
-        used_batches.update([s1["settlement_id"], s2["settlement_id"]])
-
-        # Label both merchants' settlements as MULTI_MERCHANT_SAME_UTR
-        add_label(
-            merchant_id=s1["merchant_id"],
-            error_class=None,
-            hard_negative_type="MULTI_MERCHANT_SAME_UTR",
-            entity_ids=[s1["settlement_id"], s2["settlement_id"]],
-            settlement_id=s1["settlement_id"],
-            expected_action="benign_ignore",
-        )
-        add_label(
-            merchant_id=s2["merchant_id"],
-            error_class=None,
-            hard_negative_type="MULTI_MERCHANT_SAME_UTR",
-            entity_ids=[s2["settlement_id"], s1["settlement_id"]],
-            settlement_id=s2["settlement_id"],
-            expected_action="benign_ignore",
-        )
-
-    # 6. NOISY_BANK_NARRATION (lowercase, trailing spaces, truncated UTR in bank narration)
+    # 5. NOISY_BANK_NARRATION & 6. NO_UTR_NARRATION (derived strictly from side table, no string sniffing)
+    variants = data.get("bank_narration_variants", {})
     for s in data["settlements"]:
         if s["settlement_id"] in used_batches:
             continue
         bk = bank_rows_by_settlement.get(s["settlement_id"])
         if not bk:
             continue
-        desc = bk["description"]
-        is_noisy = (
-            desc.startswith("cms/razorpay")
-            or " / " in desc
-            or (s["utr"][:12] in desc and s["utr"] not in desc)
-            or desc.endswith(" CR")
-        )
-        if is_noisy:
+        var = variants.get(bk["statement_id"])
+        if var == "noisy":
             add_label(
                 merchant_id=s["merchant_id"],
                 error_class=None,
@@ -638,14 +643,19 @@ def inject_errors_and_labels(
                 settlement_id=s["settlement_id"],
                 expected_action="benign_ignore",
             )
+        elif var == "no_utr":
+            add_label(
+                merchant_id=s["merchant_id"],
+                error_class=None,
+                hard_negative_type="NO_UTR_NARRATION",
+                entity_ids=[bk["statement_id"]],
+                settlement_id=s["settlement_id"],
+                expected_action="benign_ignore",
+            )
 
-    # 7. UNRELATED_BANK_CREDIT (other-gateway payouts, payroll, interest present in statement)
+    # 7. UNRELATED_BANK_CREDIT (external credits recorded with 'unrelated' variant)
     for b in data["bank_statement"]:
-        if (
-            b["credit"] > 0
-            and "RAZORPAY" not in b["description"]
-            and "razorpay" not in b["description"].lower()
-        ):
+        if b["credit"] > 0 and variants.get(b["statement_id"]) == "unrelated":
             add_label(
                 merchant_id=b["merchant_id"],
                 error_class=None,
@@ -654,5 +664,35 @@ def inject_errors_and_labels(
                 settlement_id=None,
                 expected_action="benign_ignore",
             )
+
+    # 8. FAILED_PAYMENT (independent failed authorization attempts not part of retry)
+    for p in data["payments"]:
+        if p["status"] == "failed" and p["payment_id"] not in retry_failed_pids:
+            add_label(
+                merchant_id=p["merchant_id"],
+                error_class=None,
+                hard_negative_type="FAILED_PAYMENT",
+                entity_ids=[p["payment_id"]],
+                settlement_id=None,
+                expected_action="benign_ignore",
+            )
+
+    # 9. PARTIAL_REFUND_CONSISTENT (legitimate partial refund matching ledger)
+    for r in data["recon_items"]:
+        if r["type"] == "refund" and r["entity_id"] not in used_entities:
+            add_label(
+                merchant_id=r["merchant_id"],
+                error_class=None,
+                hard_negative_type="PARTIAL_REFUND_CONSISTENT",
+                entity_ids=[r["entity_id"], r["payment_id"]],
+                settlement_id=r["settlement_id"],
+                expected_action="benign_ignore",
+            )
+
+    # =========================================================================
+    # Finalize Bank Statements: Sort, Reassign IDs, Continuous Balances
+    # =========================================================================
+    data["labels"] = labels
+    finalize_bank_statements(data)
 
     return labels

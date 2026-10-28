@@ -373,9 +373,11 @@ REQUIRED_HARD_NEGATIVES = [
     "LEGIT_ADJUSTMENT",
     "LATE_SETTLEMENT",
     "RETRY_AFTER_FAIL",
-    "MULTI_MERCHANT_SAME_UTR",
     "NOISY_BANK_NARRATION",
+    "NO_UTR_NARRATION",
     "UNRELATED_BANK_CREDIT",
+    "FAILED_PAYMENT",
+    "PARTIAL_REFUND_CONSISTENT",
 ]
 
 
@@ -446,6 +448,7 @@ def test_injected_error_classes_spot_checks() -> None:
     p2 = payments_map[p2_id]
     assert p1["order_id"] == p2["order_id"] == ord_id
     assert p1["amount"] == p2["amount"]
+    assert 1 <= p2["created_at"] - p1["created_at"] <= 300
     assert p1_id in recon_map and p2_id in recon_map
     assert recon_map[p1_id]["settlement_id"] == recon_map[p2_id]["settlement_id"]
     assert dup_case["expected_action"] == "flag_duplicate_payment"
@@ -475,7 +478,9 @@ def test_injected_error_classes_spot_checks() -> None:
     rfnd_id = refund_case["entity_ids"][0]
     rfnd_recon = recon_map[rfnd_id]
     ord_obj = orders_map[rfnd_recon["order_id"]]
-    assert (rfnd_recon["debit"] != ord_obj["refund_amount"]) or (ord_obj["refund_id"] == "")
+    p_orig = payments_map[rfnd_recon["payment_id"]]
+    assert 1 <= rfnd_recon["amount"] <= p_orig["amount"]
+    assert (abs(rfnd_recon["debit"] - ord_obj["refund_amount"]) >= 100) or (ord_obj["refund_id"] == "")
     assert refund_case["expected_action"] == "flag_partial_refund_mismatch"
 
     # 5. CUTOFF_DRIFT spot-check
@@ -610,4 +615,89 @@ def test_labels_filename_boundary() -> None:
     assert not violations, (
         f"Pipeline code outside synth/ references 'labels.jsonl': {violations}"
     )
+
+
+def test_statement_ids_strictly_increase_per_merchant() -> None:
+    """Statement IDs strictly increase with (date, row order) per merchant."""
+    for inject_errors in [False, True]:
+        config = create_config("small", "dev", seed=42, inject_errors=inject_errors)
+        data = SyntheticDataGenerator(config).generate()
+        rows_by_merchant: dict[str, list[dict[str, Any]]] = {}
+        for r in data["bank_statement"]:
+            rows_by_merchant.setdefault(r["merchant_id"], []).append(r)
+
+        for m_id, rows in rows_by_merchant.items():
+            assert len(rows) > 0, f"No bank statement rows for {m_id}"
+            for i in range(1, len(rows)):
+                assert rows[i]["date"] >= rows[i - 1]["date"], f"Date decreased for {m_id} at row {i}"
+                curr_id = int(rows[i]["statement_id"].split("_")[1])
+                prev_id = int(rows[i - 1]["statement_id"].split("_")[1])
+                assert curr_id > prev_id, (
+                    f"Statement ID did not strictly increase for {m_id}: "
+                    f"{rows[i - 1]['statement_id']} -> {rows[i]['statement_id']}"
+                )
+
+
+def test_bank_balances_continuous() -> None:
+    """Final balances are continuous: balance[k] == balance[k-1] + credit[k] - debit[k]."""
+    for inject_errors in [False, True]:
+        config = create_config("small", "dev", seed=42, inject_errors=inject_errors)
+        data = SyntheticDataGenerator(config).generate()
+        rows_by_merchant: dict[str, list[dict[str, Any]]] = {}
+        for r in data["bank_statement"]:
+            rows_by_merchant.setdefault(r["merchant_id"], []).append(r)
+
+        for m_id, rows in rows_by_merchant.items():
+            for i in range(1, len(rows)):
+                expected = rows[i - 1]["balance"] + rows[i]["credit"] - rows[i]["debit"]
+                assert rows[i]["balance"] == expected, (
+                    f"Discontinuous bank balance for {m_id} at row {i}: "
+                    f"expected {expected}, got {rows[i]['balance']}"
+                )
+
+
+def test_failed_payments_satisfy_i4() -> None:
+    """Every failed payment satisfies I4: p['amount'] == order['expected_amount']."""
+    for inject_errors in [False, True]:
+        config = create_config("small", "dev", seed=42, inject_errors=inject_errors)
+        data = SyntheticDataGenerator(config).generate()
+        orders_map = {o["order_id"]: o for o in data["orders_ledger"]}
+        failed_payments = [p for p in data["payments"] if p["status"] == "failed"]
+        assert len(failed_payments) > 0
+        for p in failed_payments:
+            order = orders_map[p["order_id"]]
+            assert p["amount"] == order["expected_amount"], (
+                f"Failed payment amount mismatch for {p['payment_id']}: "
+                f"payment {p['amount']} != order expected {order['expected_amount']}"
+            )
+
+
+def test_every_refund_le_payment_amount() -> None:
+    """Every refund in recon items is between 1 paise and the original payment amount."""
+    for inject_errors in [False, True]:
+        config = create_config("small", "dev", seed=42, inject_errors=inject_errors)
+        data = SyntheticDataGenerator(config).generate()
+        payments_map = {p["payment_id"]: p for p in data["payments"]}
+        refund_items = [r for r in data["recon_items"] if r["type"] == "refund"]
+        assert len(refund_items) > 0
+        for r in refund_items:
+            p = payments_map[r["payment_id"]]
+            assert 1 <= r["amount"] <= p["amount"], (
+                f"Refund amount {r['amount']} not in [1, {p['amount']}] for {r['entity_id']}"
+            )
+            assert 1 <= r["debit"] <= p["amount"], (
+                f"Refund debit {r['debit']} not in [1, {p['amount']}] for {r['entity_id']}"
+            )
+
+
+def test_utrs_unique_across_dataset() -> None:
+    """All settlement UTRs are strictly unique across the dataset."""
+    for inject_errors in [False, True]:
+        config = create_config("small", "dev", seed=42, inject_errors=inject_errors)
+        data = SyntheticDataGenerator(config).generate()
+        settlement_utrs = [s["utr"] for s in data["settlements"]]
+        assert len(settlement_utrs) == len(set(settlement_utrs)), "Settlement UTRs are not unique"
+        recon_utrs = [r["settlement_utr"] for r in data["recon_items"] if r["settlement_utr"]]
+        assert set(recon_utrs).issubset(set(settlement_utrs)), "Recon UTR not found in settlements"
+
 

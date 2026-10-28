@@ -54,7 +54,7 @@ All parameters, entity schemas, and behavioral distributions are explicitly tagg
 | `failed_rate_bps` | 600 bps (~6%) | `[ASSUMED]` | Transaction attempts failing authorization. |
 | `refund_rate_bps` | 400 bps (~4%) | `[ASSUMED]` | Captured transactions subsequently refunded. |
 | `refund_split` | 70% full / 30% partial | `[ASSUMED]` | Ratio of full vs. partial refund amounts. |
-| `adjustment_prob` | ~3.2% per batch | `[ASSUMED]` | Rare dispute or goodwill fee adjustment item (yielding >= 30 in full profile). |
+| `adjustment_prob` | ~4.0% per batch | `[ASSUMED]` | Rare dispute or goodwill fee adjustment item (yielding >= 30 in full profile). |
 | `bank_narration_mix` | 70% clean / 20% noisy / 10% no UTR | `[ASSUMED]` | Bank statement narration realistic format variation. |
 | `unrelated_bank_rows` | ~30 rows / merchant-month | `[ASSUMED]` | External bank statement noise (payroll, rent, utility). |
 
@@ -105,15 +105,20 @@ Fields strictly match the documented Razorpay recon endpoint `[DOCS: https://raz
 
 ## 5. Error Injection Classes `[ASSUMED ERROR MODELS]`
 
-Each entity receives at most one error class. Batch-level classes select only batches free of entity-level errors. All injections preserve settlement conservation (I2) except `SHORT_BANK_CREDIT`:
+### Anomaly Rules & Prevalence Principles
+- **One-Anomaly-Per-Batch Isolation Rule `[ASSUMED / DESIGN RULE]`:** Batch-level anomaly injections (`SHORT_BANK_CREDIT`, `LATE_SETTLEMENT`) exclusively select settlement batches containing zero entity-level anomalies (`DUPLICATE_PAYMENT`, `MISSING_SETTLEMENT`, `FEE_TAX_MISMATCH`, `PARTIAL_REFUND_MISMATCH`, `CUTOFF_DRIFT`). No settlement batch ever contains more than one anomaly class. Each entity participates in at most one error class.
+- **Rounding Noise vs. Fee Calculation Error Gap `[ASSUMED / DESIGN RULE]`:** Benign `ROUNDING` variance is strictly bounded to $\le 2$ paise ($\pm 1$ or $\pm 2$ paise). In contrast, true `FEE_TAX_MISMATCH` calculation errors are strictly bounded to $\ge 10$ paise (+5% to +25% markup, minimum $+10$ paise on fee, and minimum $5$ paise on tax). There is a guaranteed separation between benign rounding noise and true pricing errors.
+- **Benchmark Prevalence vs. Production Rates `[ASSUMED]`:** Injected anomaly rates (1.0% duplicates, 0.8% missing settlements, 1.2% fee/tax mismatches, 15% partial refund mismatches, 1.5% cutoff drifts, 6% short bank credits, 6% orphan credits) represent curated benchmark evaluation prevalence designed to generate statistically significant evaluation cohorts ($\ge 50$ cases per error class in the full benchmark profile), not real-world Razorpay production operational error rates.
 
-1. `DUPLICATE_PAYMENT` (1.0% of captured orders) `[ASSUMED]`: Second captured payment for same order and amount with new `payment_id`, settled in same batch; ledger unchanged. I2 preserved.
+All injections preserve settlement conservation (I2) except `SHORT_BANK_CREDIT`:
+
+1. `DUPLICATE_PAYMENT` (1.0% of captured orders) `[ASSUMED]`: Second captured payment for same order and amount with new `payment_id`, created with random 1-300s gap, settled in same batch; ledger unchanged. I2 preserved.
 2. `MISSING_SETTLEMENT` (0.8% of captured payments, eligible where settle date + 7 days $\le$ `as_of`) `[ASSUMED]`: Captured payment excluded from recon, settlement, and bank credit. I2 preserved.
 3. `FEE_TAX_MISMATCH` (1.2% of card/netbanking payments; never UPI) `[ASSUMED]`: 60% fee_off (+5% to +25%, $\ge +10$ paise vs rate card), 40% tax_off ($\ge 5$ paise). Credit follows the erroneous value so settlement and bank tie. I2 preserved.
-4. `PARTIAL_REFUND_MISMATCH` (15% of refund items) `[ASSUMED]`: 80% refund debit differs from ledger `refund_amount` by $\ge 100$ paise; 20% refund with no ledger entry. I2 preserved.
+4. `PARTIAL_REFUND_MISMATCH` (15% of refund items) `[ASSUMED]`: Random sign on difference; resulting refund amount between 1 paise and original payment amount; difference at least 100 paise (80% debit diff); 20% refund with no ledger entry. I2 preserved.
 5. `CUTOFF_DRIFT` (1.5% of payments, Mon–Thu orders) `[ASSUMED]`: Created 23:40–23:59 IST on day D, captured 00:05–00:35 on D+1; recon `created_at` on D+1, ledger `booked_date = D`; item moves to D+1 cohort. I2 preserved.
 6. `SHORT_BANK_CREDIT` (6% of eligible batches) `[ASSUMED]`: Bank credit = settlement net minus 1%–5% of net ($\ge 100$ paise); same UTR. I2 violated here only.
-7. `ORPHAN_BANK_CREDIT` (extra rows = 6% of batch count) `[ASSUMED]`: Razorpay-style bank credit matching no settlement.
+7. `ORPHAN_BANK_CREDIT` (extra rows = 6% of batch count) `[ASSUMED]`: Razorpay-style bank credit matching no settlement, following standard 70/20/10 narration mix (clean, noisy, no_utr).
 
 ---
 
@@ -121,13 +126,15 @@ Each entity receives at most one error class. Batch-level classes select only ba
 
 Hard negatives represent legitimate operational variations that must NOT be flagged as errors (labeled with `expected_action: "benign_ignore"`):
 
-1. `ROUNDING` (3% of card/netbanking items) `[ASSUMED]`: Fee or tax off by $\pm 1$ or $\pm 2$ paise due to rounding variance; credit adjusted so I2 holds.
-2. `LEGIT_ADJUSTMENT` `[ASSUMED]`: Fee dispute credits or manual adjustments that are documented in recon (`type == "adjustment"`).
-3. `LATE_SETTLEMENT` (2%–3% of eligible batches) `[ASSUMED]`: Captured Friday settles Tuesday (standard C+2) or delayed settlement batch shifted by 1–2 working days; I2 holds.
-4. `RETRY_AFTER_FAIL` (50% of failed attempts) `[ASSUMED]`: Failed attempt shares `order_id` with a subsequent captured payment.
-5. `MULTI_MERCHANT_SAME_UTR` `[ASSUMED]`: Rare bank-side batching of payouts across merchants under the same settlement UTR.
-6. `NOISY_BANK_NARRATION` `[ASSUMED]`: Lowercase, trailing spaces, or truncated UTR in bank narration.
+1. `ROUNDING` (3% of card/netbanking items) `[ASSUMED]`: Fee or tax off by $\pm 1$ or $\pm 2$ paise ($\le 2$ paise) due to rounding variance; credit adjusted so I2 holds.
+2. `LEGIT_ADJUSTMENT` `[ASSUMED]`: Fee dispute credits or manual adjustments documented in recon (`type == "adjustment"`).
+3. `LATE_SETTLEMENT` (2%–3% of eligible batches) `[ASSUMED]`: Guaranteed actual 1–2 working-day shift; batch date, bank credit, and recon items shift consistently; I2 holds.
+4. `RETRY_AFTER_FAIL` `[ASSUMED]`: Failed payment attempt for same order and same amount, created 30–600s before successful captured payment; at most one failed attempt per captured order; satisfies I4.
+5. `NOISY_BANK_NARRATION` `[ASSUMED]`: Lowercase, trailing spaces, or truncated UTR in bank narration, tracked via generation side table (not string sniffing).
+6. `NO_UTR_NARRATION` `[ASSUMED]`: Bank narration with generic Razorpay descriptor and no UTR (10% cohort), tracked via generation side table.
 7. `UNRELATED_BANK_CREDIT` `[ASSUMED]`: External other-gateway payouts (Stripe, Paytm), payroll, or interest credits present in bank statement.
+8. `FAILED_PAYMENT` `[ASSUMED]`: Standard failed authorization attempt not part of a retry sequence; satisfies I4.
+9. `PARTIAL_REFUND_CONSISTENT` `[ASSUMED]`: Legitimate partial refund matching ledger amount.
 
 ---
 
