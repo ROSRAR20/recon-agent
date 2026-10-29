@@ -8,6 +8,148 @@ from src.recon_agent.synth.config import SynthConfig
 from src.recon_agent.synth.generator import IST_TZ, _gen_base62_id, _gen_utr, finalize_bank_statements
 from src.recon_agent.synth.math_utils import mul_div_round
 
+# =============================================================================
+# Disjoint Human Explanation Templates for Explained Refunds (>= 12 each)
+# =============================================================================
+
+DEV_EXPLAINED_TEMPLATES = [
+    "Merchant deduction of {amt_str} applied for restocking fee.",
+    "Adjusted by {amt_str} due to customer service concession.",
+    "Difference of {amt_str} retained for shipping and handling charges.",
+    "Partial clawback of {amt_str} linked to prior refund {ref_id}.",
+    "Platform service fee of {amt_str} withheld per merchant agreement.",
+    "Dispute resolution allowance of {amt_str} deducted from refund total.",
+    "Currency conversion variance of {amt_str} absorbed by cardholder.",
+    "Withheld {amt_str} in accordance with return policy guidelines.",
+    "Special promotion reversal of {amt_str} cross-referenced with {ref_id}.",
+    "Authorized retention of {amt_str} per merchant ops ticket.",
+    "Adjustment of {amt_str} debited for gateway processing surcharge.",
+    "Deducted {amt_str} as agreed during customer dispute review.",
+    "Reversal adjustment of {amt_str} linked to settlement voucher.",
+    "Goodwill concession balance of {amt_str} cleared per supervisor.",
+    "Retained {amt_str} for express courier cancellation penalty.",
+]
+
+TEST_EXPLAINED_TEMPLATES = [
+    "Offsetting charge of {amt_str} applied under seller warranty terms.",
+    "Deduction of {amt_str} confirmed for repackaging and restocking costs.",
+    "Variance of {amt_str} debited following customer support mediation.",
+    "Portion of {amt_str} withheld against linked refund record {ref_id}.",
+    "Convenience markup of {amt_str} deducted as per checkout disclosure.",
+    "Merchant ops approved a differential of {amt_str} on customer claim.",
+    "Foreign exchange spread of {amt_str} retained by acquiring bank.",
+    "Withholding of {amt_str} executed under return authorization terms.",
+    "Campaign rebate recovery of {amt_str} tied to prior adjustment {ref_id}.",
+    "Operations supervisor cleared net reduction of {amt_str}.",
+    "Interchange margin adjustment of {amt_str} applied to refund ledger.",
+    "Settlement officer authorized retention of {amt_str} for claim resolution.",
+    "Penalty recovery of {amt_str} applied for late return notification.",
+    "Courtesy fee deduction of {amt_str} approved by risk operations.",
+    "Restitution of {amt_str} offset against previous processing error.",
+]
+
+DEV_NO_AMOUNT_TEMPLATES = [
+    "Restocking deduction approved per customer support ticket.",
+    "Manual dispute adjustment authorized by merchant operations.",
+    "Goodwill waiver deducted following supervisory review.",
+    "Partial retention fee applied as per terms of service.",
+    "Currency conversion fee withheld per cross-border policy.",
+    "Courier return handling fee retained by logistics partner.",
+    "Promotional coupon discount clawed back on partial return.",
+    "Damaged packaging penalty deducted per merchant assessment.",
+    "Customer appeasement allowance adjusted against refund.",
+    "Service fee retention cleared by account manager.",
+    "Cancellation charge withheld according to return schedule.",
+    "Administrative processing debit approved by billing team.",
+]
+
+TEST_NO_AMOUNT_TEMPLATES = [
+    "Seller restocking offset applied pursuant to inspection report.",
+    "Arbitration concession approved by risk management specialist.",
+    "Courtesy allowance retained following account representative audit.",
+    "Standard return fee withheld under merchant operating guidelines.",
+    "Cross-border transaction handling charge deducted from settlement.",
+    "Reverse logistics transit cost withheld per shipping agreement.",
+    "Seasonal incentive clawback deducted from customer refund.",
+    "Product restoration surcharge retained per warehouse verification.",
+    "Client resolution debit confirmed by dispute officer.",
+    "Platform convenience deduction approved by merchant services.",
+    "Late return penalty withheld in compliance with store terms.",
+    "Operations compliance fee debited per resolution protocol.",
+]
+
+
+def paise_to_words(p: int) -> str:
+    """Convert integer paise amount to English words."""
+    ones = [
+        "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+        "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+        "seventeen", "eighteen", "nineteen",
+    ]
+    tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+
+    def num_to_words(n: int) -> str:
+        if n == 0:
+            return "zero"
+        parts = []
+        if n >= 1000:
+            th = n // 1000
+            parts.append(f"{num_to_words(th)} thousand")
+            n %= 1000
+        if n >= 100:
+            h = n // 100
+            parts.append(f"{ones[h]} hundred")
+            n %= 100
+        if n > 0:
+            if parts:
+                parts.append("and")
+            if n < 20:
+                parts.append(ones[n])
+            else:
+                t = n // 10
+                o = n % 10
+                if o > 0:
+                    parts.append(f"{tens[t]}-{ones[o]}")
+                else:
+                    parts.append(tens[t])
+        return " ".join(parts)
+
+    rupees = p // 100
+    rem_paise = p % 100
+
+    if rupees > 0 and rem_paise == 0:
+        return f"{num_to_words(rupees)} rupee{'s' if rupees > 1 else ''}"
+    elif rupees > 0 and rem_paise > 0:
+        return f"{num_to_words(rupees)} rupee{'s' if rupees > 1 else ''} and {num_to_words(rem_paise)} paise"
+    else:
+        return f"{num_to_words(rem_paise)} paise"
+
+
+def format_paise_amount(rng: random.Random, p: int) -> str:
+    """Format an integer paise amount into various human currency styles."""
+    choice = rng.randint(0, 6)
+    rupees = p // 100
+    rem_paise = p % 100
+
+    if choice == 0:
+        return f"₹{p / 100:.2f}"
+    elif choice == 1:
+        return f"Rs. {p / 100:.2f}"
+    elif choice == 2:
+        if rem_paise == 0:
+            return f"Rs {rupees}"
+        return f"Rs {p / 100:.2f}"
+    elif choice == 3:
+        return f"INR {p / 100:.2f}"
+    elif choice == 4:
+        return f"{p} paise"
+    elif choice == 5:
+        if rem_paise == 0:
+            return f"₹{rupees}"
+        return f"₹{p / 100:.2f}"
+    else:
+        return paise_to_words(p)
+
 
 def inject_errors_and_labels(
     data: dict[str, Any],
@@ -32,6 +174,10 @@ def inject_errors_and_labels(
     rng_rnd = random.Random(config.seed * 1000 + 8)
     rng_lat = random.Random(config.seed * 1000 + 9)
     rng_ret = random.Random(config.seed * 1000 + 10)
+    rng_near = random.Random(config.seed * 1000 + 11)
+    rng_exp_c = random.Random(config.seed * 1000 + 12)
+    rng_exp_i = random.Random(config.seed * 1000 + 13)
+    rng_exp_n = random.Random(config.seed * 1000 + 14)
 
     used_entities: set[str] = set()
     used_batches: set[str] = set()
@@ -46,6 +192,8 @@ def inject_errors_and_labels(
     orders_by_id = {o["order_id"]: o for o in data["orders_ledger"]}
     recon_by_entity_id = {r["entity_id"]: r for r in data["recon_items"]}
     settlements_by_id = {s["settlement_id"]: s for s in data["settlements"]}
+    all_merchant_ids = sorted(list({p["merchant_id"] for p in data["payments"]}))
+    num_merchants = max(1, len(all_merchant_ids))
 
     # Index settlements by (merchant_id, date)
     settlements_by_merchant_date: dict[tuple[str, str], dict[str, Any]] = {}
@@ -75,9 +223,10 @@ def inject_errors_and_labels(
         merchant_id: str,
         error_class: str | None,
         hard_negative_type: str | None,
-        entity_ids: list[str],
-        settlement_id: str | None,
-        expected_action: str,
+        ambiguity_type: str | None = None,
+        entity_ids: list[str] | None = None,
+        settlement_id: str | None = None,
+        expected_action: str = "",
     ) -> None:
         labels.append(
             {
@@ -85,7 +234,8 @@ def inject_errors_and_labels(
                 "merchant_id": merchant_id,
                 "error_class": error_class,
                 "hard_negative_type": hard_negative_type,
-                "entity_ids": entity_ids,
+                "ambiguity_type": ambiguity_type,
+                "entity_ids": entity_ids or [],
                 "settlement_id": settlement_id,
                 "expected_action": expected_action,
             }
@@ -222,8 +372,8 @@ def inject_errors_and_labels(
             bk_row["credit"] -= delta_fee
             bk_row["balance"] -= delta_fee
         else:
-            # Tax differs from expected tax by at least 5 paise
-            delta_tax = max(5, mul_div_round(max(1, r["tax"]), rng_fee.randint(1000, 3000), 10000))
+            # Tax differs from expected tax by at least 10 paise (Amendment 1)
+            delta_tax = max(10, mul_div_round(max(1, r["tax"]), rng_fee.randint(1000, 3000), 10000))
             if stl["amount"] - delta_tax <= 0 or r["credit"] - delta_tax <= 0:
                 continue
             r["tax"] += delta_tax
@@ -256,8 +406,20 @@ def inject_errors_and_labels(
     ]
     rng_ref.shuffle(eligible_refunds)
     refund_mismatch_count = int(round(len(eligible_refunds) * get_rate("PARTIAL_REFUND_MISMATCH", 0.150)))
+    max_per_m_ref = max(2, int(3.0 * refund_mismatch_count / num_merchants))
+    m_counts_ref: dict[str, int] = {}
+    target_pos_ref = int(refund_mismatch_count * 0.4)
+    target_neg_ref = int(refund_mismatch_count * 0.4)
+    target_mis_ref = refund_mismatch_count - target_pos_ref - target_neg_ref
+    count_pos_ref = 0
+    count_neg_ref = 0
+    count_mis_ref = 0
 
-    for idx, r in enumerate(eligible_refunds[:refund_mismatch_count]):
+    for r in eligible_refunds:
+        if (count_pos_ref + count_neg_ref + count_mis_ref) >= refund_mismatch_count:
+            break
+        if m_counts_ref.get(r["merchant_id"], 0) >= max_per_m_ref:
+            continue
         stl = settlements_by_id.get(r["settlement_id"])
         bk_row = bank_rows_by_settlement.get(r["settlement_id"])
         order = orders_by_id.get(r["order_id"])
@@ -265,47 +427,46 @@ def inject_errors_and_labels(
         if not stl or not bk_row or not order or not p_cap:
             continue
 
-        is_debit_diff = (idx % 10) < 8  # 80% debit differs by >= 100 paise; 20% missing in ledger
-        if is_debit_diff:
-            p_amt = p_cap["amount"]
-            r_amt = r["amount"]
+        p_amt = p_cap["amount"]
+        r_amt = r["amount"]
 
-            available_signs: list[int] = []
-            if p_amt - r_amt >= 100:
-                available_signs.append(+1)
-            if r_amt - 1 >= 100:
-                available_signs.append(-1)
-
-            if not available_signs:
-                continue
-
-            sign = rng_ref.choice(available_signs)
-            if sign == +1:
-                max_diff = p_amt - r_amt
-                diff_paise = rng_ref.randint(100, max(100, min(max_diff, mul_div_round(r_amt, 35, 100))))
-                r_new = r_amt + diff_paise
-            else:
-                max_diff = r_amt - 1
-                diff_paise = rng_ref.randint(100, max(100, min(max_diff, mul_div_round(r_amt, 35, 100))))
-                r_new = r_amt - diff_paise
-
+        if count_pos_ref < target_pos_ref and (p_amt - r_amt >= 100):
+            sign = +1
+            diff_paise = rng_ref.randint(100, min(500, p_amt - r_amt))
+            r_new = r_amt + diff_paise
             delta_debit = r_new - r_amt
             if stl["amount"] - delta_debit <= 0:
                 continue
-
             r["amount"] = r_new
             r["debit"] = r_new
             stl["amount"] -= delta_debit
             bk_row["credit"] -= delta_debit
             bk_row["balance"] -= delta_debit
-        else:
-            # Refund exists in recon/settlement but has no ledger entry
+            count_pos_ref += 1
+        elif count_neg_ref < target_neg_ref and (r_amt - 1 >= 100):
+            sign = -1
+            diff_paise = rng_ref.randint(100, min(500, r_amt - 1))
+            r_new = r_amt - diff_paise
+            delta_debit = r_new - r_amt
+            if stl["amount"] - delta_debit <= 0:
+                continue
+            r["amount"] = r_new
+            r["debit"] = r_new
+            stl["amount"] -= delta_debit
+            bk_row["credit"] -= delta_debit
+            bk_row["balance"] -= delta_debit
+            count_neg_ref += 1
+        elif count_mis_ref < target_mis_ref:
             order["refund_id"] = ""
             order["refund_amount"] = 0
             order["status"] = "captured"
+            count_mis_ref += 1
+        else:
+            continue
 
         used_entities.update([r["entity_id"], r["payment_id"], r["order_id"]])
         used_batches.add(stl["settlement_id"])
+        m_counts_ref[r["merchant_id"]] = m_counts_ref.get(r["merchant_id"], 0) + 1
 
         add_label(
             merchant_id=r["merchant_id"],
@@ -333,9 +494,16 @@ def inject_errors_and_labels(
         eligible_cutoff.append((p, r, order, tx_dt))
 
     rng_cut.shuffle(eligible_cutoff)
-    cutoff_count = int(round(len(eligible_cutoff) * get_rate("CUTOFF_DRIFT", 0.015)))
+    cutoff_count = min(65 if config.profile == "full" else 15, int(round(len(eligible_cutoff) * get_rate("CUTOFF_DRIFT", 0.015))))
+    max_per_m_cutoff = max(2, int(3.0 * cutoff_count / num_merchants))
+    m_counts_cutoff: dict[str, int] = {}
+    injected_cutoff_count = 0
 
-    for p, r, order, tx_dt in eligible_cutoff[:cutoff_count]:
+    for p, r, order, tx_dt in eligible_cutoff:
+        if injected_cutoff_count >= cutoff_count:
+            break
+        if m_counts_cutoff.get(p["merchant_id"], 0) >= max_per_m_cutoff:
+            continue
         day_D = tx_dt.date()
         try:
             d_idx = working_days.index(day_D)
@@ -389,6 +557,8 @@ def inject_errors_and_labels(
 
         used_entities.update([p["payment_id"], order["order_id"]])
         used_batches.update([stl_old["settlement_id"], stl_new["settlement_id"]])
+        m_counts_cutoff[p["merchant_id"]] = m_counts_cutoff.get(p["merchant_id"], 0) + 1
+        injected_cutoff_count += 1
 
         add_label(
             merchant_id=p["merchant_id"],
@@ -399,19 +569,24 @@ def inject_errors_and_labels(
             expected_action="flag_cutoff_drift",
         )
 
-    # 6. SHORT_BANK_CREDIT (6% of eligible batches; restricted to batches with UTR in narration)
-    variants = data.get("bank_narration_variants", {})
+    # 6. SHORT_BANK_CREDIT (6% of eligible batches; all narration variants eligible)
     eligible_short_batches = [
         s
         for s in data["settlements"]
         if s["settlement_id"] not in used_batches
         and bank_rows_by_settlement.get(s["settlement_id"]) is not None
-        and variants.get(bank_rows_by_settlement[s["settlement_id"]]["statement_id"]) in ("clean", "noisy")
     ]
     rng_sho.shuffle(eligible_short_batches)
     short_count = int(round(len(data["settlements"]) * get_rate("SHORT_BANK_CREDIT", 0.060)))
+    max_per_m_short = max(2, int(3.0 * short_count / num_merchants))
+    m_counts_short: dict[str, int] = {}
+    injected_short_count = 0
 
-    for stl in eligible_short_batches[:short_count]:
+    for stl in eligible_short_batches:
+        if injected_short_count >= short_count:
+            break
+        if m_counts_short.get(stl["merchant_id"], 0) >= max_per_m_short:
+            continue
         bk_row = bank_rows_by_settlement.get(stl["settlement_id"])
         if not bk_row or stl["amount"] <= 200:
             continue
@@ -423,6 +598,8 @@ def inject_errors_and_labels(
 
         used_batches.add(stl["settlement_id"])
         used_entities.add(bk_row["statement_id"])
+        m_counts_short[stl["merchant_id"]] = m_counts_short.get(stl["merchant_id"], 0) + 1
+        injected_short_count += 1
 
         add_label(
             merchant_id=stl["merchant_id"],
@@ -442,11 +619,31 @@ def inject_errors_and_labels(
     if not settlement_dates:
         settlement_dates = working_days[:config.working_days]
     orphan_count = int(round(len(data["settlements"]) * get_rate("ORPHAN_BANK_CREDIT", 0.060)))
+    max_per_m_orphan = max(2, int(3.0 * orphan_count / num_merchants))
+    m_counts_orphan: dict[str, int] = {}
+
+    short_batch_m_dates = {
+        (s["merchant_id"], datetime.datetime.fromtimestamp(s["settled_at"], tz=IST_TZ).date())
+        for s in data["settlements"]
+        if s["settlement_id"] in used_batches
+    }
 
     for _ in range(orphan_count):
         fake_utr = _gen_utr(rng_orp, seen_utrs)
-        m_id = rng_orp.choice(merchants)
-        rnd_date = rng_orp.choice(settlement_dates)
+        # Avoid merchant-dates with short bank credits to preserve lone-row property (Amendment 2)
+        candidate_pairs = [
+            (m, d)
+            for m in merchants
+            for d in settlement_dates
+            if (m, d) not in short_batch_m_dates and m_counts_orphan.get(m, 0) < max_per_m_orphan
+        ]
+        if candidate_pairs:
+            m_id, rnd_date = rng_orp.choice(candidate_pairs)
+        else:
+            avail_m = [m for m in merchants if m_counts_orphan.get(m, 0) < max_per_m_orphan] or merchants
+            m_id = rng_orp.choice(avail_m)
+            rnd_date = rng_orp.choice(settlement_dates)
+        m_counts_orphan[m_id] = m_counts_orphan.get(m_id, 0) + 1
 
         # Sample from merchant's actual settlement nets (+/-30% noise)
         m_settlement_amounts = [s["amount"] for s in data["settlements"] if s["merchant_id"] == m_id]
@@ -462,10 +659,10 @@ def inject_errors_and_labels(
         stmt_id = f"stmt_orp_{len(data['bank_statement']) + 1:07d}"
 
         orp_roll = rng_orp.random()
-        if orp_roll < 0.70:
+        if orp_roll < 0.66:
             orp_variant = "clean"
             narration = f"CMS/RAZORPAY/{fake_utr}/SETTLEMENT"
-        elif orp_roll < 0.90:
+        elif orp_roll < 0.84:
             orp_variant = "noisy"
             noise_choice = rng_orp.choice(["lower", "spaces", "trunc"])
             if noise_choice == "lower":
@@ -501,6 +698,298 @@ def inject_errors_and_labels(
             entity_ids=[stmt_id],
             settlement_id=None,
             expected_action="flag_orphan_bank_credit",
+        )
+
+    # =========================================================================
+    # Ambiguity Tier (4 types: Tier 2 evaluation)
+    # =========================================================================
+
+    # 1. NEAR_TOLERANCE (3-9 paise fee/tax variance; policy gap between 2-paise rounding and >=10 error)
+    eligible_near = [
+        r
+        for r in data["recon_items"]
+        if r["type"] == "payment"
+        and r["method"] in ("card", "netbanking")
+        and r["entity_id"] not in used_entities
+        and r["settlement_id"] not in used_batches
+    ]
+    rng_near.shuffle(eligible_near)
+    target_near_count = 55 if config.profile == "full" else 15
+
+    for r in eligible_near:
+        if target_near_count <= 0:
+            break
+        stl = settlements_by_id.get(r["settlement_id"])
+        bk_row = bank_rows_by_settlement.get(r["settlement_id"])
+        if not stl or not bk_row:
+            continue
+
+        delta = rng_near.choice([-9, -8, -7, -6, -5, -4, -3, 3, 4, 5, 6, 7, 8, 9])
+        if stl["amount"] - delta <= 0 or r["credit"] - delta <= 0:
+            continue
+
+        r["fee"] += delta
+        r["credit"] -= delta
+        stl["amount"] -= delta
+        bk_row["credit"] -= delta
+        bk_row["balance"] -= delta
+
+        used_entities.add(r["entity_id"])
+        used_batches.add(stl["settlement_id"])
+
+        add_label(
+            merchant_id=r["merchant_id"],
+            error_class=None,
+            hard_negative_type=None,
+            ambiguity_type="NEAR_TOLERANCE",
+            entity_ids=[r["entity_id"]],
+            settlement_id=stl["settlement_id"],
+            expected_action="escalate_human",
+        )
+        target_near_count -= 1
+
+    # 2. EXPLAINED REFUNDS: DISJOINT templates for dev vs test
+    if config.split == "test":
+        exp_templates = TEST_EXPLAINED_TEMPLATES
+        no_amt_templates = TEST_NO_AMOUNT_TEMPLATES
+    else:
+        exp_templates = DEV_EXPLAINED_TEMPLATES
+        no_amt_templates = DEV_NO_AMOUNT_TEMPLATES
+
+    all_refund_ids = [r["entity_id"] for r in data["recon_items"] if r["type"] == "refund"]
+
+    eligible_exp = [
+        r
+        for r in data["recon_items"]
+        if r["type"] == "refund"
+        and r["entity_id"] not in used_entities
+        and r["settlement_id"] not in used_batches
+    ]
+    rng_exp_c.shuffle(eligible_exp)
+
+    # 2a. EXPLAINED_CONSISTENT
+    target_exp_c = 55 if config.profile == "full" else 15
+    target_pos_c = target_exp_c // 2
+    target_neg_c = target_exp_c - target_pos_c
+    count_pos_c = 0
+    count_neg_c = 0
+
+    for r in eligible_exp:
+        if (count_pos_c + count_neg_c) >= target_exp_c:
+            break
+        if r["entity_id"] in used_entities or r["settlement_id"] in used_batches:
+            continue
+
+        stl = settlements_by_id.get(r["settlement_id"])
+        bk_row = bank_rows_by_settlement.get(r["settlement_id"])
+        order = orders_by_id.get(r["order_id"])
+        p_cap = payments_by_id.get(r["payment_id"])
+        if not stl or not bk_row or not order or not p_cap:
+            continue
+
+        p_amt = p_cap["amount"]
+        r_amt = r["amount"]
+
+        if count_pos_c < target_pos_c and (p_amt - r_amt >= 100):
+            sign = +1
+            diff_paise = rng_exp_c.randint(100, min(500, p_amt - r_amt))
+            r_new = r_amt + diff_paise
+            delta_debit = r_new - r_amt
+            if stl["amount"] - delta_debit <= 0:
+                continue
+            r["amount"] = r_new
+            r["debit"] = r_new
+            stl["amount"] -= delta_debit
+            bk_row["credit"] -= delta_debit
+            bk_row["balance"] -= delta_debit
+            count_pos_c += 1
+        elif r_amt - 1 >= 100:
+            sign = -1
+            diff_paise = rng_exp_c.randint(100, min(500, r_amt - 1))
+            r_new = r_amt - diff_paise
+            delta_debit = r_new - r_amt
+            if stl["amount"] - delta_debit <= 0:
+                continue
+            r["amount"] = r_new
+            r["debit"] = r_new
+            stl["amount"] -= delta_debit
+            bk_row["credit"] -= delta_debit
+            bk_row["balance"] -= delta_debit
+            count_neg_c += 1
+        else:
+            continue
+
+        amt_str = format_paise_amount(rng_exp_c, diff_paise)
+        ref_id = rng_exp_c.choice(all_refund_ids) if all_refund_ids else "rfnd_00000000000000"
+        tmpl = rng_exp_c.choice(exp_templates)
+        reason_text = tmpl.format(amt_str=amt_str, ref_id=ref_id)
+
+        notes = dict(r.get("notes") or {})
+        notes["reason_text"] = reason_text
+        r["notes"] = notes
+
+        used_entities.update([r["entity_id"], r["payment_id"], r["order_id"]])
+        used_batches.add(stl["settlement_id"])
+
+        add_label(
+            merchant_id=r["merchant_id"],
+            error_class=None,
+            hard_negative_type=None,
+            ambiguity_type="EXPLAINED_CONSISTENT",
+            entity_ids=[r["entity_id"], r["payment_id"]],
+            settlement_id=stl["settlement_id"],
+            expected_action="benign_explained",
+        )
+
+    # 2b. EXPLAINED_INCONSISTENT
+    target_exp_i = 55 if config.profile == "full" else 15
+    target_pos_i = target_exp_i // 2
+    target_neg_i = target_exp_i - target_pos_i
+    count_pos_i = 0
+    count_neg_i = 0
+    rng_exp_i.shuffle(eligible_exp)
+
+    for r in eligible_exp:
+        if (count_pos_i + count_neg_i) >= target_exp_i:
+            break
+        if r["entity_id"] in used_entities or r["settlement_id"] in used_batches:
+            continue
+
+        stl = settlements_by_id.get(r["settlement_id"])
+        bk_row = bank_rows_by_settlement.get(r["settlement_id"])
+        order = orders_by_id.get(r["order_id"])
+        p_cap = payments_by_id.get(r["payment_id"])
+        if not stl or not bk_row or not order or not p_cap:
+            continue
+
+        p_amt = p_cap["amount"]
+        r_amt = r["amount"]
+
+        if count_pos_i < target_pos_i and (p_amt - r_amt >= 100):
+            sign = +1
+            diff_paise = rng_exp_i.randint(100, min(500, p_amt - r_amt))
+            r_new = r_amt + diff_paise
+            delta_debit = r_new - r_amt
+            if stl["amount"] - delta_debit <= 0:
+                continue
+            r["amount"] = r_new
+            r["debit"] = r_new
+            stl["amount"] -= delta_debit
+            bk_row["credit"] -= delta_debit
+            bk_row["balance"] -= delta_debit
+            count_pos_i += 1
+        elif r_amt - 1 >= 100:
+            sign = -1
+            diff_paise = rng_exp_i.randint(100, min(500, r_amt - 1))
+            r_new = r_amt - diff_paise
+            delta_debit = r_new - r_amt
+            if stl["amount"] - delta_debit <= 0:
+                continue
+            r["amount"] = r_new
+            r["debit"] = r_new
+            stl["amount"] -= delta_debit
+            bk_row["credit"] -= delta_debit
+            bk_row["balance"] -= delta_debit
+            count_neg_i += 1
+        else:
+            continue
+
+        offset = rng_exp_i.choice([-500, -300, -200, -100, 100, 200, 300, 500])
+        stated_paise = max(100, diff_paise + offset)
+        if stated_paise == diff_paise:
+            stated_paise = diff_paise + 250
+
+        amt_str = format_paise_amount(rng_exp_i, stated_paise)
+        ref_id = rng_exp_i.choice(all_refund_ids) if all_refund_ids else "rfnd_00000000000000"
+        tmpl = rng_exp_i.choice(exp_templates)
+        reason_text = tmpl.format(amt_str=amt_str, ref_id=ref_id)
+
+        notes = dict(r.get("notes") or {})
+        notes["reason_text"] = reason_text
+        r["notes"] = notes
+
+        used_entities.update([r["entity_id"], r["payment_id"], r["order_id"]])
+        used_batches.add(stl["settlement_id"])
+
+        add_label(
+            merchant_id=r["merchant_id"],
+            error_class=None,
+            hard_negative_type=None,
+            ambiguity_type="EXPLAINED_INCONSISTENT",
+            entity_ids=[r["entity_id"], r["payment_id"]],
+            settlement_id=stl["settlement_id"],
+            expected_action="flag_partial_refund_mismatch",
+        )
+
+    # 2c. EXPLAINED_NO_AMOUNT
+    target_exp_n = 55 if config.profile == "full" else 15
+    target_pos_n = target_exp_n // 2
+    target_neg_n = target_exp_n - target_pos_n
+    count_pos_n = 0
+    count_neg_n = 0
+    rng_exp_n.shuffle(eligible_exp)
+
+    for r in eligible_exp:
+        if (count_pos_n + count_neg_n) >= target_exp_n:
+            break
+        if r["entity_id"] in used_entities or r["settlement_id"] in used_batches:
+            continue
+
+        stl = settlements_by_id.get(r["settlement_id"])
+        bk_row = bank_rows_by_settlement.get(r["settlement_id"])
+        order = orders_by_id.get(r["order_id"])
+        p_cap = payments_by_id.get(r["payment_id"])
+        if not stl or not bk_row or not order or not p_cap:
+            continue
+
+        p_amt = p_cap["amount"]
+        r_amt = r["amount"]
+
+        if count_pos_n < target_pos_n and (p_amt - r_amt >= 100):
+            sign = +1
+            diff_paise = rng_exp_n.randint(100, min(500, p_amt - r_amt))
+            r_new = r_amt + diff_paise
+            delta_debit = r_new - r_amt
+            if stl["amount"] - delta_debit <= 0:
+                continue
+            r["amount"] = r_new
+            r["debit"] = r_new
+            stl["amount"] -= delta_debit
+            bk_row["credit"] -= delta_debit
+            bk_row["balance"] -= delta_debit
+            count_pos_n += 1
+        elif r_amt - 1 >= 100:
+            sign = -1
+            diff_paise = rng_exp_n.randint(100, min(500, r_amt - 1))
+            r_new = r_amt - diff_paise
+            delta_debit = r_new - r_amt
+            if stl["amount"] - delta_debit <= 0:
+                continue
+            r["amount"] = r_new
+            r["debit"] = r_new
+            stl["amount"] -= delta_debit
+            bk_row["credit"] -= delta_debit
+            bk_row["balance"] -= delta_debit
+            count_neg_n += 1
+        else:
+            continue
+
+        tmpl = rng_exp_n.choice(no_amt_templates)
+        notes = dict(r.get("notes") or {})
+        notes["reason_text"] = tmpl
+        r["notes"] = notes
+
+        used_entities.update([r["entity_id"], r["payment_id"], r["order_id"]])
+        used_batches.add(stl["settlement_id"])
+
+        add_label(
+            merchant_id=r["merchant_id"],
+            error_class=None,
+            hard_negative_type=None,
+            ambiguity_type="EXPLAINED_NO_AMOUNT",
+            entity_ids=[r["entity_id"], r["payment_id"]],
+            settlement_id=stl["settlement_id"],
+            expected_action="escalate_human",
         )
 
     # =========================================================================

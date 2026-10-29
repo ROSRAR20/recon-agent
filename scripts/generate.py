@@ -40,10 +40,18 @@ REQUIRED_HARD_NEGATIVES = [
     "PARTIAL_REFUND_CONSISTENT",
 ]
 
+REQUIRED_AMBIGUITY_TYPES = [
+    "NEAR_TOLERANCE",
+    "EXPLAINED_CONSISTENT",
+    "EXPLAINED_INCONSISTENT",
+    "EXPLAINED_NO_AMOUNT",
+]
+
 
 def verify_floors(
     error_counts: dict[str, int],
     hard_neg_counts: dict[str, int],
+    ambiguity_counts: dict[str, int] | None = None,
     attack_counts: dict[str, int] | None = None,
 ) -> None:
     """Verify that in full profile, all classes meet minimum threshold floors."""
@@ -58,6 +66,12 @@ def verify_floors(
         if cnt < 30:
             errors.append(f"Hard negative {hn_name} count {cnt} < 30 floor")
 
+    if ambiguity_counts is not None:
+        for amb_name in REQUIRED_AMBIGUITY_TYPES:
+            cnt = ambiguity_counts.get(amb_name, 0)
+            if cnt < 50:
+                errors.append(f"Ambiguity type {amb_name} count {cnt} < 50 floor")
+
     if attack_counts is not None:
         for atk_name in REQUIRED_ATTACK_TYPES:
             cnt = attack_counts.get(atk_name, 0)
@@ -68,9 +82,11 @@ def verify_floors(
         for err in errors:
             print(f"[ERROR] Floor violation: {err}", file=sys.stderr)
         sys.exit(1)
-    msg = "[OK] All error classes (>= 50) and hard-negative types (>= 30)"
+    msg = "[OK] All error classes (>= 50), hard-negative types (>= 30)"
+    if ambiguity_counts is not None:
+        msg += ", ambiguity types (>= 50)"
     if attack_counts is not None:
-        msg += " and attack types (>= 30)"
+        msg += ", and attack types (>= 30)"
     msg += " meet required volume floors."
     print(msg)
 
@@ -156,7 +172,8 @@ def main() -> None:
         if args.profile == "full" and inject_errors:
             err_counts = counts.get("error_class_counts", {})
             hn_counts = counts.get("hard_negative_counts", {})
-            verify_floors(err_counts, hn_counts, attack_counts)
+            amb_counts = counts.get("ambiguity_type_counts", {})
+            verify_floors(err_counts, hn_counts, amb_counts, attack_counts)
         return
 
     print(
@@ -185,7 +202,8 @@ def main() -> None:
             manifest = json.load(f)
         err_counts = manifest["counts"].get("error_class_counts", {})
         hn_counts = manifest["counts"].get("hard_negative_counts", {})
-        verify_floors(err_counts, hn_counts, attack_counts)
+        amb_counts = manifest["counts"].get("ambiguity_type_counts", {})
+        verify_floors(err_counts, hn_counts, amb_counts, attack_counts)
 
 
 if __name__ == "__main__":

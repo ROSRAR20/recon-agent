@@ -814,6 +814,11 @@ def test_twin_dataset_byte_identity_except_free_text(tmp_path: Any) -> None:
             assert b_item["description"] == t_item["description"], f"Unattacked description mutated on {eid}"
             assert b_item["notes"] == t_item["notes"], f"Unattacked notes mutated on {eid}"
 
+        # Invariant: reason_text is preserved byte-for-byte in twin datasets even if attacked
+        b_reason = (b_item.get("notes") or {}).get("reason_text") if isinstance(b_item.get("notes"), dict) else None
+        t_reason = (t_item.get("notes") or {}).get("reason_text") if isinstance(t_item.get("notes"), dict) else None
+        assert b_reason == t_reason, f"reason_text mutated on {eid}: {b_reason!r} != {t_reason!r}"
+
     assert attack_count == len(inj_manifest), "Mismatch in applied attack counts"
 
     # 3. Verify injection_manifest.jsonl presence and schema
@@ -832,6 +837,30 @@ def test_twin_dataset_byte_identity_except_free_text(tmp_path: Any) -> None:
         observed_attack_types.add(row["attack_type"])
 
     assert observed_attack_types == set(REQUIRED_ATTACK_TYPES)
+
+
+def test_entity_disjointness_across_errors_and_ambiguity() -> None:
+    """Verify entity-level disjointness across all error classes and ambiguity types."""
+    config = create_config("full", "dev", seed=1, inject_errors=True)
+    generator = SyntheticDataGenerator(config)
+    data = generator.generate()
+
+    injected_labels = [
+        lbl for lbl in data["labels"]
+        if lbl.get("error_class") or lbl.get("ambiguity_type")
+    ]
+
+    seen_entity_map: dict[str, str] = {}
+    for lbl in injected_labels:
+        case_id = lbl["case_id"]
+        c_type = lbl.get("error_class") or lbl.get("ambiguity_type")
+        for eid in lbl.get("entity_ids", []):
+            assert eid not in seen_entity_map, (
+                f"Entity collision: entity {eid} in case {case_id} ({c_type}) was already used "
+                f"in case {seen_entity_map[eid]}"
+            )
+            seen_entity_map[eid] = f"{case_id} ({c_type})"
+
 
 
 

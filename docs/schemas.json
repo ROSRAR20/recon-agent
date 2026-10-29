@@ -167,7 +167,9 @@
       "payment_settlement_lag_days",
       "refund_settlement_lag_days",
       "missing_after_days",
-      "rounding_tolerance_paise"
+      "rounding_tolerance_paise",
+      "escalate_tolerance_paise",
+      "error_threshold_paise"
     ],
     "types": {
       "card_bps": ["int"],
@@ -178,7 +180,9 @@
       "payment_settlement_lag_days": ["int"],
       "refund_settlement_lag_days": ["int"],
       "missing_after_days": ["int"],
-      "rounding_tolerance_paise": ["int"]
+      "rounding_tolerance_paise": ["int"],
+      "escalate_tolerance_paise": ["int"],
+      "error_threshold_paise": ["int"]
     }
   },
   "manifest.json": {
@@ -205,6 +209,7 @@
       "merchant_id",
       "error_class",
       "hard_negative_type",
+      "ambiguity_type",
       "entity_ids",
       "settlement_id",
       "expected_action"
@@ -214,6 +219,7 @@
       "merchant_id": ["str"],
       "error_class": ["str", "NoneType"],
       "hard_negative_type": ["str", "NoneType"],
+      "ambiguity_type": ["str", "NoneType"],
       "entity_ids": ["list"],
       "settlement_id": ["str", "NoneType"],
       "expected_action": ["str"]

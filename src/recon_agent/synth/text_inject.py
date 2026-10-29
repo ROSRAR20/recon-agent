@@ -168,7 +168,10 @@ def apply_text_injections(
             if field == "description":
                 item["description"] = tmpl["text"]
             else:
-                item["notes"] = {"comment": tmpl["text"], "source": "merchant_api"}
+                existing_notes = dict(item.get("notes") or {})
+                existing_notes["comment"] = tmpl["text"]
+                existing_notes["source"] = "merchant_api"
+                item["notes"] = existing_notes
 
             case_id = f"inj_{len(injection_manifest) + 1:06d}"
             injection_manifest.append(
@@ -264,3 +267,4 @@ def write_twin_dataset(
     paths["injection_manifest"] = inj_path
 
     return paths
+

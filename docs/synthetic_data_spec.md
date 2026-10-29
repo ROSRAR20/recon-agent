@@ -101,9 +101,11 @@ Fields strictly match the documented Razorpay recon endpoint `[DOCS: https://raz
   - `payment_settlement_lag_days`: `2` (working days for payment settlement) `[ASSUMED]`.
   - `refund_settlement_lag_days`: `1` (working days for refund debit settlement) `[ASSUMED]`.
   - `missing_after_days`: `7` (calendar days past expected settlement after which missing payout is actionable) `[ASSUMED]`.
-  - `rounding_tolerance_paise`: `2` (maximum acceptable rounding variance in minor units) `[ASSUMED]`.
+  - `rounding_tolerance_paise`: `2` (maximum acceptable rounding variance in minor units; Band 1 ignore) `[ASSUMED]`.
+  - `escalate_tolerance_paise`: `9` (maximum variance to escalate to human before classifying as definite error; Band 2) `[ASSUMED]`.
+  - `error_threshold_paise`: `10` (minimum variance considered a definite pricing error; Band 3) `[ASSUMED]`.
 - `manifest.json`: Deterministic seed, configuration hash (SHA-256), generator version, `as_of` timestamp (`last_settlement_date + 10 calendar days`), and dataset row/class counts `[ASSUMED]`.
-- `labels.jsonl`: Evaluation ground-truth labels (`case_id`, `merchant_id`, `error_class`, `hard_negative_type`, `entity_ids`, `settlement_id`, `expected_action`) `[ASSUMED]`.
+- `labels.jsonl`: Evaluation ground-truth labels (`case_id`, `merchant_id`, `error_class`, `hard_negative_type`, `ambiguity_type`, `entity_ids`, `settlement_id`, `expected_action`) `[ASSUMED]`.
 
 ---
 
@@ -111,18 +113,21 @@ Fields strictly match the documented Razorpay recon endpoint `[DOCS: https://raz
 
 ### Anomaly Rules & Prevalence Principles
 - **One-Anomaly-Per-Batch Isolation Rule `[ASSUMED / DESIGN RULE]`:** Batch-level anomaly injections (`SHORT_BANK_CREDIT`, `LATE_SETTLEMENT`) exclusively select settlement batches containing zero entity-level anomalies (`DUPLICATE_PAYMENT`, `MISSING_SETTLEMENT`, `FEE_TAX_MISMATCH`, `PARTIAL_REFUND_MISMATCH`, `CUTOFF_DRIFT`). No settlement batch ever contains more than one anomaly class. Each entity participates in at most one error class.
-- **Rounding Noise vs. Fee Calculation Error Gap `[ASSUMED / DESIGN RULE]`:** Benign `ROUNDING` variance is strictly bounded to $\le 2$ paise ($\pm 1$ or $\pm 2$ paise). In contrast, true `FEE_TAX_MISMATCH` calculation errors are strictly bounded to $\ge 10$ paise (+5% to +25% markup, minimum $+10$ paise on fee, and minimum $5$ paise on tax). There is a guaranteed separation between benign rounding noise and true pricing errors.
+- **Three-Band Fee/Tax Policy `[ASSUMED / DESIGN RULE]`:** Fee and tax variance against the merchant rate card is segmented into three distinct policy bands:
+  - *Band 1 (Rounding Noise):* $|\Delta| \le 2$ paise (`rounding_tolerance_paise: 2`). Benign operational variance; expected action is `benign_ignore`.
+  - *Band 2 (Human Escalation):* $3 \le |\Delta| \le 9$ paise (`escalate_tolerance_paise: 9`). Borderline ambiguity gap requiring human review; expected action is `escalate_human`.
+  - *Band 3 (Pricing Error):* $|\Delta| \ge 10$ paise (`error_threshold_paise: 10`). Unambiguous arithmetic error; expected action is `flag_fee_tax_mismatch`.
 - **Benchmark Prevalence vs. Production Rates `[ASSUMED]`:** Injected anomaly rates (1.0% duplicates, 0.8% missing settlements, 1.2% fee/tax mismatches, 15% partial refund mismatches, 1.5% cutoff drifts, 6% short bank credits, 6% orphan credits) represent curated benchmark evaluation prevalence designed to generate statistically significant evaluation cohorts ($\ge 50$ cases per error class in the full benchmark profile), not real-world Razorpay production operational error rates.
 
 All injections preserve settlement conservation (I2) except `SHORT_BANK_CREDIT`:
 
 1. `DUPLICATE_PAYMENT` (1.0% of captured orders) `[ASSUMED]`: Second captured payment for same order and amount with new `payment_id`, created with random 1-300s gap, settled in same batch; ledger unchanged. I2 preserved.
 2. `MISSING_SETTLEMENT` (0.8% of captured payments, eligible where settle date + 7 days $\le$ `as_of`) `[ASSUMED]`: Captured payment excluded from recon, settlement, and bank credit. I2 preserved.
-3. `FEE_TAX_MISMATCH` (1.2% of card/netbanking payments; never UPI) `[ASSUMED]`: 60% fee_off (+5% to +25%, $\ge +10$ paise vs rate card), 40% tax_off ($\ge 5$ paise). Credit follows the erroneous value so settlement and bank tie. I2 preserved.
+3. `FEE_TAX_MISMATCH` (1.2% of card/netbanking payments; never UPI) `[ASSUMED]`: 60% fee_off (+5% to +25%, $\ge +10$ paise vs rate card), 40% tax_off ($\ge 10$ paise vs rate card). Credit follows the erroneous value so settlement and bank tie. I2 preserved.
 4. `PARTIAL_REFUND_MISMATCH` (15% of refund items) `[ASSUMED]`: Random sign on difference; resulting refund amount between 1 paise and original payment amount; difference at least 100 paise (80% debit diff); 20% refund with no ledger entry. I2 preserved.
 5. `CUTOFF_DRIFT` (1.5% of payments, Mon–Thu orders) `[ASSUMED]`: Created 23:40–23:59 IST on day D, captured 00:05–00:35 on D+1; recon `created_at` on D+1, ledger `booked_date = D`; item moves to D+1 cohort. I2 preserved.
 6. `SHORT_BANK_CREDIT` (6% of eligible batches) `[ASSUMED]`: Bank credit = settlement net minus 1%–5% of net ($\ge 100$ paise); same UTR. I2 violated here only.
-7. `ORPHAN_BANK_CREDIT` (extra rows = 6% of batch count) `[ASSUMED]`: Razorpay-style bank credit matching no settlement, following standard 70/20/10 narration mix (clean, noisy, no_utr).
+7. `ORPHAN_BANK_CREDIT` (extra rows = 6% of batch count) `[ASSUMED]`: Razorpay-style bank credit matching no settlement, following standard 66/18/16 narration mix (clean, noisy, no_utr).
 
 ---
 
@@ -142,7 +147,23 @@ Hard negatives represent legitimate operational variations that must NOT be flag
 
 ---
 
-## 7. Invariants Tested
+## 7. Ambiguity Tier (Tier 2) `[ASSUMED]`
+
+To rigorously evaluate nuanced reasoning, text understanding, and human-escalation policies without confounding the core deterministic error benchmark, the generator includes an independent Ambiguity Tier:
+
+1. `NEAR_TOLERANCE` `[ASSUMED]`: Card or netbanking payment recon items where fee or tax differs from the rate card by 3 to 9 paise ($3 \le |\Delta| \le 9$ paise, within `escalate_tolerance_paise`). This tests whether a system abstains and flags for human review (`expected_action: "escalate_human"`) rather than misclassifying as benign rounding or an outright pricing error.
+2. `EXPLAINED_CONSISTENT` `[ASSUMED]`: Recon partial refund items where `notes.reason_text` explains a valid merchant deduction (e.g., return shipping, restocking charge, damage deduction), and the monetary figure in the explanation matches the ledger deficit exactly. `expected_action: "benign_explained"`.
+3. `EXPLAINED_INCONSISTENT` `[ASSUMED]`: Recon partial refund items where `notes.reason_text` claims a justification, but the text-stated amount contradicts the actual numerical difference between the refund debit and the ledger. `expected_action: "flag_partial_refund_mismatch"`.
+4. `EXPLAINED_NO_AMOUNT` `[ASSUMED]`: Recon partial refund items where `notes.reason_text` provides a qualitative explanation (e.g., "customer returned damaged goods, restocking fee deducted") without stating any monetary figure. `expected_action: "escalate_human"`.
+
+### Disjoint Template Sets & Text Realism `[ASSUMED / DESIGN RULE]`
+- **Strict Split Isolation:** The dev split uses dev templates exclusively ($\ge 12$ dev phrasings per category), and the held-out test split uses test templates exclusively ($\ge 12$ test phrasings per category). Zero template overlap exists across splits.
+- **Linguistic & Numeric Variation:** Templates incorporate real-world variations: written English number-words ("one hundred and fifty paise"), Indian Rupee symbols ("₹"), and cross-references to sibling refund or payment identifiers.
+- **Decoupled Benchmark Protocol:** Tier 2 cases are labeled with `ambiguity_type` in `labels.jsonl` and are strictly evaluated in a separate informational tier. Tier 2 results are **never blended** into Tier 1 deterministic pass/fail metrics.
+
+---
+
+## 8. Invariants Tested
 
 - **I1 (Item Arithmetic):** $\text{base\_fee} = \text{mul\_div\_round}(\text{amount}, \text{rate\_bps}, 10000)$, $\text{tax} = \text{mul\_div\_round}(\text{base\_fee}, 1800, 10000)$, $\text{credit} = \text{amount} - \text{fee}$ (or $\text{amount} - \text{fee} - \text{tax}$). For refunds: $\text{debit} = \text{amount}, \text{credit} = 0, \text{fee} = 0, \text{tax} = 0$.
 - **I2 (Settlement Conservation):** $\sum \text{credit} - \sum \text{debit} = \text{settlement\_net} = \text{bank\_credit\_amount}$ (holds for all clean batches and all injections except `SHORT_BANK_CREDIT`).
@@ -153,11 +174,11 @@ Hard negatives represent legitimate operational variations that must NOT be flag
 - **I7 (Architectural Boundary):** No module outside `src/recon_agent/synth/`, `tests/`, and `scripts/generate.py` imports `recon_agent.synth`.
 - **I8 (Positive Settlement Batch Net):** Every settlement batch satisfies $\text{net} > 0$.
 - **I9 (Schema Conformance):** All emitted files conform to column, type, and nullability rules defined in `docs/schemas.json`.
-- **I10 (Disjointness of Error Entities):** Each entity participates in at most one error class.
+- **I10 (Disjointness of Error Entities):** Each entity participates in at most one error class or ambiguity type.
 
 ---
 
-## 8. Adversarial Text-Injection Twin Datasets `[ASSUMED]`
+## 9. Adversarial Text-Injection Twin Datasets `[ASSUMED]`
 
 To rigorously evaluate the resilience of future downstream LLM verification layers against prompt injection and adversarial free-text manipulation, the generator produces twin datasets under `<split>/injected/`:
 - **Byte Identity Guarantee:** Every auxiliary file (`payments.jsonl`, `settlements.jsonl`, `orders_ledger.csv`, `bank_statement.csv`, `rate_card.json`, `manifest.json`, `labels.jsonl`) is strictly byte-identical to the base dataset.
@@ -175,26 +196,41 @@ To rigorously evaluate the resilience of future downstream LLM verification laye
 
 ---
 
-## 9. Independent Audit Infrastructure
+## 10. Independent Audit Infrastructure
 
 Reconciliation benchmark datasets are verified by two independent audit tools operating outside the generation pipeline:
 
 ### 1. Pure Observable Oracle Audit (`tests/audit/oracle.py`)
 - **Isolation Boundary:** Imports only Python standard library (`csv`, `datetime`, `json`, `os`, `sys`). Never imports `recon_agent.synth` or generator internals.
-- **Observable Rules:** Evaluates all 7 error classes using only file-level relationships:
+- **Observable Rules:** Evaluates all 7 Tier 1 error classes using file-level relationships:
   - `DUPLICATE_PAYMENT`: Multiple captured payments for one order with identical amount.
   - `MISSING_SETTLEMENT`: Captured payment absent from recon items where expected settlement date + `missing_after_days` $\le$ `as_of`.
-  - `FEE_TAX_MISMATCH`: Recon payment item where fee or tax differs from rate card calculation by $> \text{rounding\_tolerance\_paise}$ (2 paise).
+  - `FEE_TAX_MISMATCH`: Recon payment item where fee or tax differs from rate card calculation by $\ge \text{error\_threshold\_paise}$ (10 paise; Band 3).
   - `PARTIAL_REFUND_MISMATCH`: Recon refund debit $\ne$ ledger refund amount, or ledger status == "captured" with no refund entry.
   - `CUTOFF_DRIFT`: Ledger `booked_date` != IST date of payment capture.
   - `SHORT_BANK_CREDIT`: Bank credit amount $<$ settlement net amount for matching UTR.
   - `ORPHAN_BANK_CREDIT`: Bank credit with Razorpay narration matching no settlement batch.
-- **Quality Floor:** Minimum 98.0% detection rate and zero false positives across all error classes.
+- **Bank Statement No-UTR Matching Logic:**
+  1. Filter bank statement to Razorpay-style narrations.
+  2. For a merchant-date, a bank row whose amount equals the settlement net is the legitimate settlement credit.
+  3. Any additional Razorpay row on that merchant-date is an orphan credit.
+  4. A lone row on that merchant-date with a different amount is a short credit. Never match on "amount < net" alone.
+- **Tier 1 Quality Floor:** Minimum 98.0% detection rate and zero false positives across all 7 Tier 1 error classes.
+- **Tier 2 Reporting:** Pure observable rules without NLP cannot read `reason_text` explanations; the audit demonstrates and documents this baseline text blindness (e.g. 0% on `EXPLAINED_CONSISTENT` and `EXPLAINED_NO_AMOUNT`, matching on `EXPLAINED_INCONSISTENT`, and 100% escalation on `NEAR_TOLERANCE`).
 
 ### 2. Statistical Feature Leakage Audit (`tests/audit/leakage.py`)
 - **Non-Semantic Leakage Protection:** Evaluates whether non-semantic artifacts (file order, ID prefixes/suffixes, sequence gaps, narration lengths, dictionary structures) inadvertently identify injected entities.
 - **Metric:** Mann-Whitney $U$ test rank-sum calculation yielding Area Under ROC Curve (AUC).
-- **Invariance Bounds:** Every non-whitelisted feature must satisfy $0.30 \le \text{AUC} \le 0.70$.
-- **Whitelisted Semantics:** Only `("CUTOFF_DRIFT", "time_of_day")` is whitelisted, as cutoff drift by definition shifts transaction timing toward midnight.
+- **Tightened Invariance Bounds:** Every non-whitelisted feature must satisfy $0.40 \le \text{AUC} \le 0.60$.
+- **Whitelisted Semantics:** Strictly `("CUTOFF_DRIFT", "time_of_day")` only, as cutoff drift by definition shifts transaction timing toward midnight.
+- **Same Eligible Clean Population:** Each injected class is compared strictly against clean entities from its own eligible population (e.g. fee/tax against clean card/netbanking payments; bank classes against clean Razorpay settlement bank credits; refunds against clean refunds). Population counts ($N_{\text{pos}}, N_{\text{neg}}$) are explicitly tracked and printed.
+- **Batch-Level Features:** Evaluates settlement batch-level properties (`batch_item_count`, `batch_net_amount_zscore`, `batch_day_of_week`).
+- **Per-Merchant Concentration:** Verifies that no single merchant holds $> 3\times$ its uniform share of any injected class ($\text{max} \le 3.0 \times \text{uniform}$).
+- **Narration-Variant Tracking:** Bank classes track the proportion of `clean`, `noisy`, and `no_utr` narration variants.
+- **Root Cause Analyses & Audit Fixes:**
+  1. `SHORT_BANK_CREDIT` narration length (AUC 0.64 $\rightarrow$ 0.49): Short credit injection was previously restricted to `clean` and `noisy` batches, omitting `no_utr` narrations (~44 characters). Allowing short credits across all narration variants mirrored the natural 66/18/16 distribution.
+  2. `ORPHAN_BANK_CREDIT` narration length (AUC 0.68 $\rightarrow$ 0.46): Injected orphan credits were previously audited against all bank statement credit rows, including unrelated external credits (Stripe, interest: ~19–26 characters). Comparing exclusively against eligible clean Razorpay settlement bank credits eliminated the length divergence.
+  3. `FEE_TAX_MISMATCH` null count (AUC 0.35 $\rightarrow$ 0.48): Auditing fee/tax items against the entire recon population caused an artificial null discrepancy because UPI payments and dispute adjustments naturally have 4–8 null fields. Comparing fee/tax errors strictly against clean card/netbanking payment recon items resolved the null discrepancy.
+  4. `EXPLAINED_*` null count and amount z-score (AUC 0.23 / 0.39 $\rightarrow$ 0.45–0.55): Clean refunds initially lacked notes (6 nulls) whereas explained refunds had notes (5 nulls); adding merchant order ref notes to clean refunds aligned null counts. Small balanced positive/negative adjustments (100–500 paise) eliminated refund amount z-score skew.
 
 

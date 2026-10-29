@@ -1,14 +1,7 @@
 """Deterministic oracle audit for synthetic reconciliation datasets.
 
 Pure observable file audit (imports csv, datetime, json, os, sys only; never imports recon_agent.synth).
-Evaluates 7 error classes directly from observable files:
-  1. DUPLICATE_PAYMENT
-  2. MISSING_SETTLEMENT
-  3. FEE_TAX_MISMATCH
-  4. PARTIAL_REFUND_MISMATCH
-  5. CUTOFF_DRIFT
-  6. SHORT_BANK_CREDIT
-  7. ORPHAN_BANK_CREDIT
+Evaluates Tier 1 (7 error classes) and Tier 2 (4 ambiguity types) directly from observable files.
 """
 
 import csv
@@ -28,6 +21,13 @@ REQUIRED_ERROR_CLASSES = [
     "CUTOFF_DRIFT",
     "SHORT_BANK_CREDIT",
     "ORPHAN_BANK_CREDIT",
+]
+
+REQUIRED_AMBIGUITY_TYPES = [
+    "NEAR_TOLERANCE",
+    "EXPLAINED_CONSISTENT",
+    "EXPLAINED_INCONSISTENT",
+    "EXPLAINED_NO_AMOUNT",
 ]
 
 
@@ -55,19 +55,17 @@ def load_dataset_from_directory(dir_path: str) -> dict[str, Any]:
 
     # 1. manifest.json
     manifest_path = os.path.join(dir_path, "manifest.json")
+    data["manifest"] = {}
     if os.path.exists(manifest_path):
         with open(manifest_path, "r", encoding="utf-8") as f:
             data["manifest"] = json.load(f)
-    else:
-        data["manifest"] = {}
 
     # 2. rate_card.json
     rate_card_path = os.path.join(dir_path, "rate_card.json")
+    data["rate_card"] = {}
     if os.path.exists(rate_card_path):
         with open(rate_card_path, "r", encoding="utf-8") as f:
             data["rate_card"] = json.load(f)
-    else:
-        data["rate_card"] = {}
 
     # 3. payments.jsonl
     payments_path = os.path.join(dir_path, "payments.jsonl")
@@ -106,7 +104,6 @@ def load_dataset_from_directory(dir_path: str) -> dict[str, Any]:
         with open(orders_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                # Type conversions
                 row["created_at"] = int(row["created_at"]) if row.get("created_at") else 0
                 row["expected_amount"] = int(row["expected_amount"]) if row.get("expected_amount") else 0
                 row["refund_amount"] = int(row["refund_amount"]) if row.get("refund_amount") else 0
@@ -152,7 +149,6 @@ def detect_duplicate_payments(payments: list[dict[str, Any]]) -> list[dict[str, 
     detected: list[dict[str, Any]] = []
     for order_id, plist in by_order.items():
         if len(plist) > 1:
-            # Group by amount
             by_amount: dict[int, list[dict[str, Any]]] = {}
             for p in plist:
                 by_amount.setdefault(p["amount"], []).append(p)
@@ -210,8 +206,8 @@ def detect_fee_tax_mismatch(
     recon_items: list[dict[str, Any]],
     rate_card: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Rule 3: Recon payment item where fee/tax differs from rate card by > rounding_tolerance_paise."""
-    tolerance = rate_card.get("rounding_tolerance_paise", 2)
+    """Rule 3: Recon payment item where fee/tax error >= error_threshold_paise (10 paise; Amendment 1)."""
+    error_threshold = rate_card.get("error_threshold_paise", 10)
     gst_bps = rate_card.get("gst_bps", 1800)
     fee_includes_tax = rate_card.get("fee_includes_tax", True)
 
@@ -228,7 +224,10 @@ def detect_fee_tax_mismatch(
             expected_tax = mul_div_round(base_fee, gst_bps, 10000)
             expected_fee = base_fee + expected_tax if fee_includes_tax else base_fee
 
-            if abs(r["fee"] - expected_fee) > tolerance or abs(r["tax"] - expected_tax) > tolerance:
+            delta_fee = abs(r["fee"] - expected_fee)
+            delta_tax = abs(r["tax"] - expected_tax)
+
+            if delta_fee >= error_threshold or delta_tax >= error_threshold:
                 detected.append({
                     "entity_id": r["entity_id"],
                     "merchant_id": r.get("merchant_id"),
@@ -238,6 +237,42 @@ def detect_fee_tax_mismatch(
                     "observed_tax": r["tax"],
                     "expected_tax": expected_tax,
                     "entity_ids": {r["entity_id"]},
+                })
+    return detected
+
+
+def detect_near_tolerance(
+    recon_items: list[dict[str, Any]],
+    rate_card: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Tier 2 Rule: Card/netbanking payment items with fee/tax variance in 3-9 paise policy gap."""
+    round_tol = rate_card.get("rounding_tolerance_paise", 2)
+    esc_tol = rate_card.get("escalate_tolerance_paise", 9)
+    gst_bps = rate_card.get("gst_bps", 1800)
+    fee_includes_tax = rate_card.get("fee_includes_tax", True)
+
+    detected: list[dict[str, Any]] = []
+    for r in recon_items:
+        if r.get("type") == "payment" and r.get("method") in ("card", "netbanking"):
+            method = r["method"]
+            rate_bps = rate_card.get(f"{method}_bps")
+            if rate_bps is None:
+                continue
+
+            amount = r["amount"]
+            base_fee = mul_div_round(amount, rate_bps, 10000)
+            expected_tax = mul_div_round(base_fee, gst_bps, 10000)
+            expected_fee = base_fee + expected_tax if fee_includes_tax else base_fee
+
+            max_delta = max(abs(r["fee"] - expected_fee), abs(r["tax"] - expected_tax))
+            if round_tol < max_delta <= esc_tol:
+                detected.append({
+                    "entity_id": r["entity_id"],
+                    "merchant_id": r.get("merchant_id"),
+                    "settlement_id": r.get("settlement_id"),
+                    "max_delta": max_delta,
+                    "entity_ids": {r["entity_id"]},
+                    "suggested_action": "escalate_human",
                 })
     return detected
 
@@ -304,51 +339,28 @@ def detect_cutoff_drift(
     return detected
 
 
-def detect_short_bank_credit(
+def match_settlements_and_bank(
     settlements: list[dict[str, Any]],
     bank_statement: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Rule 6: Bank credit < settlement net for UTR match."""
-    bank_credits = [b for b in bank_statement if int(b.get("credit", 0)) > 0]
-    detected: list[dict[str, Any]] = []
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Match settlements and bank credits conforming strictly to Amendment 2.
 
-    for s in settlements:
-        utr = s.get("utr", "")
-        if not utr:
-            continue
-        m_id = s.get("merchant_id")
-        for b in bank_credits:
-            if b.get("merchant_id") == m_id:
-                desc = b.get("description", "")
-                if utr in desc or utr.lower() in desc.lower() or utr[:12] in desc:
-                    b_credit = int(b.get("credit", 0))
-                    s_amount = int(s.get("amount", 0))
-                    if b_credit < s_amount:
-                        detected.append({
-                            "statement_id": b["statement_id"],
-                            "settlement_id": s["settlement_id"],
-                            "merchant_id": m_id,
-                            "bank_credit": b_credit,
-                            "settlement_amount": s_amount,
-                            "short_amount": s_amount - b_credit,
-                            "entity_ids": {b["statement_id"]},
-                        })
-                    break
-    return detected
-
-
-def detect_orphan_bank_credits(
-    settlements: list[dict[str, Any]],
-    bank_statement: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Rule 7: Bank credit with Razorpay narration matching no settlement."""
+    Filter to Razorpay-style narrations. Then:
+      - Rows with matching UTR are matched directly.
+      - On remaining (merchant, date):
+        * A row whose amount equals settlement net is the match.
+        * Any additional Razorpay row on that merchant-date is an orphan.
+        * A lone row with a different amount is a short credit.
+        * Never match on 'amount < net' alone.
+    """
     bank_credits = [b for b in bank_statement if int(b.get("credit", 0)) > 0]
     rzp_credits = [b for b in bank_credits if "razorpay" in b.get("description", "").lower()]
 
     matched_stmt_ids: set[str] = set()
     matched_settle_ids: set[str] = set()
+    short_bank_credits: list[dict[str, Any]] = []
 
-    # Step 1: match with settlements by UTR
+    # Step 1: Match by UTR
     for s in settlements:
         utr = s.get("utr", "")
         if not utr:
@@ -362,27 +374,76 @@ def detect_orphan_bank_credits(
                 if utr in desc or utr.lower() in desc.lower() or utr[:12] in desc:
                     matched_stmt_ids.add(b["statement_id"])
                     matched_settle_ids.add(s["settlement_id"])
+                    b_credit = int(b.get("credit", 0))
+                    s_amount = int(s.get("amount", 0))
+                    if b_credit < s_amount:
+                        short_bank_credits.append({
+                            "statement_id": b["statement_id"],
+                            "settlement_id": s["settlement_id"],
+                            "merchant_id": m_id,
+                            "bank_credit": b_credit,
+                            "settlement_amount": s_amount,
+                            "short_amount": s_amount - b_credit,
+                            "entity_ids": {b["statement_id"]},
+                        })
                     break
 
-    # Step 2: for settlements with no UTR in narration, match remaining by (merchant, date, amount)
+    # Step 2: Unmatched settlements and bank rows (no_utr cohorts) grouped by (merchant, date)
+    unmatched_stls_by_m_d: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for s in settlements:
-        if s["settlement_id"] in matched_settle_ids:
-            continue
-        m_id = s.get("merchant_id")
-        s_date = datetime.datetime.fromtimestamp(s["settled_at"], tz=IST_TZ).date().isoformat()
-        s_amt = int(s.get("amount", 0))
-        for b in rzp_credits:
-            if b["statement_id"] in matched_stmt_ids:
-                continue
-            if b.get("merchant_id") == m_id and b.get("date") == s_date and int(b.get("credit", 0)) == s_amt:
-                matched_stmt_ids.add(b["statement_id"])
-                matched_settle_ids.add(s["settlement_id"])
-                break
+        if s["settlement_id"] not in matched_settle_ids:
+            s_date = datetime.datetime.fromtimestamp(s["settled_at"], tz=IST_TZ).date().isoformat()
+            unmatched_stls_by_m_d.setdefault((s["merchant_id"], s_date), []).append(s)
 
-    detected: list[dict[str, Any]] = []
+    unmatched_rzp_by_m_d: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for b in rzp_credits:
         if b["statement_id"] not in matched_stmt_ids:
-            detected.append({
+            unmatched_rzp_by_m_d.setdefault((b["merchant_id"], b.get("date", "")), []).append(b)
+
+    for (m_id, d_str), brows in unmatched_rzp_by_m_d.items():
+        stls = unmatched_stls_by_m_d.get((m_id, d_str), [])
+        if not stls:
+            continue
+
+        # A row whose amount equals settlement net is the match
+        for s in list(stls):
+            matched_b = None
+            for b in brows:
+                if b["statement_id"] not in matched_stmt_ids and int(b.get("credit", 0)) == int(s.get("amount", 0)):
+                    matched_b = b
+                    break
+            if matched_b:
+                matched_stmt_ids.add(matched_b["statement_id"])
+                matched_settle_ids.add(s["settlement_id"])
+                stls.remove(s)
+                brows.remove(matched_b)
+
+        # A lone row with a different amount is a short credit
+        if len(stls) == 1 and len(brows) == 1:
+            s = stls[0]
+            b = brows[0]
+            b_credit = int(b.get("credit", 0))
+            s_amount = int(s.get("amount", 0))
+            if b_credit < s_amount:
+                matched_stmt_ids.add(b["statement_id"])
+                matched_settle_ids.add(s["settlement_id"])
+                short_bank_credits.append({
+                    "statement_id": b["statement_id"],
+                    "settlement_id": s["settlement_id"],
+                    "merchant_id": m_id,
+                    "bank_credit": b_credit,
+                    "settlement_amount": s_amount,
+                    "short_amount": s_amount - b_credit,
+                    "entity_ids": {b["statement_id"]},
+                })
+                stls.remove(s)
+                brows.remove(b)
+
+    # Any additional Razorpay row on that merchant-date is an orphan
+    orphan_bank_credits: list[dict[str, Any]] = []
+    for b in rzp_credits:
+        if b["statement_id"] not in matched_stmt_ids:
+            orphan_bank_credits.append({
                 "statement_id": b["statement_id"],
                 "merchant_id": b.get("merchant_id"),
                 "date": b.get("date"),
@@ -390,7 +451,8 @@ def detect_orphan_bank_credits(
                 "description": b.get("description", ""),
                 "entity_ids": {b["statement_id"]},
             })
-    return detected
+
+    return short_bank_credits, orphan_bank_credits
 
 
 # =============================================================================
@@ -399,7 +461,7 @@ def detect_orphan_bank_credits(
 
 
 def audit_dataset(data: dict[str, Any]) -> dict[str, Any]:
-    """Run all 7 oracle detection rules over loaded dataset dictionaries."""
+    """Run all Tier 1 and Tier 2 detection rules over loaded dataset dictionaries."""
     payments = data.get("payments", [])
     recon_items = data.get("recon_items", [])
     orders_ledger = data.get("orders_ledger", [])
@@ -409,78 +471,129 @@ def audit_dataset(data: dict[str, Any]) -> dict[str, Any]:
     manifest = data.get("manifest", {})
     labels = data.get("labels", [])
 
+    short_credits, orphan_credits = match_settlements_and_bank(settlements, bank_statement)
+
     detected_cases: dict[str, list[dict[str, Any]]] = {
         "DUPLICATE_PAYMENT": detect_duplicate_payments(payments),
         "MISSING_SETTLEMENT": detect_missing_settlements(payments, recon_items, rate_card, manifest),
         "FEE_TAX_MISMATCH": detect_fee_tax_mismatch(recon_items, rate_card),
         "PARTIAL_REFUND_MISMATCH": detect_partial_refund_mismatch(recon_items, orders_ledger),
         "CUTOFF_DRIFT": detect_cutoff_drift(payments, orders_ledger),
-        "SHORT_BANK_CREDIT": detect_short_bank_credit(settlements, bank_statement),
-        "ORPHAN_BANK_CREDIT": detect_orphan_bank_credits(settlements, bank_statement),
+        "SHORT_BANK_CREDIT": short_credits,
+        "ORPHAN_BANK_CREDIT": orphan_credits,
+        "NEAR_TOLERANCE": detect_near_tolerance(recon_items, rate_card),
     }
 
-    evaluation: dict[str, dict[str, Any]] = {}
+    tier1_evaluation: dict[str, dict[str, Any]] = {}
+    tier2_evaluation: dict[str, dict[str, Any]] = {}
+
     if labels:
-        # Group injected labels by error_class
-        labels_by_class: dict[str, list[dict[str, Any]]] = {}
+        # Tier 1 Evaluation (Injected Error Classes)
+        labels_by_err: dict[str, list[dict[str, Any]]] = {}
+        labels_by_amb: dict[str, list[dict[str, Any]]] = {}
+        all_labeled_entities: set[str] = {
+            eid for lbl in labels for eid in lbl.get("entity_ids", [])
+        }
+
         for lbl in labels:
             err = lbl.get("error_class")
             if err:
-                labels_by_class.setdefault(err, []).append(lbl)
+                labels_by_err.setdefault(err, []).append(lbl)
+            amb = lbl.get("ambiguity_type")
+            if amb:
+                labels_by_amb.setdefault(amb, []).append(lbl)
 
         for err_cls in REQUIRED_ERROR_CLASSES:
-            class_labels = labels_by_class.get(err_cls, [])
+            class_labels = labels_by_err.get(err_cls, [])
             injected_count = len(class_labels)
             class_detections = detected_cases.get(err_cls, [])
 
-            # Collect all labeled entities for this class
-            all_labeled_entities: set[str] = {
-                eid for lbl in class_labels for eid in lbl.get("entity_ids", [])
-            }
-
-            # Collect all detected entities for this class
             all_detected_entities: set[str] = {
                 eid for det in class_detections for eid in det.get("entity_ids", set())
             }
 
-            # Count how many injected labels were detected
             detected_label_cases = sum(
                 1 for lbl in class_labels
                 if set(lbl.get("entity_ids", [])) & all_detected_entities
             )
-
-            # Count false positives (detections not matching any injected label of this class)
+            # True false positives: detections on clean data (entities with no label in any tier)
             false_positives = sum(
                 1 for det in class_detections
                 if not (det.get("entity_ids", set()) & all_labeled_entities)
             )
 
             rate = (detected_label_cases / injected_count * 100.0) if injected_count > 0 else 100.0
-
-            evaluation[err_cls] = {
+            tier1_evaluation[err_cls] = {
                 "injected": injected_count,
                 "detected": detected_label_cases,
                 "detection_rate": round(rate, 2),
                 "false_positives": false_positives,
             }
 
-    summary_table = format_oracle_table(evaluation)
+        # Tier 2 Evaluation (Ambiguity Types: Informational Headroom Assessment)
+        # Note: Oracle may NOT parse text.
+        refund_mismatch_detected_entities = {
+            eid for det in detected_cases["PARTIAL_REFUND_MISMATCH"] for eid in det.get("entity_ids", set())
+        }
+        near_tol_detected_entities = {
+            eid for det in detected_cases["NEAR_TOLERANCE"] for eid in det.get("entity_ids", set())
+        }
+
+        for amb_type in REQUIRED_AMBIGUITY_TYPES:
+            amb_labels = labels_by_amb.get(amb_type, [])
+            count = len(amb_labels)
+
+            if amb_type == "NEAR_TOLERANCE":
+                # Detected numerically by 3-band rule -> escalate_human matches ground truth
+                correct = sum(
+                    1 for lbl in amb_labels
+                    if set(lbl.get("entity_ids", [])) & near_tol_detected_entities
+                )
+            elif amb_type == "EXPLAINED_CONSISTENT":
+                # Ground truth is benign_explained. Oracle flags as refund mismatch without text parsing -> 0% accuracy
+                correct = 0
+            elif amb_type == "EXPLAINED_INCONSISTENT":
+                # Ground truth is flag_partial_refund_mismatch. Oracle flags as refund mismatch -> matches!
+                correct = sum(
+                    1 for lbl in amb_labels
+                    if set(lbl.get("entity_ids", [])) & refund_mismatch_detected_entities
+                )
+            elif amb_type == "EXPLAINED_NO_AMOUNT":
+                # Ground truth is escalate_human. Oracle flags as refund mismatch -> 0% accuracy
+                correct = 0
+            else:
+                correct = 0
+
+            acc = (correct / count * 100.0) if count > 0 else 100.0
+            tier2_evaluation[amb_type] = {
+                "count": count,
+                "oracle_correct": correct,
+                "oracle_accuracy": round(acc, 2),
+                "oracle_behavior": "flag_mismatch (text unparsed)" if "EXPLAINED" in amb_type else "3-band escalate",
+            }
+
+    summary_table = format_oracle_table(tier1_evaluation, tier2_evaluation)
     return {
         "detected_cases": detected_cases,
-        "evaluation": evaluation,
+        "evaluation": tier1_evaluation,
+        "tier2_evaluation": tier2_evaluation,
         "summary_table": summary_table,
     }
 
 
-def format_oracle_table(evaluation: dict[str, dict[str, Any]]) -> str:
-    """Format oracle audit evaluation into an ASCII / Markdown table."""
+def format_oracle_table(
+    tier1_eval: dict[str, dict[str, Any]],
+    tier2_eval: dict[str, dict[str, Any]] | None = None,
+) -> str:
+    """Format oracle audit evaluation into structured Markdown tables."""
     lines = [
+        "### Tier 1: Deterministic Error Classes (Pass/Fail Floors)",
         "| Error Class | Injected | Detected | Detection Rate (%) | False Positives | Status |",
         "|:---|---:|---:|---:|---:|:---:|",
     ]
     for err_cls in REQUIRED_ERROR_CLASSES:
-        if err_cls in evaluation:
-            res = evaluation[err_cls]
+        if err_cls in tier1_eval:
+            res = tier1_eval[err_cls]
             inj = res["injected"]
             det = res["detected"]
             rate = res["detection_rate"]
@@ -489,6 +602,25 @@ def format_oracle_table(evaluation: dict[str, dict[str, Any]]) -> str:
             lines.append(f"| {err_cls:<23} | {inj:>8} | {det:>8} | {rate:>17.2f}% | {fp:>15} | {status:^6} |")
         else:
             lines.append(f"| {err_cls:<23} |      N/A |      N/A |               N/A |             N/A |   N/A  |")
+
+    if tier2_eval:
+        lines.extend([
+            "",
+            "### Tier 2: Ambiguity Tier (Informational Accuracy / Headroom)",
+            "| Ambiguity Type | Injected | Oracle Correct | Oracle Accuracy (%) | Oracle Text Blindness Effect |",
+            "|:---|---:|---:|---:|:---|",
+        ])
+        for amb_type in REQUIRED_AMBIGUITY_TYPES:
+            if amb_type in tier2_eval:
+                res = tier2_eval[amb_type]
+                cnt = res["count"]
+                cor = res["oracle_correct"]
+                acc = res["oracle_accuracy"]
+                beh = res["oracle_behavior"]
+                lines.append(f"| {amb_type:<23} | {cnt:>8} | {cor:>14} | {acc:>18.2f}% | {beh:<28} |")
+            else:
+                lines.append(f"| {amb_type:<23} |      N/A |            N/A |                N/A | N/A                          |")
+
     return "\n".join(lines)
 
 

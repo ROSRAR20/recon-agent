@@ -320,7 +320,7 @@ class SyntheticDataGenerator:
                             "settled_at": 0,
                             "settlement_id": "",
                             "description": "Refund processed",
-                            "notes": None,
+                            "notes": {"merchant_order_ref": receipt_num},
                             "payment_id": payment_id,
                             "settlement_utr": None,
                             "order_id": order_id,
@@ -466,10 +466,10 @@ class SyntheticDataGenerator:
                 # Bank statement entry for this settlement (one credit per settlement on settle date)
                 # Narration mix: 70% clean UTR, 20% noisy UTR, 10% no UTR
                 narration_roll = self.rng.random()
-                if narration_roll < 0.70:
+                if narration_roll < 0.66:
                     variant = "clean"
                     narration = f"CMS/RAZORPAY/{settlement_utr}/SETTLEMENT"
-                elif narration_roll < 0.90:
+                elif narration_roll < 0.84:
                     variant = "noisy"
                     noise_choice = self.rng.choice(["lower", "spaces", "trunc"])
                     if noise_choice == "lower":
@@ -591,6 +591,8 @@ class SyntheticDataGenerator:
             "refund_settlement_lag_days": self.config.refund_settlement_lag_days,
             "missing_after_days": 7,
             "rounding_tolerance_paise": 2,
+            "escalate_tolerance_paise": 9,
+            "error_threshold_paise": 10,
         }
 
         data = {
@@ -618,21 +620,27 @@ class SyntheticDataGenerator:
             )
             data["labels"] = labels
 
-            # Update manifest counts with error class counts and hard negative counts
+            # Update manifest counts with error class counts, hard negative counts, and ambiguity type counts
             error_class_counts: dict[str, int] = {}
             hard_negative_counts: dict[str, int] = {}
+            ambiguity_type_counts: dict[str, int] = {}
             for lbl in labels:
-                if lbl["error_class"]:
+                if lbl.get("error_class"):
                     error_class_counts[lbl["error_class"]] = (
                         error_class_counts.get(lbl["error_class"], 0) + 1
                     )
-                if lbl["hard_negative_type"]:
+                if lbl.get("hard_negative_type"):
                     hard_negative_counts[lbl["hard_negative_type"]] = (
                         hard_negative_counts.get(lbl["hard_negative_type"], 0) + 1
+                    )
+                if lbl.get("ambiguity_type"):
+                    ambiguity_type_counts[lbl["ambiguity_type"]] = (
+                        ambiguity_type_counts.get(lbl["ambiguity_type"], 0) + 1
                     )
 
             manifest["counts"]["error_class_counts"] = error_class_counts
             manifest["counts"]["hard_negative_counts"] = hard_negative_counts
+            manifest["counts"]["ambiguity_type_counts"] = ambiguity_type_counts
 
             # Re-sort affected collections to maintain invariant order
             orders_ledger.sort(key=lambda x: x["created_at"])

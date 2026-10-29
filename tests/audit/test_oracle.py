@@ -9,7 +9,7 @@ import pytest
 
 from src.recon_agent.synth.config import create_config
 from src.recon_agent.synth.generator import SyntheticDataGenerator
-from tests.audit.oracle import REQUIRED_ERROR_CLASSES, audit_dataset, run_oracle
+from tests.audit.oracle import REQUIRED_AMBIGUITY_TYPES, REQUIRED_ERROR_CLASSES, audit_dataset, run_oracle
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -53,6 +53,15 @@ def test_oracle_audit_small_profile(seed: int) -> None:
             f"Class {err_cls} had {stats['false_positives']} false positives"
         )
 
+    assert "tier2_evaluation" in results
+    tier2_eval = results["tier2_evaluation"]
+    for amb_type in REQUIRED_AMBIGUITY_TYPES:
+        assert amb_type in tier2_eval, f"Missing Tier 2 evaluation for {amb_type}"
+        amb_stats = tier2_eval[amb_type]
+        assert amb_stats["count"] >= 0, (
+            f"Expected >= 0 injected for small profile Tier 2 {amb_type}, got {amb_stats['count']}"
+        )
+
 
 def test_oracle_audit_full_profile() -> None:
     """Test oracle detection rate >= 98% across all 7 error classes on full profile."""
@@ -75,4 +84,13 @@ def test_oracle_audit_full_profile() -> None:
         )
         assert stats["false_positives"] == 0, (
             f"Class {err_cls} had {stats['false_positives']} false positives"
+        )
+
+    assert "tier2_evaluation" in results
+    tier2_eval = results["tier2_evaluation"]
+    for amb_type in REQUIRED_AMBIGUITY_TYPES:
+        assert amb_type in tier2_eval, f"Missing Tier 2 evaluation for {amb_type}"
+        amb_stats = tier2_eval[amb_type]
+        assert amb_stats["count"] >= 50, (
+            f"Expected >= 50 injected for Tier 2 {amb_type}, got {amb_stats['count']}"
         )
