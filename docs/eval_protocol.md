@@ -10,7 +10,7 @@ To rigorously isolate the contribution of each architectural component, all eval
 
 | System ID | Name | Ingestion & Rules | LLM Residual Reasoning | Verification Layer | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **B0** | Baseline Exact-ID | Exact ID matching only | None | None | Matches records solely if transaction ID (`pay_...`, `order_...`) is identical in gateway and internal ledger. |
+| **B0** | Baseline Exact-ID | Exact ID matching only | None | None | Exact identifier matching only (`payments <-> recon` by `payment_id`, `recon <-> settlements` by `settlement_id`, and `settlements <-> bank` by full UTR as an exact case-sensitive substring of narration without normalization). Unmatched outputs: captured payment without recon item -> `MISSING_SETTLEMENT`; Razorpay bank credit without settlement match -> `ORPHAN_BANK_CREDIT`; settlement without bank match -> `UNKNOWN`. Zero arithmetic checks, ledger checks, or tolerances. |
 | **B1** | Deterministic Rules | Extended rules & invariants | None | None | Matches on secondary keys, amount matching (in integer paise), timestamp windows, and fee calculations without any LLM. |
 | **B1r** | Rules + Regex Parser | Extended rules & invariants + Regex parser | None | None | Extends B1 with regex pattern matching over free-text fields (`notes.reason_text`, bank narrations) to extract explicit numeric amounts and deduction keywords without an LLM. Establishes the non-LLM text extraction benchmark. |
 | **B2** | Rules + Unverified LLM | Extended rules & invariants | Active for residual cases | None | Residual exceptions are routed to an LLM. Model explanations and resolutions are accepted without algorithmic verification. |

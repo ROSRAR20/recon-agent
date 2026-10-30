@@ -80,6 +80,7 @@ def finalize_bank_statements(data: dict[str, Any], rng_order: random.Random | No
     stmt_map: dict[str, str] = {}
     merchant_balances = dict(initial_balances)
 
+    truth_links: list[dict[str, Any]] = []
     for idx, r in enumerate(bank_statements):
         old_id = r["statement_id"]
         new_id = f"stmt_{idx + 1:07d}"
@@ -91,6 +92,13 @@ def finalize_bank_statements(data: dict[str, Any], rng_order: random.Random | No
         r["balance"] = merchant_balances[m_id]
         r.pop("_orig_seq", None)
         r.pop("_tiebreak", None)
+        setl_id = r.pop("_settlement_id", None)
+        truth_links.append({
+            "statement_id": new_id,
+            "settlement_id": setl_id,
+        })
+
+    data["truth_links"] = truth_links
 
     # Remap statement IDs in labels
     for lbl in data.get("labels", []):
@@ -494,6 +502,7 @@ class SyntheticDataGenerator:
                         "credit": settlement_net,
                         "balance": 0,
                         "_orig_seq": len(bank_statements),
+                        "_settlement_id": settlement_id,
                     }
                 )
 
@@ -546,6 +555,7 @@ class SyntheticDataGenerator:
                         "credit": c_final,
                         "balance": 0,
                         "_orig_seq": len(bank_statements),
+                        "_settlement_id": None,
                     }
                 )
 
@@ -717,5 +727,13 @@ class SyntheticDataGenerator:
                 for item in data["labels"]:
                     f.write(json.dumps(item, separators=(",", ":")) + "\n")
             paths["labels"] = labels_path
+
+        # 9. truth_links.jsonl (eval-only, if generated)
+        if data.get("truth_links"):
+            truth_path = os.path.join(out_dir, "truth_links.jsonl")
+            with open(truth_path, "w", encoding="utf-8") as f:
+                for item in data["truth_links"]:
+                    f.write(json.dumps(item, separators=(",", ":")) + "\n")
+            paths["truth_links"] = truth_path
 
         return paths

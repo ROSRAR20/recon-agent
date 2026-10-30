@@ -688,6 +688,7 @@ def inject_errors_and_labels(
                 "credit": orphan_amt,
                 "balance": 0,
                 "_orig_seq": len(data["bank_statement"]),
+                "_settlement_id": None,
             }
         )
 

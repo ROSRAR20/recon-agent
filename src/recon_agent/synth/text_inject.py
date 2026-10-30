@@ -266,5 +266,13 @@ def write_twin_dataset(
             f.write(json.dumps(item, separators=(",", ":")) + "\n")
     paths["injection_manifest"] = inj_path
 
+    # 10. truth_links.jsonl (eval-only, unchanged by text injection)
+    if twin_data.get("truth_links"):
+        truth_path = os.path.join(output_dir, "truth_links.jsonl")
+        with open(truth_path, "w", encoding="utf-8") as f:
+            for item in twin_data["truth_links"]:
+                f.write(json.dumps(item, separators=(",", ":")) + "\n")
+        paths["truth_links"] = truth_path
+
     return paths
 

@@ -271,6 +271,7 @@ def test_invariant_i6_determinism_and_divergence(tmp_path) -> None:
         "bank_statement.csv",
         "manifest.json",
         "rate_card.json",
+        "truth_links.jsonl",
     ]
 
     for fname in file_names:
@@ -300,6 +301,7 @@ def test_invariant_i7_import_boundary() -> None:
         os.path.abspath(os.path.join(src_dir, "recon_agent", "synth")),
         os.path.abspath(os.path.join(REPO_ROOT, "tests")),
         os.path.abspath(os.path.join(scripts_dir, "generate.py")),
+        os.path.abspath(os.path.join(scripts_dir, "evaluate.py")),
     ]
 
     violations: list[str] = []
@@ -595,25 +597,31 @@ def test_full_profile_volume_floors_dev_and_test() -> None:
             assert cnt >= 30, f"[{split}] Hard negative {hn_name} count {cnt} < 30 floor"
 
 
-def test_labels_filename_boundary() -> None:
-    """Verify literal string 'labels.jsonl' does not appear outside synth/, tests/, scripts/, and docs/."""
+def test_eval_files_boundary() -> None:
+    """Verify labels.jsonl, truth_links.jsonl, and injection_manifest.jsonl never appear in pipeline or systems."""
     src_dir = os.path.join(REPO_ROOT, "src")
     synth_dir = os.path.abspath(os.path.join(src_dir, "recon_agent", "synth"))
+    eval_dir = os.path.abspath(os.path.join(src_dir, "recon_agent", "eval"))
+
+    eval_filenames = ("labels.jsonl", "truth_links.jsonl", "injection_manifest.jsonl")
 
     violations: list[str] = []
     for root, _, files in os.walk(src_dir):
-        if os.path.abspath(root).startswith(synth_dir):
+        abs_root = os.path.abspath(root)
+        if abs_root.startswith(synth_dir) or abs_root.startswith(eval_dir):
             continue
         for file in files:
             if file.endswith(".py"):
                 path = os.path.join(root, file)
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    if "labels.jsonl" in content:
-                        violations.append(path)
+                    for ef in eval_filenames:
+                        if ef in content:
+                            violations.append(f"{path} references '{ef}'")
 
     assert not violations, (
-        f"Pipeline code outside synth/ references 'labels.jsonl': {violations}"
+        f"Pipeline or systems code outside synth/ and eval/ references eval files:\n"
+        + "\n".join(violations)
     )
 
 
@@ -723,6 +731,7 @@ def test_injection_manifest_boundary() -> None:
         is_allowed = (
             any(norm_rel.startswith(ad) or norm_rel == ad for ad in allowed_dirs)
             or "src/recon_agent/synth" in norm_rel
+            or "src/recon_agent/eval" in norm_rel
         )
 
         if not is_allowed:
@@ -770,6 +779,7 @@ def test_twin_dataset_byte_identity_except_free_text(tmp_path: Any) -> None:
         "rate_card.json",
         "manifest.json",
         "labels.jsonl",
+        "truth_links.jsonl",
     ]
     for fname in identical_files:
         base_f = os.path.join(base_dir, fname)
@@ -860,6 +870,25 @@ def test_entity_disjointness_across_errors_and_ambiguity() -> None:
                 f"in case {seen_entity_map[eid]}"
             )
             seen_entity_map[eid] = f"{case_id} ({c_type})"
+
+
+def test_truth_links_integrity() -> None:
+    """Verify truth_links.jsonl maps every bank row correctly: null for orphans/unrelated, valid settlement_id otherwise."""
+    for inject_errors in (False, True):
+        config = create_config("small", "dev", seed=42, inject_errors=inject_errors)
+        data = SyntheticDataGenerator(config).generate()
+        truth_links = data.get("truth_links", [])
+        bank_statements = data["bank_statement"]
+        settlements = data["settlements"]
+        settle_ids = {s["settlement_id"] for s in settlements}
+
+        assert len(truth_links) == len(bank_statements), "truth_links count must match bank_statement count"
+        for tl, bs in zip(truth_links, bank_statements):
+            assert tl["statement_id"] == bs["statement_id"]
+            s_id = tl["settlement_id"]
+            if s_id is not None:
+                assert s_id in settle_ids, f"Linked settlement_id {s_id} not found in settlements"
+
 
 
 
