@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 from typing import Any
 
 import pytest
@@ -922,6 +923,103 @@ def test_truth_links_integrity() -> None:
             s_id = tl["settlement_id"]
             if s_id is not None:
                 assert s_id in settle_ids, f"Linked settlement_id {s_id} not found in settlements"
+
+
+def test_observable_files_hash_regression() -> None:
+    """Verify SHA-256 hashes of observable files match exact expected hashes from previous runs."""
+    config = create_config("small", "dev", seed=42, inject_errors=True)
+    gen = SyntheticDataGenerator(config)
+    data = gen.generate()
+
+    expected_hashes = {
+        "orders_ledger.csv": "ce3c4dfb7e391d2b14a87979617cbc0464d542f81be9cfce5da25635829e357d",
+        "payments.jsonl": "2818d39ebde612e85f85f9b57727279fe02216d4d121249e690f78ff0edcc09a",
+        "recon_items.jsonl": "dc92517416eadee745157024b650594cc9c5b50c48812ca80271391f95308356",
+        "settlements.jsonl": "a4c12b4898b4a8035571c257ee1e9244fa71b02c2b9655e6b0e39a1d1e0be397",
+        "bank_statement.csv": "a9178f80cf24f2f3d54a1ff63796ab8c9e69ca03c3c57d80081669ecdd31b4c6",
+        "rate_card.json": "2ae81c822d82fda90ccac9db52e90811787781585d6f23ce4ea1fdf692fb430a",
+        "manifest.json": "5f177ae03ccc7fa16b3a74d66eb978bdb29959a953627fa04916595d9e662cf0",
+    }
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        gen.write_to_directory(tmpdir, data=data)
+        for fname, expected_hash in expected_hashes.items():
+            fpath = os.path.join(tmpdir, fname)
+            assert os.path.exists(fpath), f"Observable file {fname} not found"
+            with open(fpath, "rb") as f:
+                actual_hash = hashlib.sha256(f.read()).hexdigest()
+            assert (
+                actual_hash == expected_hash
+            ), f"Hash mismatch for observable file {fname}: expected {expected_hash}, got {actual_hash}"
+
+
+def test_primary_entity_ids_structure() -> None:
+    """Verify primary_entity_ids contract on all generated labels."""
+    config = create_config("small", "dev", seed=42, inject_errors=True)
+    data = SyntheticDataGenerator(config).generate()
+    labels = data["labels"]
+
+    for lbl in labels:
+        assert "primary_entity_ids" in lbl, f"Missing primary_entity_ids in label {lbl}"
+        p_ids = lbl["primary_entity_ids"]
+        assert isinstance(p_ids, list), f"primary_entity_ids must be list in {lbl}"
+        assert len(p_ids) > 0, f"primary_entity_ids cannot be empty in {lbl}"
+        assert all(isinstance(x, str) for x in p_ids), f"All primary_entity_ids must be str in {lbl}"
+
+        err_cls = lbl.get("error_class")
+        hn_cls = lbl.get("hard_negative_type")
+        amb_cls = lbl.get("ambiguity_type")
+
+        if err_cls == "DUPLICATE_PAYMENT":
+            assert len(p_ids) == 2
+            assert all(x.startswith("pay_") for x in p_ids)
+        elif err_cls == "MISSING_SETTLEMENT":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("pay_")
+        elif err_cls == "FEE_TAX_MISMATCH":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("pay_")
+        elif err_cls == "PARTIAL_REFUND_MISMATCH":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("rfnd_")
+        elif err_cls == "CUTOFF_DRIFT":
+            assert len(p_ids) == 2
+            assert any(x.startswith("pay_") for x in p_ids)
+            assert any(x.startswith("order_") for x in p_ids)
+        elif err_cls in ("SHORT_BANK_CREDIT", "ORPHAN_BANK_CREDIT"):
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("stmt_")
+        elif amb_cls == "NEAR_TOLERANCE":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("pay_")
+        elif amb_cls and amb_cls.startswith("EXPLAINED_"):
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("rfnd_")
+        elif hn_cls == "ROUNDING":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("pay_")
+        elif hn_cls == "LEGIT_ADJUSTMENT":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("adj_")
+        elif hn_cls == "LATE_SETTLEMENT":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("setl_")
+        elif hn_cls == "RETRY_AFTER_FAIL":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("pay_")
+        elif hn_cls in ("NOISY_BANK_NARRATION", "NO_UTR_NARRATION", "UNRELATED_BANK_CREDIT"):
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("stmt_")
+        elif hn_cls == "FAILED_PAYMENT":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("pay_")
+        elif hn_cls == "PARTIAL_REFUND_CONSISTENT":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith("rfnd_")
+        elif hn_cls == "IN_FLIGHT":
+            assert len(p_ids) == 1
+            assert p_ids[0].startswith(("pay_", "rfnd_"))
+
 
 
 

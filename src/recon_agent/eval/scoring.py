@@ -191,14 +191,14 @@ def score_predictions(
     # =========================================================================
     # 1. One-to-one greedy assignment between predictions and labels
     # =========================================================================
-    # Candidate matches: merchant_id equal and entity_ids intersect
+    # Candidate matches: merchant_id equal and prediction.entity_ids intersect label.primary_entity_ids
     candidate_pairs: list[tuple[int, int, int, str]] = []  # (-overlap, l_idx, p_idx, case_id)
     for p_idx, pred in enumerate(predictions):
         p_entities = set(pred.entity_ids)
         for l_idx, lbl in enumerate(labels):
             if pred.merchant_id == lbl.get("merchant_id"):
-                l_entities = set(lbl.get("entity_ids", []))
-                overlap = len(p_entities & l_entities)
+                l_primary = set(lbl.get("primary_entity_ids", lbl.get("entity_ids", [])))
+                overlap = len(p_entities & l_primary)
                 if overlap > 0:
                     case_id = str(lbl.get("case_id", f"case_{l_idx:06d}"))
                     candidate_pairs.append((-overlap, l_idx, p_idx, case_id))
@@ -486,9 +486,6 @@ def format_markdown_report(res: ScoringResult) -> str:
         "| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Recall (k/n) | 95% CI | F1 |",
         "|:---|---:|---:|---:|---:|:---:|---:|:---:|---:|",
     ]
-    valid_c_p = [m.precision for m in res.tier1_class_correct.values() if m.precision is not None]
-    valid_c_r = [m.recall for m in res.tier1_class_correct.values() if m.recall is not None]
-    valid_c_f = [m.f1 for m in res.tier1_class_correct.values() if m.f1 is not None]
     for c, m in res.tier1_class_correct.items():
         if m.precision is not None:
             prec_str = f"{m.precision * 100:.1f}% ({m.precision_kn})"
@@ -508,12 +505,34 @@ def format_markdown_report(res: ScoringResult) -> str:
         lines.append(
             f"| {c:<23} | {m.tp:>4} | {m.fp:>4} | {m.fn:>4} | {prec_str:>16} | {prec_ci:^16} | {rec_str:>16} | {rec_ci:^16} | {f1_str:>6} |"
         )
-    macro_p = f"{sum(valid_c_p)/len(valid_c_p)*100:.1f}%" if valid_c_p else "N/A"
-    macro_r = f"{sum(valid_c_r)/len(valid_c_r)*100:.1f}%" if valid_c_r else "N/A"
-    macro_f = f"{sum(valid_c_f)/len(valid_c_f):.3f}" if valid_c_f else "N/A"
-    lines.append(
-        f"| {'Macro-Average':<23} | {'-':>4} | {'-':>4} | {'-':>4} | {macro_p:>16} | {'-':^16} | {macro_r:>16} | {'-':^16} | {macro_f:>6} |"
+
+    # Micro Pooled Headline
+    micro_c_tp = sum(m.tp for m in res.tier1_class_correct.values())
+    micro_c_fp = sum(m.fp for m in res.tier1_class_correct.values())
+    micro_c_fn = sum(m.fn for m in res.tier1_class_correct.values())
+    p_denom_c = micro_c_tp + micro_c_fp
+    r_denom_c = micro_c_tp + micro_c_fn
+    micro_c_prec = (micro_c_tp / p_denom_c) if p_denom_c > 0 else None
+    micro_c_prec_ci = wilson_ci(micro_c_tp, p_denom_c) if p_denom_c > 0 else None
+    micro_c_rec = (micro_c_tp / r_denom_c) if r_denom_c > 0 else None
+    micro_c_rec_ci = wilson_ci(micro_c_tp, r_denom_c) if r_denom_c > 0 else None
+    micro_c_f1 = (
+        round(2 * micro_c_prec * micro_c_rec / (micro_c_prec + micro_c_rec), 4)
+        if (micro_c_prec is not None and micro_c_rec is not None and (micro_c_prec + micro_c_rec) > 0)
+        else None
     )
+
+    micro_p_str = f"{micro_c_prec * 100:.1f}% ({micro_c_tp}/{p_denom_c})" if micro_c_prec is not None else f"N/A (0/{p_denom_c})"
+    micro_p_ci = f"[{micro_c_prec_ci[0]*100:.1f}%, {micro_c_prec_ci[1]*100:.1f}%]" if micro_c_prec_ci else "N/A"
+    micro_r_str = f"{micro_c_rec * 100:.1f}% ({micro_c_tp}/{r_denom_c})" if micro_c_rec is not None else f"N/A (0/{r_denom_c})"
+    micro_r_ci = f"[{micro_c_rec_ci[0]*100:.1f}%, {micro_c_rec_ci[1]*100:.1f}%]" if micro_c_rec_ci else "N/A"
+    micro_f1_str = f"{micro_c_f1:.3f}" if micro_c_f1 is not None else "N/A"
+
+    lines.append(
+        f"| {'Overall (Micro)':<23} | {micro_c_tp:>4} | {micro_c_fp:>4} | {micro_c_fn:>4} | {micro_p_str:>16} | {micro_p_ci:^16} | {micro_r_str:>16} | {micro_r_ci:^16} | {micro_f1_str:>6} |"
+    )
+    macro_c_f1_zero = sum(m.f1 if m.f1 is not None else 0.0 for m in res.tier1_class_correct.values()) / len(res.tier1_class_correct)
+    lines.append(f"**Secondary Metric:** Macro-F1 (undefined as 0) = {macro_c_f1_zero:.3f}")
 
     lines.extend([
         "",
@@ -521,9 +540,6 @@ def format_markdown_report(res: ScoringResult) -> str:
         "| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Recall (k/n) | 95% CI | F1 |",
         "|:---|---:|---:|---:|---:|:---:|---:|:---:|---:|",
     ])
-    valid_a_p = [m.precision for m in res.tier1_class_agnostic.values() if m.precision is not None]
-    valid_a_r = [m.recall for m in res.tier1_class_agnostic.values() if m.recall is not None]
-    valid_a_f = [m.f1 for m in res.tier1_class_agnostic.values() if m.f1 is not None]
     for c, m in res.tier1_class_agnostic.items():
         if m.precision is not None:
             prec_str = f"{m.precision * 100:.1f}% ({m.precision_kn})"
@@ -543,12 +559,34 @@ def format_markdown_report(res: ScoringResult) -> str:
         lines.append(
             f"| {c:<23} | {m.tp:>4} | {m.fp:>4} | {m.fn:>4} | {prec_str:>16} | {prec_ci:^16} | {rec_str:>16} | {rec_ci:^16} | {f1_str:>6} |"
         )
-    macro_ap = f"{sum(valid_a_p)/len(valid_a_p)*100:.1f}%" if valid_a_p else "N/A"
-    macro_ar = f"{sum(valid_a_r)/len(valid_a_r)*100:.1f}%" if valid_a_r else "N/A"
-    macro_af = f"{sum(valid_a_f)/len(valid_a_f):.3f}" if valid_a_f else "N/A"
-    lines.append(
-        f"| {'Macro-Average':<23} | {'-':>4} | {'-':>4} | {'-':>4} | {macro_ap:>16} | {'-':^16} | {macro_ar:>16} | {'-':^16} | {macro_af:>6} |"
+
+    # Micro Pooled Headline
+    micro_a_tp = sum(m.tp for m in res.tier1_class_agnostic.values())
+    micro_a_fp = sum(m.fp for m in res.tier1_class_agnostic.values())
+    micro_a_fn = sum(m.fn for m in res.tier1_class_agnostic.values())
+    p_denom_a = micro_a_tp + micro_a_fp
+    r_denom_a = micro_a_tp + micro_a_fn
+    micro_a_prec = (micro_a_tp / p_denom_a) if p_denom_a > 0 else None
+    micro_a_prec_ci = wilson_ci(micro_a_tp, p_denom_a) if p_denom_a > 0 else None
+    micro_a_rec = (micro_a_tp / r_denom_a) if r_denom_a > 0 else None
+    micro_a_rec_ci = wilson_ci(micro_a_tp, r_denom_a) if r_denom_a > 0 else None
+    micro_a_f1 = (
+        round(2 * micro_a_prec * micro_a_rec / (micro_a_prec + micro_a_rec), 4)
+        if (micro_a_prec is not None and micro_a_rec is not None and (micro_a_prec + micro_a_rec) > 0)
+        else None
     )
+
+    micro_ap_str = f"{micro_a_prec * 100:.1f}% ({micro_a_tp}/{p_denom_a})" if micro_a_prec is not None else f"N/A (0/{p_denom_a})"
+    micro_ap_ci = f"[{micro_a_prec_ci[0]*100:.1f}%, {micro_a_prec_ci[1]*100:.1f}%]" if micro_a_prec_ci else "N/A"
+    micro_ar_str = f"{micro_a_rec * 100:.1f}% ({micro_a_tp}/{r_denom_a})" if micro_a_rec is not None else f"N/A (0/{r_denom_a})"
+    micro_ar_ci = f"[{micro_a_rec_ci[0]*100:.1f}%, {micro_a_rec_ci[1]*100:.1f}%]" if micro_a_rec_ci else "N/A"
+    micro_af1_str = f"{micro_a_f1:.3f}" if micro_a_f1 is not None else "N/A"
+
+    lines.append(
+        f"| {'Overall (Micro)':<23} | {micro_a_tp:>4} | {micro_a_fp:>4} | {micro_a_fn:>4} | {micro_ap_str:>16} | {micro_ap_ci:^16} | {micro_ar_str:>16} | {micro_ar_ci:^16} | {micro_af1_str:>6} |"
+    )
+    macro_a_f1_zero = sum(m.f1 if m.f1 is not None else 0.0 for m in res.tier1_class_agnostic.values()) / len(res.tier1_class_agnostic)
+    lines.append(f"**Secondary Metric:** Macro-F1 (undefined as 0) = {macro_a_f1_zero:.3f}")
 
     lines.extend([
         "",
@@ -694,9 +732,48 @@ def compute_pooled_results(results: list[ScoringResult]) -> dict[str, Any]:
             "f1_range": f_range,
         }
 
-    macro_c_p = round(sum(valid_c_p_pooled) / len(valid_c_p_pooled), 4) if valid_c_p_pooled else None
-    macro_c_r = round(sum(valid_c_r_pooled) / len(valid_c_r_pooled), 4) if valid_c_r_pooled else None
-    macro_c_f = round(sum(valid_c_f_pooled) / len(valid_c_f_pooled), 4) if valid_c_f_pooled else None
+    # 1. Tier 1 Class-Correct Micro Pooled
+    micro_c_tp = sum(t1_correct[c]["tp"] for c in TIER1_ERROR_CLASSES)
+    micro_c_fp = sum(t1_correct[c]["fp"] for c in TIER1_ERROR_CLASSES)
+    micro_c_fn = sum(t1_correct[c]["fn"] for c in TIER1_ERROR_CLASSES)
+    p_denom_c = micro_c_tp + micro_c_fp
+    r_denom_c = micro_c_tp + micro_c_fn
+    micro_c_prec = round(micro_c_tp / p_denom_c, 4) if p_denom_c > 0 else None
+    micro_c_prec_ci = wilson_ci(micro_c_tp, p_denom_c) if p_denom_c > 0 else None
+    micro_c_rec = round(micro_c_tp / r_denom_c, 4) if r_denom_c > 0 else None
+    micro_c_rec_ci = wilson_ci(micro_c_tp, r_denom_c) if r_denom_c > 0 else None
+    micro_c_f1 = (
+        round(2 * micro_c_prec * micro_c_rec / (micro_c_prec + micro_c_rec), 4)
+        if (micro_c_prec is not None and micro_c_rec is not None and (micro_c_prec + micro_c_rec) > 0)
+        else None
+    )
+
+    seed_micro_c_precs = []
+    seed_micro_c_recs = []
+    seed_micro_c_f1s = []
+    seed_macro_c_f1_zeros = []
+    for r in results:
+        s_tp = sum(r.tier1_class_correct[c].tp for c in TIER1_ERROR_CLASSES)
+        s_fp = sum(r.tier1_class_correct[c].fp for c in TIER1_ERROR_CLASSES)
+        s_fn = sum(r.tier1_class_correct[c].fn for c in TIER1_ERROR_CLASSES)
+        s_p = (s_tp / (s_tp + s_fp)) if (s_tp + s_fp) > 0 else None
+        s_r = (s_tp / (s_tp + s_fn)) if (s_tp + s_fn) > 0 else None
+        s_f = (2 * s_p * s_r / (s_p + s_r)) if (s_p is not None and s_r is not None and (s_p + s_r) > 0) else None
+        if s_p is not None:
+            seed_micro_c_precs.append(s_p)
+        if s_r is not None:
+            seed_micro_c_recs.append(s_r)
+        if s_f is not None:
+            seed_micro_c_f1s.append(s_f)
+        s_macro_f1 = sum(r.tier1_class_correct[c].f1 if r.tier1_class_correct[c].f1 is not None else 0.0 for c in TIER1_ERROR_CLASSES) / len(TIER1_ERROR_CLASSES)
+        seed_macro_c_f1_zeros.append(s_macro_f1)
+
+    micro_c_p_range = (min(seed_micro_c_precs), max(seed_micro_c_precs)) if seed_micro_c_precs else None
+    micro_c_r_range = (min(seed_micro_c_recs), max(seed_micro_c_recs)) if seed_micro_c_recs else None
+    micro_c_f_range = (min(seed_micro_c_f1s), max(seed_micro_c_f1s)) if seed_micro_c_f1s else None
+
+    macro_c_f1_zero_pooled = round(sum(t1_correct[c]["f1"] if t1_correct[c]["f1"] is not None else 0.0 for c in TIER1_ERROR_CLASSES) / len(TIER1_ERROR_CLASSES), 4)
+    macro_c_f1_zero_range = (round(min(seed_macro_c_f1_zeros), 4), round(max(seed_macro_c_f1_zeros), 4)) if seed_macro_c_f1_zeros else None
 
     # 2. Tier 1 Class-Agnostic
     t1_agnostic: dict[str, dict[str, Any]] = {}
@@ -764,9 +841,48 @@ def compute_pooled_results(results: list[ScoringResult]) -> dict[str, Any]:
             "f1_range": f_range,
         }
 
-    macro_a_p = round(sum(valid_a_p_pooled) / len(valid_a_p_pooled), 4) if valid_a_p_pooled else None
-    macro_a_r = round(sum(valid_a_r_pooled) / len(valid_a_r_pooled), 4) if valid_a_r_pooled else None
-    macro_a_f = round(sum(valid_a_f_pooled) / len(valid_a_f_pooled), 4) if valid_a_f_pooled else None
+    # 2. Tier 1 Class-Agnostic Micro Pooled
+    micro_a_tp = sum(t1_agnostic[c]["tp"] for c in TIER1_ERROR_CLASSES)
+    micro_a_fp = sum(t1_agnostic[c]["fp"] for c in TIER1_ERROR_CLASSES)
+    micro_a_fn = sum(t1_agnostic[c]["fn"] for c in TIER1_ERROR_CLASSES)
+    p_denom_a = micro_a_tp + micro_a_fp
+    r_denom_a = micro_a_tp + micro_a_fn
+    micro_a_prec = round(micro_a_tp / p_denom_a, 4) if p_denom_a > 0 else None
+    micro_a_prec_ci = wilson_ci(micro_a_tp, p_denom_a) if p_denom_a > 0 else None
+    micro_a_rec = round(micro_a_tp / r_denom_a, 4) if r_denom_a > 0 else None
+    micro_a_rec_ci = wilson_ci(micro_a_tp, r_denom_a) if r_denom_a > 0 else None
+    micro_a_f1 = (
+        round(2 * micro_a_prec * micro_a_rec / (micro_a_prec + micro_a_rec), 4)
+        if (micro_a_prec is not None and micro_a_rec is not None and (micro_a_prec + micro_a_rec) > 0)
+        else None
+    )
+
+    seed_micro_a_precs = []
+    seed_micro_a_recs = []
+    seed_micro_a_f1s = []
+    seed_macro_a_f1_zeros = []
+    for r in results:
+        s_tp = sum(r.tier1_class_agnostic[c].tp for c in TIER1_ERROR_CLASSES)
+        s_fp = sum(r.tier1_class_agnostic[c].fp for c in TIER1_ERROR_CLASSES)
+        s_fn = sum(r.tier1_class_agnostic[c].fn for c in TIER1_ERROR_CLASSES)
+        s_p = (s_tp / (s_tp + s_fp)) if (s_tp + s_fp) > 0 else None
+        s_r = (s_tp / (s_tp + s_fn)) if (s_tp + s_fn) > 0 else None
+        s_f = (2 * s_p * s_r / (s_p + s_r)) if (s_p is not None and s_r is not None and (s_p + s_r) > 0) else None
+        if s_p is not None:
+            seed_micro_a_precs.append(s_p)
+        if s_r is not None:
+            seed_micro_a_recs.append(s_r)
+        if s_f is not None:
+            seed_micro_a_f1s.append(s_f)
+        s_macro_f1 = sum(r.tier1_class_agnostic[c].f1 if r.tier1_class_agnostic[c].f1 is not None else 0.0 for c in TIER1_ERROR_CLASSES) / len(TIER1_ERROR_CLASSES)
+        seed_macro_a_f1_zeros.append(s_macro_f1)
+
+    micro_a_p_range = (min(seed_micro_a_precs), max(seed_micro_a_precs)) if seed_micro_a_precs else None
+    micro_a_r_range = (min(seed_micro_a_recs), max(seed_micro_a_recs)) if seed_micro_a_recs else None
+    micro_a_f_range = (min(seed_micro_a_f1s), max(seed_micro_a_f1s)) if seed_micro_a_f1s else None
+
+    macro_a_f1_zero_pooled = round(sum(t1_agnostic[c]["f1"] if t1_agnostic[c]["f1"] is not None else 0.0 for c in TIER1_ERROR_CLASSES) / len(TIER1_ERROR_CLASSES), 4)
+    macro_a_f1_zero_range = (round(min(seed_macro_a_f1_zeros), 4), round(max(seed_macro_a_f1_zeros), 4)) if seed_macro_a_f1_zeros else None
 
     # 3. Hard Negatives
     hard_negatives: dict[str, dict[str, Any]] = {}
@@ -846,17 +962,37 @@ def compute_pooled_results(results: list[ScoringResult]) -> dict[str, Any]:
         "split": split,
         "seeds": seeds,
         "tier1_class_correct": t1_correct,
-        "tier1_class_correct_macro": {
-            "precision": macro_c_p,
-            "recall": macro_c_r,
-            "f1": macro_c_f,
+        "tier1_class_correct_micro": {
+            "tp": micro_c_tp,
+            "fp": micro_c_fp,
+            "fn": micro_c_fn,
+            "precision": micro_c_prec,
+            "precision_ci": micro_c_prec_ci,
+            "precision_range": micro_c_p_range,
+            "recall": micro_c_rec,
+            "recall_ci": micro_c_rec_ci,
+            "recall_range": micro_c_r_range,
+            "f1": micro_c_f1,
+            "f1_range": micro_c_f_range,
         },
+        "macro_f1_undefined_as_zero": macro_c_f1_zero_pooled,
+        "macro_f1_undefined_as_zero_range": macro_c_f1_zero_range,
         "tier1_class_agnostic": t1_agnostic,
-        "tier1_class_agnostic_macro": {
-            "precision": macro_a_p,
-            "recall": macro_a_r,
-            "f1": macro_a_f,
+        "tier1_class_agnostic_micro": {
+            "tp": micro_a_tp,
+            "fp": micro_a_fp,
+            "fn": micro_a_fn,
+            "precision": micro_a_prec,
+            "precision_ci": micro_a_prec_ci,
+            "precision_range": micro_a_p_range,
+            "recall": micro_a_rec,
+            "recall_ci": micro_a_rec_ci,
+            "recall_range": micro_a_r_range,
+            "f1": micro_a_f1,
+            "f1_range": micro_a_f_range,
         },
+        "macro_agnostic_f1_undefined_as_zero": macro_a_f1_zero_pooled,
+        "macro_agnostic_f1_undefined_as_zero_range": macro_a_f1_zero_range,
         "hard_negatives": hard_negatives,
         "ambiguity_tier": ambiguity_tier,
         "matching": matching,
@@ -908,13 +1044,37 @@ def format_pooled_markdown_report(pooled: dict[str, Any]) -> str:
             f"| {c:<23} | {m['tp']:>4} | {m['fp']:>4} | {m['fn']:>4} | {prec_str:>16} | {prec_ci:^16} | {p_range_str:^16} | {rec_str:>16} | {rec_ci:^16} | {r_range_str:^16} | {f1_str:>6} | {f_range_str:^14} |"
         )
 
-    macro_c = pooled["tier1_class_correct_macro"]
-    m_p = f"{macro_c['precision']*100:.1f}%" if macro_c["precision"] is not None else "N/A"
-    m_r = f"{macro_c['recall']*100:.1f}%" if macro_c["recall"] is not None else "N/A"
-    m_f = f"{macro_c['f1']:.3f}" if macro_c["f1"] is not None else "N/A"
+    micro_c = pooled["tier1_class_correct_micro"]
+    p_denom_c = micro_c["tp"] + micro_c["fp"]
+    r_denom_c = micro_c["tp"] + micro_c["fn"]
+    if micro_c["precision"] is not None:
+        p_str = f"{micro_c['precision'] * 100:.1f}% ({micro_c['tp']}/{p_denom_c})"
+        p_ci = f"[{micro_c['precision_ci'][0]*100:.1f}%, {micro_c['precision_ci'][1]*100:.1f}%]" if micro_c["precision_ci"] else "N/A"
+        p_rng = f"[{micro_c['precision_range'][0]*100:.1f}%, {micro_c['precision_range'][1]*100:.1f}%]" if micro_c["precision_range"] else "N/A"
+    else:
+        p_str = f"N/A (0/{p_denom_c})"
+        p_ci = "N/A"
+        p_rng = "N/A"
+
+    if micro_c["recall"] is not None:
+        r_str = f"{micro_c['recall'] * 100:.1f}% ({micro_c['tp']}/{r_denom_c})"
+        r_ci = f"[{micro_c['recall_ci'][0]*100:.1f}%, {micro_c['recall_ci'][1]*100:.1f}%]" if micro_c["recall_ci"] else "N/A"
+        r_rng = f"[{micro_c['recall_range'][0]*100:.1f}%, {micro_c['recall_range'][1]*100:.1f}%]" if micro_c["recall_range"] else "N/A"
+    else:
+        r_str = f"N/A (0/{r_denom_c})"
+        r_ci = "N/A"
+        r_rng = "N/A"
+
+    f_str = f"{micro_c['f1']:.3f}" if micro_c["f1"] is not None else "N/A"
+    f_rng = f"[{micro_c['f1_range'][0]:.3f}, {micro_c['f1_range'][1]:.3f}]" if micro_c["f1_range"] else "N/A"
+
     lines.append(
-        f"| {'Macro-Average':<23} | {'-':>4} | {'-':>4} | {'-':>4} | {m_p:>16} | {'-':^16} | {'-':^16} | {m_r:>16} | {'-':^16} | {'-':^16} | {m_f:>6} | {'-':^14} |"
+        f"| {'Overall (Pooled)':<23} | {micro_c['tp']:>4} | {micro_c['fp']:>4} | {micro_c['fn']:>4} | {p_str:>16} | {p_ci:^16} | {p_rng:^16} | {r_str:>16} | {r_ci:^16} | {r_rng:^16} | {f_str:>6} | {f_rng:^14} |"
     )
+    m_f1_zero = pooled["macro_f1_undefined_as_zero"]
+    m_f1_rng = pooled["macro_f1_undefined_as_zero_range"]
+    rng_note = f" (Seed Range: [{m_f1_rng[0]:.3f}, {m_f1_rng[1]:.3f}])" if m_f1_rng else ""
+    lines.append(f"**Secondary Metric:** Macro-F1 (undefined as 0) = {m_f1_zero:.3f}{rng_note}")
 
     lines.extend([
         "",
@@ -950,13 +1110,37 @@ def format_pooled_markdown_report(pooled: dict[str, Any]) -> str:
             f"| {c:<23} | {m['tp']:>4} | {m['fp']:>4} | {m['fn']:>4} | {prec_str:>16} | {prec_ci:^16} | {p_range_str:^16} | {rec_str:>16} | {rec_ci:^16} | {r_range_str:^16} | {f1_str:>6} | {f_range_str:^14} |"
         )
 
-    macro_a = pooled["tier1_class_agnostic_macro"]
-    ma_p = f"{macro_a['precision']*100:.1f}%" if macro_a["precision"] is not None else "N/A"
-    ma_r = f"{macro_a['recall']*100:.1f}%" if macro_a["recall"] is not None else "N/A"
-    ma_f = f"{macro_a['f1']:.3f}" if macro_a["f1"] is not None else "N/A"
+    micro_a = pooled["tier1_class_agnostic_micro"]
+    p_denom_a = micro_a["tp"] + micro_a["fp"]
+    r_denom_a = micro_a["tp"] + micro_a["fn"]
+    if micro_a["precision"] is not None:
+        ap_str = f"{micro_a['precision'] * 100:.1f}% ({micro_a['tp']}/{p_denom_a})"
+        ap_ci = f"[{micro_a['precision_ci'][0]*100:.1f}%, {micro_a['precision_ci'][1]*100:.1f}%]" if micro_a["precision_ci"] else "N/A"
+        ap_rng = f"[{micro_a['precision_range'][0]*100:.1f}%, {micro_a['precision_range'][1]*100:.1f}%]" if micro_a["precision_range"] else "N/A"
+    else:
+        ap_str = f"N/A (0/{p_denom_a})"
+        ap_ci = "N/A"
+        ap_rng = "N/A"
+
+    if micro_a["recall"] is not None:
+        ar_str = f"{micro_a['recall'] * 100:.1f}% ({micro_a['tp']}/{r_denom_a})"
+        ar_ci = f"[{micro_a['recall_ci'][0]*100:.1f}%, {micro_a['recall_ci'][1]*100:.1f}%]" if micro_a["recall_ci"] else "N/A"
+        ar_rng = f"[{micro_a['recall_range'][0]*100:.1f}%, {micro_a['recall_range'][1]*100:.1f}%]" if micro_a["recall_range"] else "N/A"
+    else:
+        ar_str = f"N/A (0/{r_denom_a})"
+        ar_ci = "N/A"
+        ar_rng = "N/A"
+
+    af_str = f"{micro_a['f1']:.3f}" if micro_a["f1"] is not None else "N/A"
+    af_rng = f"[{micro_a['f1_range'][0]:.3f}, {micro_a['f1_range'][1]:.3f}]" if micro_a["f1_range"] else "N/A"
+
     lines.append(
-        f"| {'Macro-Average':<23} | {'-':>4} | {'-':>4} | {'-':>4} | {ma_p:>16} | {'-':^16} | {'-':^16} | {ma_r:>16} | {'-':^16} | {'-':^16} | {ma_f:>6} | {'-':^14} |"
+        f"| {'Overall (Pooled)':<23} | {micro_a['tp']:>4} | {micro_a['fp']:>4} | {micro_a['fn']:>4} | {ap_str:>16} | {ap_ci:^16} | {ap_rng:^16} | {ar_str:>16} | {ar_ci:^16} | {ar_rng:^16} | {af_str:>6} | {af_rng:^14} |"
     )
+    ma_f1_zero = pooled["macro_agnostic_f1_undefined_as_zero"]
+    ma_f1_rng = pooled["macro_agnostic_f1_undefined_as_zero_range"]
+    rng_note_a = f" (Seed Range: [{ma_f1_rng[0]:.3f}, {ma_f1_rng[1]:.3f}])" if ma_f1_rng else ""
+    lines.append(f"**Secondary Metric:** Macro-F1 (undefined as 0) = {ma_f1_zero:.3f}{rng_note_a}")
 
     lines.extend([
         "",

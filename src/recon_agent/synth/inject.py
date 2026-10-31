@@ -225,9 +225,11 @@ def inject_errors_and_labels(
         hard_negative_type: str | None,
         ambiguity_type: str | None = None,
         entity_ids: list[str] | None = None,
+        primary_entity_ids: list[str] | None = None,
         settlement_id: str | None = None,
         expected_action: str = "",
     ) -> None:
+        p_ids = primary_entity_ids if primary_entity_ids is not None else (entity_ids or [])
         labels.append(
             {
                 "case_id": f"case_{len(labels)+1:06d}",
@@ -236,6 +238,7 @@ def inject_errors_and_labels(
                 "hard_negative_type": hard_negative_type,
                 "ambiguity_type": ambiguity_type,
                 "entity_ids": entity_ids or [],
+                "primary_entity_ids": p_ids,
                 "settlement_id": settlement_id,
                 "expected_action": expected_action,
             }
@@ -296,6 +299,7 @@ def inject_errors_and_labels(
             error_class="DUPLICATE_PAYMENT",
             hard_negative_type=None,
             entity_ids=[p1["payment_id"], p2_id, order["order_id"]],
+            primary_entity_ids=[p1["payment_id"], p2_id],
             settlement_id=stl["settlement_id"],
             expected_action="flag_duplicate_payment",
         )
@@ -347,6 +351,7 @@ def inject_errors_and_labels(
             error_class="MISSING_SETTLEMENT",
             hard_negative_type=None,
             entity_ids=[p["payment_id"]],
+            primary_entity_ids=[p["payment_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="flag_missing_settlement",
         )
@@ -413,6 +418,7 @@ def inject_errors_and_labels(
             error_class="FEE_TAX_MISMATCH",
             hard_negative_type=None,
             entity_ids=[r["entity_id"]],
+            primary_entity_ids=[r["entity_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="flag_fee_tax_mismatch",
         )
@@ -503,6 +509,7 @@ def inject_errors_and_labels(
             error_class="PARTIAL_REFUND_MISMATCH",
             hard_negative_type=None,
             entity_ids=[r["entity_id"], r["payment_id"]],
+            primary_entity_ids=[r["entity_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="flag_partial_refund_mismatch",
         )
@@ -597,6 +604,7 @@ def inject_errors_and_labels(
             error_class="CUTOFF_DRIFT",
             hard_negative_type=None,
             entity_ids=[p["payment_id"], order["order_id"]],
+            primary_entity_ids=[p["payment_id"], order["order_id"]],
             settlement_id=r["settlement_id"],
             expected_action="flag_cutoff_drift",
         )
@@ -638,6 +646,7 @@ def inject_errors_and_labels(
             error_class="SHORT_BANK_CREDIT",
             hard_negative_type=None,
             entity_ids=[bk_row["statement_id"]],
+            primary_entity_ids=[bk_row["statement_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="flag_short_bank_credit",
         )
@@ -729,6 +738,7 @@ def inject_errors_and_labels(
             error_class="ORPHAN_BANK_CREDIT",
             hard_negative_type=None,
             entity_ids=[stmt_id],
+            primary_entity_ids=[stmt_id],
             settlement_id=None,
             expected_action="flag_orphan_bank_credit",
         )
@@ -802,6 +812,7 @@ def inject_errors_and_labels(
             hard_negative_type=None,
             ambiguity_type="NEAR_TOLERANCE",
             entity_ids=[r["entity_id"]],
+            primary_entity_ids=[r["entity_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="escalate_human",
         )
@@ -839,6 +850,7 @@ def inject_errors_and_labels(
             hard_negative_type=None,
             ambiguity_type="NEAR_TOLERANCE",
             entity_ids=[r["entity_id"]],
+            primary_entity_ids=[r["entity_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="escalate_human",
         )
@@ -944,6 +956,7 @@ def inject_errors_and_labels(
             hard_negative_type=None,
             ambiguity_type="EXPLAINED_CONSISTENT",
             entity_ids=[r["entity_id"], r["payment_id"]],
+            primary_entity_ids=[r["entity_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="benign_explained",
         )
@@ -1044,6 +1057,7 @@ def inject_errors_and_labels(
             hard_negative_type=None,
             ambiguity_type="EXPLAINED_INCONSISTENT",
             entity_ids=[r["entity_id"], r["payment_id"]],
+            primary_entity_ids=[r["entity_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="flag_partial_refund_mismatch",
         )
@@ -1135,6 +1149,7 @@ def inject_errors_and_labels(
             hard_negative_type=None,
             ambiguity_type="EXPLAINED_NO_AMOUNT",
             entity_ids=[r["entity_id"], r["payment_id"]],
+            primary_entity_ids=[r["entity_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="escalate_human",
         )
@@ -1178,6 +1193,7 @@ def inject_errors_and_labels(
             error_class=None,
             hard_negative_type="ROUNDING",
             entity_ids=[r["entity_id"]],
+            primary_entity_ids=[r["entity_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="benign_ignore",
         )
@@ -1190,6 +1206,7 @@ def inject_errors_and_labels(
                 error_class=None,
                 hard_negative_type="LEGIT_ADJUSTMENT",
                 entity_ids=[r["entity_id"]],
+                primary_entity_ids=[r["entity_id"]],
                 settlement_id=r["settlement_id"],
                 expected_action="benign_ignore",
             )
@@ -1238,6 +1255,7 @@ def inject_errors_and_labels(
             error_class=None,
             hard_negative_type="LATE_SETTLEMENT",
             entity_ids=[stl["settlement_id"]],
+            primary_entity_ids=[stl["settlement_id"]],
             settlement_id=stl["settlement_id"],
             expected_action="benign_ignore",
         )
@@ -1279,6 +1297,7 @@ def inject_errors_and_labels(
             error_class=None,
             hard_negative_type="RETRY_AFTER_FAIL",
             entity_ids=[fail_id, p_cap["payment_id"], order["order_id"]],
+            primary_entity_ids=[fail_id],
             settlement_id=None,
             expected_action="benign_ignore",
         )
@@ -1298,6 +1317,7 @@ def inject_errors_and_labels(
                 error_class=None,
                 hard_negative_type="NOISY_BANK_NARRATION",
                 entity_ids=[bk["statement_id"]],
+                primary_entity_ids=[bk["statement_id"]],
                 settlement_id=s["settlement_id"],
                 expected_action="benign_ignore",
             )
@@ -1307,6 +1327,7 @@ def inject_errors_and_labels(
                 error_class=None,
                 hard_negative_type="NO_UTR_NARRATION",
                 entity_ids=[bk["statement_id"]],
+                primary_entity_ids=[bk["statement_id"]],
                 settlement_id=s["settlement_id"],
                 expected_action="benign_ignore",
             )
@@ -1319,6 +1340,7 @@ def inject_errors_and_labels(
                 error_class=None,
                 hard_negative_type="UNRELATED_BANK_CREDIT",
                 entity_ids=[b["statement_id"]],
+                primary_entity_ids=[b["statement_id"]],
                 settlement_id=None,
                 expected_action="benign_ignore",
             )
@@ -1331,6 +1353,7 @@ def inject_errors_and_labels(
                 error_class=None,
                 hard_negative_type="FAILED_PAYMENT",
                 entity_ids=[p["payment_id"]],
+                primary_entity_ids=[p["payment_id"]],
                 settlement_id=None,
                 expected_action="benign_ignore",
             )
@@ -1349,6 +1372,7 @@ def inject_errors_and_labels(
                 error_class=None,
                 hard_negative_type="PARTIAL_REFUND_CONSISTENT",
                 entity_ids=[r["entity_id"], r["payment_id"]],
+                primary_entity_ids=[r["entity_id"]],
                 settlement_id=r["settlement_id"],
                 expected_action="benign_ignore",
             )
@@ -1360,6 +1384,7 @@ def inject_errors_and_labels(
             error_class=None,
             hard_negative_type="IN_FLIGHT",
             entity_ids=[p["payment_id"]],
+            primary_entity_ids=[p["payment_id"]],
             settlement_id=None,
             expected_action="benign_ignore",
         )
@@ -1369,6 +1394,7 @@ def inject_errors_and_labels(
             error_class=None,
             hard_negative_type="IN_FLIGHT",
             entity_ids=[r["refund_id"]],
+            primary_entity_ids=[r["refund_id"]],
             settlement_id=None,
             expected_action="benign_ignore",
         )

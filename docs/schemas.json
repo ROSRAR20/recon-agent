@@ -211,6 +211,7 @@
       "hard_negative_type",
       "ambiguity_type",
       "entity_ids",
+      "primary_entity_ids",
       "settlement_id",
       "expected_action"
     ],
@@ -221,6 +222,7 @@
       "hard_negative_type": ["str", "NoneType"],
       "ambiguity_type": ["str", "NoneType"],
       "entity_ids": ["list"],
+      "primary_entity_ids": ["list"],
       "settlement_id": ["str", "NoneType"],
       "expected_action": ["str"]
     }

@@ -143,41 +143,66 @@
       "f1_range": null
     },
     "ORPHAN_BANK_CREDIT": {
-      "tp": 303,
-      "fp": 1424,
-      "fn": 0,
-      "precision": 0.1754,
+      "tp": 0,
+      "fp": 1727,
+      "fn": 303,
+      "precision": 0.0,
       "precision_ci": [
-        0.1582,
-        0.1941
+        0.0,
+        0.0022
       ],
-      "precision_kn": "303/1727",
+      "precision_kn": "0/1727",
       "precision_range": [
-        0.1718,
-        0.181
+        0.0,
+        0.0
       ],
-      "recall": 1.0,
+      "recall": 0.0,
       "recall_ci": [
-        0.9875,
-        1.0
+        0.0,
+        0.0125
       ],
-      "recall_kn": "303/303",
+      "recall_kn": "0/303",
       "recall_range": [
-        1.0,
-        1.0
+        0.0,
+        0.0
       ],
-      "f1": 0.2985,
-      "f1_range": [
-        0.2932,
-        0.3065
-      ]
+      "f1": null,
+      "f1_range": null
     }
   },
-  "tier1_class_correct_macro": {
-    "precision": 0.1227,
-    "recall": 0.2857,
-    "f1": 0.2146
+  "tier1_class_correct_micro": {
+    "tp": 515,
+    "fp": 8576,
+    "fn": 2596,
+    "precision": 0.0566,
+    "precision_ci": [
+      0.0521,
+      0.0616
+    ],
+    "precision_range": [
+      0.055900621118012424,
+      0.05749831876260928
+    ],
+    "recall": 0.1655,
+    "recall_ci": [
+      0.1529,
+      0.179
+    ],
+    "recall_range": [
+      0.1645813282001925,
+      0.166988416988417
+    ],
+    "f1": 0.0844,
+    "f1_range": [
+      0.08351648351648353,
+      0.08522302516820333
+    ]
   },
+  "macro_f1_undefined_as_zero": 0.0187,
+  "macro_f1_undefined_as_zero_range": [
+    0.0185,
+    0.0189
+  ],
   "tier1_class_agnostic": {
     "DUPLICATE_PAYMENT": {
       "tp": 0,
@@ -202,16 +227,16 @@
     },
     "MISSING_SETTLEMENT": {
       "tp": 515,
-      "fp": 6842,
+      "fp": 6849,
       "fn": 0,
-      "precision": 0.07,
+      "precision": 0.0699,
       "precision_ci": [
-        0.0644,
-        0.0761
+        0.0643,
+        0.076
       ],
-      "precision_kn": "515/7357",
+      "precision_kn": "515/7364",
       "precision_range": [
-        0.0693,
+        0.0692,
         0.0708
       ],
       "recall": 1.0,
@@ -224,10 +249,10 @@
         1.0,
         1.0
       ],
-      "f1": 0.1308,
+      "f1": 0.1307,
       "f1_range": [
-        0.1295,
-        0.1323
+        0.1294,
+        0.1322
       ]
     },
     "FEE_TAX_MISMATCH": {
@@ -252,34 +277,25 @@
       "f1_range": null
     },
     "PARTIAL_REFUND_MISMATCH": {
-      "tp": 7,
+      "tp": 0,
       "fp": 0,
-      "fn": 359,
-      "precision": 1.0,
-      "precision_ci": [
-        0.6457,
-        1.0
-      ],
-      "precision_kn": "7/7",
-      "precision_range": [
-        1.0,
-        1.0
-      ],
-      "recall": 0.0191,
+      "fn": 366,
+      "precision": null,
+      "precision_ci": null,
+      "precision_kn": "0/0",
+      "precision_range": null,
+      "recall": 0.0,
       "recall_ci": [
-        0.0093,
-        0.0389
+        0.0,
+        0.0104
       ],
-      "recall_kn": "7/366",
+      "recall_kn": "0/366",
       "recall_range": [
-        0.0159,
-        0.0256
+        0.0,
+        0.0
       ],
-      "f1": 0.0375,
-      "f1_range": [
-        0.0312,
-        0.05
-      ]
+      "f1": null,
+      "f1_range": null
     },
     "CUTOFF_DRIFT": {
       "tp": 0,
@@ -303,71 +319,87 @@
       "f1_range": null
     },
     "SHORT_BANK_CREDIT": {
-      "tp": 82,
+      "tp": 0,
       "fp": 0,
-      "fn": 221,
-      "precision": 1.0,
-      "precision_ci": [
-        0.9552,
-        1.0
-      ],
-      "precision_kn": "82/82",
-      "precision_range": [
-        1.0,
-        1.0
-      ],
-      "recall": 0.2706,
+      "fn": 303,
+      "precision": null,
+      "precision_ci": null,
+      "precision_kn": "0/0",
+      "precision_range": null,
+      "recall": 0.0,
       "recall_ci": [
-        0.2237,
-        0.3233
+        0.0,
+        0.0125
       ],
-      "recall_kn": "82/303",
+      "recall_kn": "0/303",
       "recall_range": [
-        0.2475,
-        0.3168
+        0.0,
+        0.0
       ],
-      "f1": 0.4259,
-      "f1_range": [
-        0.3968,
-        0.4812
-      ]
+      "f1": null,
+      "f1_range": null
     },
     "ORPHAN_BANK_CREDIT": {
-      "tp": 303,
-      "fp": 1342,
-      "fn": 0,
-      "precision": 0.1842,
+      "tp": 0,
+      "fp": 1727,
+      "fn": 303,
+      "precision": 0.0,
       "precision_ci": [
-        0.1662,
-        0.2037
+        0.0,
+        0.0022
       ],
-      "precision_kn": "303/1645",
+      "precision_kn": "0/1727",
       "precision_range": [
-        0.1794,
-        0.1895
+        0.0,
+        0.0
       ],
-      "recall": 1.0,
+      "recall": 0.0,
       "recall_ci": [
-        0.9875,
-        1.0
+        0.0,
+        0.0125
       ],
-      "recall_kn": "303/303",
+      "recall_kn": "0/303",
       "recall_range": [
-        1.0,
-        1.0
+        0.0,
+        0.0
       ],
-      "f1": 0.3111,
-      "f1_range": [
-        0.3042,
-        0.3186
-      ]
+      "f1": null,
+      "f1_range": null
     }
   },
-  "tier1_class_agnostic_macro": {
-    "precision": 0.5635,
-    "recall": 0.3271,
-    "f1": 0.2263
+  "tier1_class_agnostic_micro": {
+    "tp": 515,
+    "fp": 8576,
+    "fn": 2596,
+    "precision": 0.0566,
+    "precision_ci": [
+      0.0521,
+      0.0616
+    ],
+    "precision_range": [
+      0.055900621118012424,
+      0.05749831876260928
+    ],
+    "recall": 0.1655,
+    "recall_ci": [
+      0.1529,
+      0.179
+    ],
+    "recall_range": [
+      0.1645813282001925,
+      0.166988416988417
+    ],
+    "f1": 0.0844,
+    "f1_range": [
+      0.08351648351648353,
+      0.08522302516820333
+    ]
   },
+  "macro_agnostic_f1_undefined_as_zero": 0.0187,
+  "macro_agnostic_f1_undefined_as_zero_range": [
+    0.0185,
+    0.0189
+  ],
   "hard_negatives": {
     "ROUNDING": {
       "flagged": 0,
@@ -412,45 +444,45 @@
       ]
     },
     "RETRY_AFTER_FAIL": {
-      "flagged": 198,
+      "flagged": 0,
       "total": 2950,
-      "fpr": 0.0671,
+      "fpr": 0.0,
       "fpr_ci": [
-        0.0586,
-        0.0767
+        0.0,
+        0.0013
       ],
-      "fpr_kn": "198/2950",
+      "fpr_kn": "0/2950",
       "fpr_range": [
-        0.0643,
-        0.0708
+        0.0,
+        0.0
       ]
     },
     "NOISY_BANK_NARRATION": {
-      "flagged": 123,
+      "flagged": 0,
       "total": 185,
-      "fpr": 0.6649,
+      "fpr": 0.0,
       "fpr_ci": [
-        0.5941,
-        0.7289
+        0.0,
+        0.0203
       ],
-      "fpr_kn": "123/185",
+      "fpr_kn": "0/185",
       "fpr_range": [
-        0.614,
-        0.7
+        0.0,
+        0.0
       ]
     },
     "NO_UTR_NARRATION": {
-      "flagged": 171,
+      "flagged": 0,
       "total": 171,
-      "fpr": 1.0,
+      "fpr": 0.0,
       "fpr_ci": [
-        0.978,
-        1.0
+        0.0,
+        0.022
       ],
-      "fpr_kn": "171/171",
+      "fpr_kn": "0/171",
       "fpr_range": [
-        1.0,
-        1.0
+        0.0,
+        0.0
       ]
     },
     "UNRELATED_BANK_CREDIT": {
@@ -482,31 +514,31 @@
       ]
     },
     "PARTIAL_REFUND_CONSISTENT": {
-      "flagged": 25,
+      "flagged": 0,
       "total": 2791,
-      "fpr": 0.009,
+      "fpr": 0.0,
       "fpr_ci": [
-        0.0061,
-        0.0132
+        0.0,
+        0.0014
       ],
-      "fpr_kn": "25/2791",
+      "fpr_kn": "0/2791",
       "fpr_range": [
-        0.0065,
-        0.0116
+        0.0,
+        0.0
       ]
     },
     "IN_FLIGHT": {
-      "flagged": 6604,
+      "flagged": 6849,
       "total": 7065,
-      "fpr": 0.9347,
+      "fpr": 0.9694,
       "fpr_ci": [
-        0.9288,
-        0.9403
+        0.9652,
+        0.9732
       ],
-      "fpr_kn": "6604/7065",
+      "fpr_kn": "6849/7065",
       "fpr_range": [
-        0.9314,
-        0.9369
+        0.968,
+        0.971
       ]
     }
   },
@@ -591,8 +623,8 @@
       0.728
     ]
   },
-  "clean_false_positives": 2427,
+  "clean_false_positives": 3106,
   "total_flagged_predictions": 10515,
   "total_labels": 26158,
-  "summary_markdown": "# Multi-Seed Evaluation Report: B0 (Split: dev, Seeds: 1, 2, 3)\n\n## 1. Tier 1: Deterministic Error Classes (Class-Correct Detection, Pooled)\n| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Seed Range | Recall (k/n) | 95% CI | Seed Range | F1 | Seed Range |\n|:---|---:|---:|---:|---:|:---:|:---:|---:|:---:|:---:|---:|:---:|\n| DUPLICATE_PAYMENT       |    0 |    0 |  827 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/827) |   [0.0%, 0.5%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| MISSING_SETTLEMENT      |  515 | 6849 |    0 |  7.0% (515/7364) |   [6.4%, 7.6%]   |   [6.9%, 7.1%]   | 100.0% (515/515) | [99.3%, 100.0%]  | [100.0%, 100.0%] |  0.131 | [0.129, 0.132] |\n| FEE_TAX_MISMATCH        |    0 |    0 |  497 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/497) |   [0.0%, 0.8%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| PARTIAL_REFUND_MISMATCH |    0 |    0 |  366 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/366) |   [0.0%, 1.0%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| CUTOFF_DRIFT            |    0 |    0 |  300 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/300) |   [0.0%, 1.3%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| SHORT_BANK_CREDIT       |    0 |    0 |  303 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/303) |   [0.0%, 1.2%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| ORPHAN_BANK_CREDIT      |  303 | 1424 |    0 | 17.5% (303/1727) |  [15.8%, 19.4%]  |  [17.2%, 18.1%]  | 100.0% (303/303) | [98.8%, 100.0%]  | [100.0%, 100.0%] |  0.298 | [0.293, 0.306] |\n| Macro-Average           |    - |    - |    - |            12.3% |        -         |        -         |            28.6% |        -         |        -         |  0.215 |       -        |\n\n## 2. Tier 1: Anomaly Detection (Class-Agnostic Detection, Pooled)\n| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Seed Range | Recall (k/n) | 95% CI | Seed Range | F1 | Seed Range |\n|:---|---:|---:|---:|---:|:---:|:---:|---:|:---:|:---:|---:|:---:|\n| DUPLICATE_PAYMENT       |    0 |    0 |  827 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/827) |   [0.0%, 0.5%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| MISSING_SETTLEMENT      |  515 | 6842 |    0 |  7.0% (515/7357) |   [6.4%, 7.6%]   |   [6.9%, 7.1%]   | 100.0% (515/515) | [99.3%, 100.0%]  | [100.0%, 100.0%] |  0.131 | [0.130, 0.132] |\n| FEE_TAX_MISMATCH        |    0 |    0 |  497 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/497) |   [0.0%, 0.8%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| PARTIAL_REFUND_MISMATCH |    7 |    0 |  359 |     100.0% (7/7) | [64.6%, 100.0%]  | [100.0%, 100.0%] |     1.9% (7/366) |   [0.9%, 3.9%]   |   [1.6%, 2.6%]   |  0.037 | [0.031, 0.050] |\n| CUTOFF_DRIFT            |    0 |    0 |  300 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/300) |   [0.0%, 1.3%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| SHORT_BANK_CREDIT       |   82 |    0 |  221 |   100.0% (82/82) | [95.5%, 100.0%]  | [100.0%, 100.0%] |   27.1% (82/303) |  [22.4%, 32.3%]  |  [24.8%, 31.7%]  |  0.426 | [0.397, 0.481] |\n| ORPHAN_BANK_CREDIT      |  303 | 1342 |    0 | 18.4% (303/1645) |  [16.6%, 20.4%]  |  [17.9%, 18.9%]  | 100.0% (303/303) | [98.8%, 100.0%]  | [100.0%, 100.0%] |  0.311 | [0.304, 0.319] |\n| Macro-Average           |    - |    - |    - |            56.4% |        -         |        -         |            32.7% |        -         |        -         |  0.226 |       -        |\n\n## 3. Hard Negatives (False Positive Resistance, Pooled)\n| Hard Negative Type | Flagged / Total | False Positive Rate (%) | 95% CI | Per-Seed Range |\n|:---|---:|---:|:---:|:---:|\n| ROUNDING                  |           0/397 |                   0.00% |   [0.0%, 1.0%]   |   [0.0%, 0.0%]   |\n| LEGIT_ADJUSTMENT          |           0/188 |                   0.00% |   [0.0%, 2.0%]   |   [0.0%, 0.0%]   |\n| LATE_SETTLEMENT           |          45/169 |                  26.63% |  [20.5%, 33.8%]  |  [19.3%, 32.1%]  |\n| RETRY_AFTER_FAIL          |        198/2950 |                   6.71% |   [5.9%, 7.7%]   |   [6.4%, 7.1%]   |\n| NOISY_BANK_NARRATION      |         123/185 |                  66.49% |  [59.4%, 72.9%]  |  [61.4%, 70.0%]  |\n| NO_UTR_NARRATION          |         171/171 |                 100.00% | [97.8%, 100.0%]  | [100.0%, 100.0%] |\n| UNRELATED_BANK_CREDIT     |          0/2015 |                   0.00% |   [0.0%, 0.2%]   |   [0.0%, 0.0%]   |\n| FAILED_PAYMENT            |          0/6366 |                   0.00% |   [0.0%, 0.1%]   |   [0.0%, 0.0%]   |\n| PARTIAL_REFUND_CONSISTENT |         25/2791 |                   0.90% |   [0.6%, 1.3%]   |   [0.7%, 1.2%]   |\n| IN_FLIGHT                 |       6604/7065 |                  93.47% |  [92.9%, 94.0%]  |  [93.1%, 93.7%]  |\n\n## 4. Ambiguity Tier (Action Accuracy, Pooled)\n| Ambiguity Type | Correct / Total | Action Accuracy (%) | 95% CI | Per-Seed Range |\n|:---|---:|---:|:---:|:---:|\n| NEAR_TOLERANCE            |           0/165 |               0.00% |   [0.0%, 2.3%]   |   [0.0%, 0.0%]   |\n| EXPLAINED_CONSISTENT      |           0/195 |               0.00% |   [0.0%, 1.9%]   |   [0.0%, 0.0%]   |\n| EXPLAINED_INCONSISTENT    |           0/195 |               0.00% |   [0.0%, 1.9%]   |   [0.0%, 0.0%]   |\n| EXPLAINED_NO_AMOUNT       |           0/195 |               0.00% |   [0.0%, 1.9%]   |   [0.0%, 0.0%]   |\n\n## 5. Bank Statement to Settlement Matching (Pooled)\n| Metric | Count / Value | 95% CI | Per-Seed Range |\n|:---|---:|:---:|:---:|\n| Links Made | 3616 | N/A | N/A |\n| Correct Links | 3616 | N/A | N/A |\n| Wrong Links | 0 | N/A | N/A |\n| False-Match Rate | 0.00% (0/3616) | [0.0%, 0.1%] | [0.0%, 0.0%] |\n| Match Rate | 71.75% | [70.5%, 73.0%] | [71.0%, 72.8%] |\n\n**Clean Data False Positives (Pooled):** 2427\n**Total Flagged Predictions (Pooled):** 10515\n**Total Ground-Truth Labels (Pooled):** 26158"
+  "summary_markdown": "# Multi-Seed Evaluation Report: B0 (Split: dev, Seeds: 1, 2, 3)\n\n## 1. Tier 1: Deterministic Error Classes (Class-Correct Detection, Pooled)\n| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Seed Range | Recall (k/n) | 95% CI | Seed Range | F1 | Seed Range |\n|:---|---:|---:|---:|---:|:---:|:---:|---:|:---:|:---:|---:|:---:|\n| DUPLICATE_PAYMENT       |    0 |    0 |  827 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/827) |   [0.0%, 0.5%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| MISSING_SETTLEMENT      |  515 | 6849 |    0 |  7.0% (515/7364) |   [6.4%, 7.6%]   |   [6.9%, 7.1%]   | 100.0% (515/515) | [99.3%, 100.0%]  | [100.0%, 100.0%] |  0.131 | [0.129, 0.132] |\n| FEE_TAX_MISMATCH        |    0 |    0 |  497 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/497) |   [0.0%, 0.8%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| PARTIAL_REFUND_MISMATCH |    0 |    0 |  366 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/366) |   [0.0%, 1.0%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| CUTOFF_DRIFT            |    0 |    0 |  300 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/300) |   [0.0%, 1.3%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| SHORT_BANK_CREDIT       |    0 |    0 |  303 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/303) |   [0.0%, 1.2%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| ORPHAN_BANK_CREDIT      |    0 | 1727 |  303 |    0.0% (0/1727) |   [0.0%, 0.2%]   |   [0.0%, 0.0%]   |     0.0% (0/303) |   [0.0%, 1.2%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| Overall (Pooled)        |  515 | 8576 | 2596 |  5.7% (515/9091) |   [5.2%, 6.2%]   |   [5.6%, 5.7%]   | 16.6% (515/3111) |  [15.3%, 17.9%]  |  [16.5%, 16.7%]  |  0.084 | [0.084, 0.085] |\n**Secondary Metric:** Macro-F1 (undefined as 0) = 0.019 (Seed Range: [0.018, 0.019])\n\n## 2. Tier 1: Anomaly Detection (Class-Agnostic Detection, Pooled)\n| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Seed Range | Recall (k/n) | 95% CI | Seed Range | F1 | Seed Range |\n|:---|---:|---:|---:|---:|:---:|:---:|---:|:---:|:---:|---:|:---:|\n| DUPLICATE_PAYMENT       |    0 |    0 |  827 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/827) |   [0.0%, 0.5%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| MISSING_SETTLEMENT      |  515 | 6849 |    0 |  7.0% (515/7364) |   [6.4%, 7.6%]   |   [6.9%, 7.1%]   | 100.0% (515/515) | [99.3%, 100.0%]  | [100.0%, 100.0%] |  0.131 | [0.129, 0.132] |\n| FEE_TAX_MISMATCH        |    0 |    0 |  497 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/497) |   [0.0%, 0.8%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| PARTIAL_REFUND_MISMATCH |    0 |    0 |  366 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/366) |   [0.0%, 1.0%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| CUTOFF_DRIFT            |    0 |    0 |  300 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/300) |   [0.0%, 1.3%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| SHORT_BANK_CREDIT       |    0 |    0 |  303 |        N/A (0/0) |       N/A        |       N/A        |     0.0% (0/303) |   [0.0%, 1.2%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| ORPHAN_BANK_CREDIT      |    0 | 1727 |  303 |    0.0% (0/1727) |   [0.0%, 0.2%]   |   [0.0%, 0.0%]   |     0.0% (0/303) |   [0.0%, 1.2%]   |   [0.0%, 0.0%]   |    N/A |      N/A       |\n| Overall (Pooled)        |  515 | 8576 | 2596 |  5.7% (515/9091) |   [5.2%, 6.2%]   |   [5.6%, 5.7%]   | 16.6% (515/3111) |  [15.3%, 17.9%]  |  [16.5%, 16.7%]  |  0.084 | [0.084, 0.085] |\n**Secondary Metric:** Macro-F1 (undefined as 0) = 0.019 (Seed Range: [0.018, 0.019])\n\n## 3. Hard Negatives (False Positive Resistance, Pooled)\n| Hard Negative Type | Flagged / Total | False Positive Rate (%) | 95% CI | Per-Seed Range |\n|:---|---:|---:|:---:|:---:|\n| ROUNDING                  |           0/397 |                   0.00% |   [0.0%, 1.0%]   |   [0.0%, 0.0%]   |\n| LEGIT_ADJUSTMENT          |           0/188 |                   0.00% |   [0.0%, 2.0%]   |   [0.0%, 0.0%]   |\n| LATE_SETTLEMENT           |          45/169 |                  26.63% |  [20.5%, 33.8%]  |  [19.3%, 32.1%]  |\n| RETRY_AFTER_FAIL          |          0/2950 |                   0.00% |   [0.0%, 0.1%]   |   [0.0%, 0.0%]   |\n| NOISY_BANK_NARRATION      |           0/185 |                   0.00% |   [0.0%, 2.0%]   |   [0.0%, 0.0%]   |\n| NO_UTR_NARRATION          |           0/171 |                   0.00% |   [0.0%, 2.2%]   |   [0.0%, 0.0%]   |\n| UNRELATED_BANK_CREDIT     |          0/2015 |                   0.00% |   [0.0%, 0.2%]   |   [0.0%, 0.0%]   |\n| FAILED_PAYMENT            |          0/6366 |                   0.00% |   [0.0%, 0.1%]   |   [0.0%, 0.0%]   |\n| PARTIAL_REFUND_CONSISTENT |          0/2791 |                   0.00% |   [0.0%, 0.1%]   |   [0.0%, 0.0%]   |\n| IN_FLIGHT                 |       6849/7065 |                  96.94% |  [96.5%, 97.3%]  |  [96.8%, 97.1%]  |\n\n## 4. Ambiguity Tier (Action Accuracy, Pooled)\n| Ambiguity Type | Correct / Total | Action Accuracy (%) | 95% CI | Per-Seed Range |\n|:---|---:|---:|:---:|:---:|\n| NEAR_TOLERANCE            |           0/165 |               0.00% |   [0.0%, 2.3%]   |   [0.0%, 0.0%]   |\n| EXPLAINED_CONSISTENT      |           0/195 |               0.00% |   [0.0%, 1.9%]   |   [0.0%, 0.0%]   |\n| EXPLAINED_INCONSISTENT    |           0/195 |               0.00% |   [0.0%, 1.9%]   |   [0.0%, 0.0%]   |\n| EXPLAINED_NO_AMOUNT       |           0/195 |               0.00% |   [0.0%, 1.9%]   |   [0.0%, 0.0%]   |\n\n## 5. Bank Statement to Settlement Matching (Pooled)\n| Metric | Count / Value | 95% CI | Per-Seed Range |\n|:---|---:|:---:|:---:|\n| Links Made | 3616 | N/A | N/A |\n| Correct Links | 3616 | N/A | N/A |\n| Wrong Links | 0 | N/A | N/A |\n| False-Match Rate | 0.00% (0/3616) | [0.0%, 0.1%] | [0.0%, 0.0%] |\n| Match Rate | 71.75% | [70.5%, 73.0%] | [71.0%, 72.8%] |\n\n**Clean Data False Positives (Pooled):** 3106\n**Total Flagged Predictions (Pooled):** 10515\n**Total Ground-Truth Labels (Pooled):** 26158"
 }

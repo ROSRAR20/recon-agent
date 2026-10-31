@@ -351,6 +351,203 @@ def test_zero_denominator_returns_none_and_prints_na() -> None:
     # Check markdown summary formatting
     report = res.summary_markdown
     assert "N/A (0/0)" in report
-    assert "Macro-Average" in report
+    assert "Overall (Micro)" in report
+    assert "Macro-F1 (undefined as 0)" in report
+
+
+def test_in_flight_flag_does_not_mark_retry_or_refund_consistent() -> None:
+    """A flag on an in-flight payment must not mark RETRY_AFTER_FAIL or PARTIAL_REFUND_CONSISTENT as flagged."""
+    labels = [
+        {
+            "case_id": "case_retry",
+            "merchant_id": "mer_01",
+            "error_class": None,
+            "hard_negative_type": "RETRY_AFTER_FAIL",
+            "entity_ids": ["pay_fail_01", "pay_inflight_01", "order_01"],
+            "primary_entity_ids": ["pay_fail_01"],
+            "settlement_id": None,
+            "expected_action": "benign_ignore",
+        },
+        {
+            "case_id": "case_refund",
+            "merchant_id": "mer_01",
+            "error_class": None,
+            "hard_negative_type": "PARTIAL_REFUND_CONSISTENT",
+            "entity_ids": ["rfnd_01", "pay_inflight_01"],
+            "primary_entity_ids": ["rfnd_01"],
+            "settlement_id": "setl_01",
+            "expected_action": "benign_ignore",
+        },
+        {
+            "case_id": "case_inflight",
+            "merchant_id": "mer_01",
+            "error_class": None,
+            "hard_negative_type": "IN_FLIGHT",
+            "entity_ids": ["pay_inflight_01"],
+            "primary_entity_ids": ["pay_inflight_01"],
+            "settlement_id": None,
+            "expected_action": "benign_ignore",
+        },
+    ]
+
+    # System flags the in-flight captured payment
+    preds = [
+        Prediction(
+            merchant_id="mer_01",
+            predicted_class="MISSING_SETTLEMENT",
+            action="flag",
+            entity_ids=("pay_inflight_01",),
+        )
+    ]
+
+    res = score_predictions(preds, labels, truth_links={})
+    # Must flag IN_FLIGHT, NOT RETRY_AFTER_FAIL or PARTIAL_REFUND_CONSISTENT
+    assert res.hard_negatives["IN_FLIGHT"].flagged == 1
+    assert res.hard_negatives["RETRY_AFTER_FAIL"].flagged == 0
+    assert res.hard_negatives["PARTIAL_REFUND_CONSISTENT"].flagged == 0
+
+
+def test_flag_on_refund_payment_id_does_not_count_as_detecting_refund_mismatch() -> None:
+    """A flag on a refund's payment_id must not count as detecting that refund's mismatch."""
+    labels = [
+        {
+            "case_id": "case_ref_mis",
+            "merchant_id": "mer_01",
+            "error_class": "PARTIAL_REFUND_MISMATCH",
+            "hard_negative_type": None,
+            "entity_ids": ["rfnd_01", "pay_01"],
+            "primary_entity_ids": ["rfnd_01"],
+            "settlement_id": "setl_01",
+            "expected_action": "flag_partial_refund_mismatch",
+        }
+    ]
+
+    # Model flags pay_01, claiming it's PARTIAL_REFUND_MISMATCH
+    preds = [
+        Prediction(
+            merchant_id="mer_01",
+            predicted_class="PARTIAL_REFUND_MISMATCH",
+            action="flag",
+            entity_ids=("pay_01",),
+        )
+    ]
+
+    res = score_predictions(preds, labels, truth_links={})
+    # Because primary is rfnd_01, pay_01 does not match the label
+    assert res.tier1_class_correct["PARTIAL_REFUND_MISMATCH"].tp == 0
+    assert res.tier1_class_correct["PARTIAL_REFUND_MISMATCH"].fn == 1
+    assert res.tier1_class_agnostic["PARTIAL_REFUND_MISMATCH"].tp == 0
+    assert res.tier1_class_agnostic["PARTIAL_REFUND_MISMATCH"].fn == 1
+    assert res.clean_false_positives == 1
+
+
+def test_flag_on_refund_id_detects_refund_mismatch() -> None:
+    """A flag on the refund entity_id successfully detects that refund's mismatch."""
+    labels = [
+        {
+            "case_id": "case_ref_mis",
+            "merchant_id": "mer_01",
+            "error_class": "PARTIAL_REFUND_MISMATCH",
+            "hard_negative_type": None,
+            "entity_ids": ["rfnd_01", "pay_01"],
+            "primary_entity_ids": ["rfnd_01"],
+            "settlement_id": "setl_01",
+            "expected_action": "flag_partial_refund_mismatch",
+        }
+    ]
+
+    # Model flags rfnd_01
+    preds = [
+        Prediction(
+            merchant_id="mer_01",
+            predicted_class="PARTIAL_REFUND_MISMATCH",
+            action="flag",
+            entity_ids=("rfnd_01",),
+        )
+    ]
+
+    res = score_predictions(preds, labels, truth_links={})
+    assert res.tier1_class_correct["PARTIAL_REFUND_MISMATCH"].tp == 1
+    assert res.tier1_class_correct["PARTIAL_REFUND_MISMATCH"].fp == 0
+    assert res.tier1_class_correct["PARTIAL_REFUND_MISMATCH"].fn == 0
+    assert res.clean_false_positives == 0
+
+
+def test_one_to_one_assignment_unchanged_with_primary_entities() -> None:
+    """Greedy one-to-one assignment is strictly preserved when using primary_entity_ids."""
+    labels = [
+        {
+            "case_id": "case_dup_1",
+            "merchant_id": "mer_01",
+            "error_class": "DUPLICATE_PAYMENT",
+            "entity_ids": ["pay_01", "pay_02", "order_01"],
+            "primary_entity_ids": ["pay_01", "pay_02"],
+            "expected_action": "flag_duplicate_payment",
+        },
+        {
+            "case_id": "case_dup_2",
+            "merchant_id": "mer_01",
+            "error_class": "DUPLICATE_PAYMENT",
+            "entity_ids": ["pay_03", "pay_04", "order_02"],
+            "primary_entity_ids": ["pay_03", "pay_04"],
+            "expected_action": "flag_duplicate_payment",
+        },
+    ]
+
+    # Two predictions: pred1 has pay_01 and pay_02 (overlap 2 with case_dup_1)
+    # pred2 has pay_01 only (overlap 1 with case_dup_1)
+    # Both try to match case_dup_1. Pred1 must greedily win case_dup_1; pred2 must NOT be assigned to case_dup_1.
+    preds = [
+        Prediction(
+            merchant_id="mer_01",
+            predicted_class="DUPLICATE_PAYMENT",
+            action="flag",
+            entity_ids=("pay_01", "pay_02"),
+        ),
+        Prediction(
+            merchant_id="mer_01",
+            predicted_class="DUPLICATE_PAYMENT",
+            action="flag",
+            entity_ids=("pay_01",),
+        ),
+    ]
+
+    res = score_predictions(preds, labels, truth_links={})
+    dup = res.tier1_class_correct["DUPLICATE_PAYMENT"]
+    assert dup.tp == 1
+    assert dup.fp == 1
+    assert dup.fn == 1
+    assert res.clean_false_positives == 1
+
+
+def test_macro_f1_treats_undefined_as_zero() -> None:
+    """Macro-F1 treats classes with undefined/None F1 as 0.0 in summary calculation."""
+    labels = [
+        {
+            "case_id": "case_01",
+            "merchant_id": "mer_01",
+            "error_class": "DUPLICATE_PAYMENT",
+            "entity_ids": ["pay_01", "pay_02"],
+            "primary_entity_ids": ["pay_01", "pay_02"],
+            "expected_action": "flag_duplicate_payment",
+        }
+    ]
+
+    preds = [
+        Prediction(
+            merchant_id="mer_01",
+            predicted_class="DUPLICATE_PAYMENT",
+            action="flag",
+            entity_ids=("pay_01", "pay_02"),
+        )
+    ]
+
+    res = score_predictions(preds, labels, truth_links={})
+    dup = res.tier1_class_correct["DUPLICATE_PAYMENT"]
+    assert dup.f1 == 1.0
+
+    # The other 6 Tier 1 classes have None F1 -> 1.0 / 7 = 0.142857... -> 0.143
+    report = res.summary_markdown
+    assert "Macro-F1 (undefined as 0) = 0.143" in report
 
 
