@@ -58,6 +58,15 @@ def get_working_days(start_date_str: str, count: int) -> list[datetime.date]:
     return days
 
 
+def remap_label_ids(lbl: dict[str, Any], stmt_map: dict[str, str]) -> None:
+    """Remap statement IDs across all ID-bearing fields (lists of IDs and ID strings) in a label."""
+    for key, val in list(lbl.items()):
+        if isinstance(val, list):
+            lbl[key] = [stmt_map.get(x, x) if isinstance(x, str) else x for x in val]
+        elif isinstance(val, str) and val in stmt_map:
+            lbl[key] = stmt_map[val]
+
+
 def finalize_bank_statements(data: dict[str, Any], rng_order: random.Random | None = None) -> None:
     """Sort each merchant's bank rows by (date, random order within merchant/date), reassign statement_ids,
     and recompute continuous running balances per merchant.
@@ -100,9 +109,9 @@ def finalize_bank_statements(data: dict[str, Any], rng_order: random.Random | No
 
     data["truth_links"] = truth_links
 
-    # Remap statement IDs in labels
+    # Remap statement IDs in labels across all ID-bearing fields
     for lbl in data.get("labels", []):
-        lbl["entity_ids"] = [stmt_map.get(eid, eid) for eid in lbl["entity_ids"]]
+        remap_label_ids(lbl, stmt_map)
 
     # Remap statement IDs in bank_narration_variants side table
     if "bank_narration_variants" in data:

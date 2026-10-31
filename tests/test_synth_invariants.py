@@ -1021,6 +1021,76 @@ def test_primary_entity_ids_structure() -> None:
             assert p_ids[0].startswith(("pay_", "rfnd_"))
 
 
+@pytest.mark.parametrize("profile", ["small", "full"])
+def test_primary_entity_ids_referential_integrity(profile: str) -> None:
+    """For every label (dev split, profiles small and full), each primary_entity_id exists in the
+    observable file implied by its type and starts with the expected prefix.
+    On failure print counts per label type.
+    """
+    config = create_config(profile=profile, split="dev", seed=1, inject_errors=True)
+    data = SyntheticDataGenerator(config).generate()
+
+    bank_ids = {b["statement_id"] for b in data["bank_statement"]}
+    pay_ids = {p["payment_id"] for p in data["payments"]}
+    recon_ids = {r["entity_id"] for r in data["recon_items"]}
+    settle_ids = {s["settlement_id"] for s in data["settlements"]}
+    order_ids = {o["order_id"] for o in data["orders_ledger"]}
+    order_refund_ids = {o["refund_id"] for o in data["orders_ledger"] if o.get("refund_id")}
+
+    failures: dict[str, int] = {}
+    for lbl in data["labels"]:
+        c_type = lbl.get("error_class") or lbl.get("hard_negative_type") or lbl.get("ambiguity_type") or "UNKNOWN"
+        p_ids = lbl.get("primary_entity_ids", [])
+
+        # 1. Expected prefix
+        expected_prefixes: tuple[str, ...] = ()
+        if c_type in ("ORPHAN_BANK_CREDIT", "SHORT_BANK_CREDIT", "NOISY_BANK_NARRATION", "NO_UTR_NARRATION", "UNRELATED_BANK_CREDIT"):
+            expected_prefixes = ("stmt_",)
+        elif c_type in ("MISSING_SETTLEMENT", "FAILED_PAYMENT", "RETRY_AFTER_FAIL", "FEE_TAX_MISMATCH", "NEAR_TOLERANCE", "ROUNDING"):
+            expected_prefixes = ("pay_",)
+        elif c_type == "DUPLICATE_PAYMENT":
+            expected_prefixes = ("pay_",)
+        elif c_type == "CUTOFF_DRIFT":
+            expected_prefixes = ("pay_", "order_")
+        elif c_type in ("PARTIAL_REFUND_MISMATCH", "PARTIAL_REFUND_CONSISTENT", "EXPLAINED_CONSISTENT", "EXPLAINED_INCONSISTENT", "EXPLAINED_NO_AMOUNT"):
+            expected_prefixes = ("rfnd_",)
+        elif c_type == "LATE_SETTLEMENT":
+            expected_prefixes = ("setl_",)
+        elif c_type == "LEGIT_ADJUSTMENT":
+            expected_prefixes = ("adj_",)
+        elif c_type == "IN_FLIGHT":
+            expected_prefixes = ("pay_", "rfnd_")
+
+        for eid in p_ids:
+            if not any(eid.startswith(pref) for pref in expected_prefixes):
+                failures[f"{c_type}:bad_prefix:{eid}"] = failures.get(f"{c_type}:bad_prefix:{eid}", 0) + 1
+
+            # 2. Existence check in implied observable file
+            found = False
+            if eid.startswith("stmt_"):
+                found = eid in bank_ids
+            elif eid.startswith("pay_"):
+                found = eid in pay_ids
+            elif eid.startswith("setl_"):
+                found = eid in settle_ids
+            elif eid.startswith("order_"):
+                found = eid in order_ids
+            elif eid.startswith("adj_"):
+                found = eid in recon_ids
+            elif eid.startswith("rfnd_"):
+                found = (eid in recon_ids) or (eid in order_refund_ids)
+
+            if not found:
+                failures[f"{c_type}:missing:{eid}"] = failures.get(f"{c_type}:missing:{eid}", 0) + 1
+
+    if failures:
+        print(f"\n[FAILURES] Referential integrity failures in profile '{profile}':")
+        for k, cnt in sorted(failures.items()):
+            print(f"  {k}: {cnt}")
+        assert not failures, f"Referential integrity failures in profile '{profile}': {failures}"
+
+
+
 
 
 
