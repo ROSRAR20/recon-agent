@@ -126,14 +126,19 @@ class SyntheticDataGenerator:
 
         # 1. Merchants & Calendar
         merchants = [f"mer_{i+1:02d}" for i in range(self.config.num_merchants)]
-        # Generate extra working days so settlements past day 22 have defined dates
+        # Generate extra working days so settlements past window have defined dates
         working_days = get_working_days(self.config.start_date, self.config.working_days + 25)
+        # Window and as_of date: strictly the date of the last working day of the window (Day 4B)
+        as_of_date = working_days[self.config.working_days - 1]
+        as_of_str = as_of_date.isoformat()
 
         payments: list[dict[str, Any]] = []
         orders_ledger: list[dict[str, Any]] = []
         settlements: list[dict[str, Any]] = []
         recon_items: list[dict[str, Any]] = []
         bank_statements: list[dict[str, Any]] = []
+        in_flight_payments: list[dict[str, Any]] = []
+        in_flight_refunds: list[dict[str, Any]] = []
 
         total_adjustment_count = 0
         initial_balances = {m_id: 50000000 + m_idx * 5000000 for m_idx, m_id in enumerate(merchants)}
@@ -287,9 +292,20 @@ class SyntheticDataGenerator:
 
                     # Payment settles at C + 2 working days
                     payment_settle_day = day_idx + self.config.payment_settlement_lag_days
-                    pending_settlement_items.setdefault(payment_settle_day, []).append(
-                        recon_payment_item
-                    )
+                    if payment_settle_day >= self.config.working_days:
+                        # In-flight payment: scheduled settle date is AFTER as_of
+                        in_flight_payments.append(
+                            {
+                                "payment_id": payment_id,
+                                "merchant_id": merchant_id,
+                                "order_id": order_id,
+                                "amount": amount,
+                            }
+                        )
+                    else:
+                        pending_settlement_items.setdefault(payment_settle_day, []).append(
+                            recon_payment_item
+                        )
 
                     # Check for refund (~4% of captured payments)
                     is_refunded = self.rng.randint(1, 10000) <= self.config.refund_rate_bps
@@ -342,13 +358,28 @@ class SyntheticDataGenerator:
                         }
 
                         # Refund settles 1 working day after processing
-                        refund_settle_day = min(
-                            day_idx + 1 + self.config.refund_settlement_lag_days,
-                            len(working_days) - 1,
-                        )
-                        pending_settlement_items.setdefault(refund_settle_day, []).append(
-                            recon_refund_item
-                        )
+                        refund_date = datetime.datetime.fromtimestamp(refund_time, tz=IST_TZ).date()
+                        try:
+                            r_day_idx = working_days.index(refund_date)
+                        except ValueError:
+                            r_day_idx = day_idx + 1
+
+                        refund_settle_day = r_day_idx + self.config.refund_settlement_lag_days
+                        if refund_settle_day >= self.config.working_days:
+                            # In-flight refund: scheduled settle date is AFTER as_of
+                            in_flight_refunds.append(
+                                {
+                                    "refund_id": refund_id,
+                                    "merchant_id": merchant_id,
+                                    "payment_id": payment_id,
+                                    "order_id": order_id,
+                                    "amount": refund_amount,
+                                }
+                            )
+                        else:
+                            pending_settlement_items.setdefault(refund_settle_day, []).append(
+                                recon_refund_item
+                            )
 
                     orders_ledger.append(
                         {
@@ -366,12 +397,11 @@ class SyntheticDataGenerator:
                         }
                     )
 
-            # Process settlement batches day-by-day for this merchant
+            # Process settlement batches day-by-day for this merchant strictly within the window (<= as_of)
             # Guarantee every refund debit is processed and deferred if net would be <= 0
             deferred_refunds: list[dict[str, Any]] = []
-            max_settle_day = max(pending_settlement_items.keys()) if pending_settlement_items else 0
 
-            for s_day in range(max_settle_day + 1):
+            for s_day in range(self.config.working_days):
                 day_items = pending_settlement_items.get(s_day, [])
                 payments_in_batch = [item for item in day_items if item["type"] == "payment"]
                 refunds_in_batch = deferred_refunds + [
@@ -506,17 +536,6 @@ class SyntheticDataGenerator:
                     }
                 )
 
-        # Derive as_of date: last settlement date + 10 calendar days
-        if settlements:
-            last_settle_date = max(
-                datetime.datetime.fromtimestamp(s["settled_at"], tz=IST_TZ).date()
-                for s in settlements
-            )
-            as_of_date = last_settle_date + datetime.timedelta(days=10)
-        else:
-            as_of_date = datetime.date.fromisoformat(self.config.start_date) + datetime.timedelta(days=35)
-        as_of_str = as_of_date.isoformat()
-
         # Generate unrelated bank rows up to as_of
         all_bank_days = [
             d for d in working_days if d <= as_of_date
@@ -616,6 +635,8 @@ class SyntheticDataGenerator:
             "labels": [],
             "_initial_balances": initial_balances,
             "bank_narration_variants": bank_narration_variants,
+            "in_flight_payments": in_flight_payments,
+            "in_flight_refunds": in_flight_refunds,
         }
 
         # Apply error injection and generate labels if enabled

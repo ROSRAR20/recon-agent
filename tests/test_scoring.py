@@ -334,3 +334,23 @@ def test_matching_metrics_and_ambiguity_tier() -> None:
     assert res.ambiguity_tier["NEAR_TOLERANCE"].accuracy == 1.0  # 1/1
     assert res.ambiguity_tier["EXPLAINED_CONSISTENT"].accuracy == 0.0  # 0/1 (ignore != benign_explained)
 
+
+def test_zero_denominator_returns_none_and_prints_na() -> None:
+    """When a class has no predictions and no ground-truth, precision/recall/F1 are None, formatted as N/A."""
+    labels = []  # No labels
+    preds = []  # No predictions
+
+    res = score_predictions(preds, labels, truth_links={})
+    dup_res = res.tier1_class_correct["DUPLICATE_PAYMENT"]
+    assert dup_res.precision is None
+    assert dup_res.precision_ci is None
+    assert dup_res.recall is None
+    assert dup_res.recall_ci is None
+    assert dup_res.f1 is None
+
+    # Check markdown summary formatting
+    report = res.summary_markdown
+    assert "N/A (0/0)" in report
+    assert "Macro-Average" in report
+
+

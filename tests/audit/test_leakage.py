@@ -47,9 +47,10 @@ def test_compute_auc_deterministic() -> None:
     assert compute_auc([2, 4], [1, 3]) == 0.75
 
 
-def test_leakage_audit_full_profile() -> None:
-    """Assert that for all classes, every non-whitelisted feature has 0.40 <= AUC <= 0.60."""
-    config = create_config(profile="full", split="dev", seed=1, inject_errors=True)
+@pytest.mark.parametrize("seed", [1, 2, 3])
+def test_leakage_audit_full_profile(seed: int) -> None:
+    """Assert that for all classes, every non-whitelisted feature has 0.40 <= AUC <= 0.60 across seeds 1, 2, 3."""
+    config = create_config(profile="full", split="dev", seed=seed, inject_errors=True)
     generator = SyntheticDataGenerator(config)
     data = generator.generate()
 

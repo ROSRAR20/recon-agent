@@ -27,7 +27,8 @@ All parameters, entity schemas, and behavioral distributions are explicitly tagg
 
 - **Timezone:** Indian Standard Time (IST, UTC+05:30) `[ASSUMED / STANDARD]`.
 - **Timestamps:** Standard integer Unix seconds `[DOCS / ASSUMED]`.
-- **Simulation Window:** 22 working days (Monday through Friday) starting Monday, 2026-08-03 `[ASSUMED]`.
+- **Simulation Window:** 30 working days (Monday through Friday) starting Monday, 2026-08-03 `[ASSUMED]`. Lengthened from 22 days to ensure all dry-run statistical floors pass for both dev and test splits.
+- **`as_of` Semantics:** `manifest.as_of` is set to the end of the last working day of the simulation window (`working_days[config.working_days - 1]`) in ISO format `[ASSUMED / DESIGN RULE]`. Zero recon items, settlements, or bank statement rows are dated after `as_of`. Captured payments and refunds whose scheduled settlement date falls after `as_of` appear in the orders ledger / gateway payments but have no recon item, settlement batch, or bank statement credit.
 - **Settlement Lag:**
   - Captured payments settle at $C + 2$ working days `[ASSUMED standard T+2 settlement]`.
   - Refunds settle at $R + 1$ working day after processing `[ASSUMED]`.
@@ -41,7 +42,7 @@ All parameters, entity schemas, and behavioral distributions are explicitly tagg
 | Parameter | Value | Tag | Description |
 | :--- | :--- | :--- | :--- |
 | `start_date` | `2026-08-03` | `[ASSUMED]` | Window start date (Monday). |
-| `working_days` | `22` | `[ASSUMED]` | Count of Monday–Friday business days. |
+| `working_days` | `30` | `[ASSUMED]` | Count of Monday–Friday business days (lengthened from 22 to guarantee dry-run floors for dev and test splits). |
 | `profile: small` | 10 merchants | `[ASSUMED]` | Fast test profile for dev iteration. |
 | `profile: full` | 60 merchants | `[ASSUMED]` | Full benchmarking profile per split. |
 | `avg_payments_per_day` | 20 (Poisson mean) | `[ASSUMED]` | Mean captured attempts per merchant-day. |
@@ -104,7 +105,7 @@ Fields strictly match the documented Razorpay recon endpoint `[DOCS: https://raz
   - `rounding_tolerance_paise`: `2` (maximum acceptable rounding variance in minor units; Band 1 ignore) `[ASSUMED]`.
   - `escalate_tolerance_paise`: `9` (maximum variance to escalate to human before classifying as definite error; Band 2) `[ASSUMED]`.
   - `error_threshold_paise`: `10` (minimum variance considered a definite pricing error; Band 3) `[ASSUMED]`.
-- `manifest.json`: Deterministic seed, configuration hash (SHA-256), generator version, `as_of` timestamp (`last_settlement_date + 10 calendar days`), and dataset row/class counts `[ASSUMED]`.
+- `manifest.json`: Deterministic seed, configuration hash (SHA-256), generator version, `as_of` timestamp (end of the last working day of the simulation window), and dataset row/class counts `[ASSUMED]`.
 - `labels.jsonl`: Evaluation ground-truth labels (`case_id`, `merchant_id`, `error_class`, `hard_negative_type`, `ambiguity_type`, `entity_ids`, `settlement_id`, `expected_action`) `[ASSUMED]`.
 
 ---
@@ -144,6 +145,7 @@ Hard negatives represent legitimate operational variations that must NOT be flag
 7. `UNRELATED_BANK_CREDIT` `[ASSUMED]`: External other-gateway payouts (Stripe, Paytm), payroll, or interest credits present in bank statement.
 8. `FAILED_PAYMENT` `[ASSUMED]`: Standard failed authorization attempt not part of a retry sequence; satisfies I4.
 9. `PARTIAL_REFUND_CONSISTENT` `[ASSUMED]`: Legitimate partial refund matching ledger amount.
+10. `IN_FLIGHT` `[ASSUMED]`: Captured payments and refunds whose scheduled settlement date is after `as_of`. These transactions legitimately have no recon items, settlement batches, or bank credits.
 
 ---
 
@@ -167,7 +169,7 @@ To rigorously evaluate nuanced reasoning, text understanding, and human-escalati
 
 - **I1 (Item Arithmetic):** $\text{base\_fee} = \text{mul\_div\_round}(\text{amount}, \text{rate\_bps}, 10000)$, $\text{tax} = \text{mul\_div\_round}(\text{base\_fee}, 1800, 10000)$, $\text{credit} = \text{amount} - \text{fee}$ (or $\text{amount} - \text{fee} - \text{tax}$). For refunds: $\text{debit} = \text{amount}, \text{credit} = 0, \text{fee} = 0, \text{tax} = 0$.
 - **I2 (Settlement Conservation):** $\sum \text{credit} - \sum \text{debit} = \text{settlement\_net} = \text{bank\_credit\_amount}$ (holds for all clean batches and all injections except `SHORT_BANK_CREDIT`).
-- **I3 (Referential Integrity):** Every captured payment has exactly one recon payment item; every recon item links to a valid `settlement_id`.
+- **I3 (Referential Integrity):** Every captured payment whose scheduled settlement date $\le \text{as\_of}$ has exactly one recon payment item (except `MISSING_SETTLEMENT`-labeled); in-flight payments have none; zero recon items, settlements, or bank rows are dated after `as_of`; every recon item links to a valid `settlement_id`.
 - **I4 (Ledger Consistency):** Order expected amount equals payment amount; refund amounts align with orders ledger.
 - **I5 (Type & ID Hygiene):** Strictly zero floating-point numbers in emitted JSON files; all identifiers conform to unique `prefix + 14 base62` characters.
 - **I6 (Determinism):** Same seed produces bit-identical files; distinct seeds diverge.

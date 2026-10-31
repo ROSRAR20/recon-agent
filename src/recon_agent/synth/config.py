@@ -19,7 +19,7 @@ class SynthConfig:
     split: str = "dev"  # "dev" or "test"
     num_merchants: int = 10
     start_date: str = "2026-08-03"  # Monday
-    working_days: int = 22  # Mon-Fri business days
+    working_days: int = 30  # Mon-Fri business days (Day 4B: extended from 22 to 30)
     avg_payments_per_day: float = 20.0  # Poisson mean
     method_mix: dict[str, int] = field(
         default_factory=lambda: {"card": 45, "upi": 40, "netbanking": 15}

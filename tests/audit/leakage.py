@@ -16,6 +16,18 @@ from typing import Any
 
 IST_TZ = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
+
+def add_working_days(start_date: datetime.date, n: int) -> datetime.date:
+    """Add n Mon-Fri working days to start_date."""
+    curr = start_date
+    added = 0
+    while added < n:
+        curr += datetime.timedelta(days=1)
+        if curr.weekday() < 5:
+            added += 1
+    return curr
+
+
 WHITELISTED_FEATURES = {
     ("CUTOFF_DRIFT", "time_of_day"),
 }
@@ -207,6 +219,7 @@ def audit_leakage(data: dict[str, Any], use_eligible_population: bool = True) ->
     labels = data.get("labels", [])
     variants = data.get("bank_narration_variants", {})
     manifest = data.get("manifest", {})
+    rate_card = data.get("rate_card", {})
     as_of_str = manifest.get("as_of")
     if as_of_str:
         as_of_date = datetime.date.fromisoformat(as_of_str)
@@ -359,17 +372,17 @@ def audit_leakage(data: dict[str, Any], use_eligible_population: bool = True) ->
     # Specific eligible clean subsets
     clean_payments_missing = []
     clean_payments_cutoff = []
+    settle_lag = rate_card.get("payment_settlement_lag_days", 2)
+    missing_after = rate_card.get("missing_after_days", 7)
     for idx, p in enumerate(payments):
         if p["payment_id"] in injected_entities or p.get("status") != "captured":
             continue
-        # Missing settlement eligibility: settled >= 7 days before as_of
-        r = recon_by_entity_id.get(p["payment_id"])
-        if r:
-            stl = settlements_by_id.get(r["settlement_id"])
-            if stl:
-                s_date = datetime.datetime.fromtimestamp(stl["settled_at"], tz=IST_TZ).date()
-                if s_date + datetime.timedelta(days=7) <= as_of_date:
-                    clean_payments_missing.append(pay_features[idx])
+        # Missing settlement eligibility: scheduled settle date + 7 days <= as_of
+        cap_ts = p.get("captured_at") or p.get("created_at") or 0
+        cap_date = datetime.datetime.fromtimestamp(cap_ts, tz=IST_TZ).date()
+        sched_settle = add_working_days(cap_date, settle_lag)
+        if sched_settle + datetime.timedelta(days=missing_after) <= as_of_date:
+            clean_payments_missing.append(pay_features[idx])
         # Cutoff drift eligibility: Mon-Thu creation
         dt = datetime.datetime.fromtimestamp(p.get("created_at") or 0, tz=IST_TZ)
         if dt.weekday() < 4:

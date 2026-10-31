@@ -32,6 +32,7 @@ HARD_NEGATIVE_TYPES = (
     "UNRELATED_BANK_CREDIT",
     "FAILED_PAYMENT",
     "PARTIAL_REFUND_CONSISTENT",
+    "IN_FLIGHT",
 )
 
 AMBIGUITY_TYPES = (
@@ -93,13 +94,13 @@ class Tier1Metric:
     tp: int
     fp: int
     fn: int
-    precision: float
-    precision_ci: tuple[float, float]
+    precision: float | None
+    precision_ci: tuple[float, float] | None
     precision_kn: str
-    recall: float
-    recall_ci: tuple[float, float]
+    recall: float | None
+    recall_ci: tuple[float, float] | None
     recall_kn: str
-    f1: float
+    f1: float | None
 
 
 @dataclass(frozen=True)
@@ -131,10 +132,10 @@ class MatchingMetric:
     links_made: int
     correct_links: int
     wrong_links: int
-    false_match_rate: float
-    false_match_ci: tuple[float, float]
-    match_rate: float
-    match_rate_ci: tuple[float, float]
+    false_match_rate: float | None
+    false_match_ci: tuple[float, float] | None
+    match_rate: float | None
+    match_rate_ci: tuple[float, float] | None
 
 
 @dataclass
@@ -314,21 +315,27 @@ def score_predictions(
         c_fn = t1_correct_fn[c]
         p_denom = c_tp + c_fp
         r_denom = c_tp + c_fn
-        prec = (c_tp / p_denom) if p_denom > 0 else 0.0
-        rec = (c_tp / r_denom) if r_denom > 0 else 0.0
-        f1 = (2 * prec * rec / (prec + rec)) if (prec + rec) > 0 else 0.0
+        prec = (c_tp / p_denom) if p_denom > 0 else None
+        prec_ci = wilson_ci(c_tp, p_denom) if p_denom > 0 else None
+        rec = (c_tp / r_denom) if r_denom > 0 else None
+        rec_ci = wilson_ci(c_tp, r_denom) if r_denom > 0 else None
+        f1 = (
+            round(2 * prec * rec / (prec + rec), 4)
+            if (prec is not None and rec is not None and (prec + rec) > 0)
+            else None
+        )
 
         tier1_class_correct[c] = Tier1Metric(
             tp=c_tp,
             fp=c_fp,
             fn=c_fn,
-            precision=round(prec, 4),
-            precision_ci=wilson_ci(c_tp, p_denom),
+            precision=round(prec, 4) if prec is not None else None,
+            precision_ci=prec_ci,
             precision_kn=f"{c_tp}/{p_denom}",
-            recall=round(rec, 4),
-            recall_ci=wilson_ci(c_tp, r_denom),
+            recall=round(rec, 4) if rec is not None else None,
+            recall_ci=rec_ci,
             recall_kn=f"{c_tp}/{r_denom}",
-            f1=round(f1, 4),
+            f1=f1,
         )
 
         # Class-Agnostic
@@ -337,21 +344,27 @@ def score_predictions(
         a_fn = t1_agnostic_fn[c]
         ap_denom = a_tp + a_fp
         ar_denom = a_tp + a_fn
-        a_prec = (a_tp / ap_denom) if ap_denom > 0 else 0.0
-        a_rec = (a_tp / ar_denom) if ar_denom > 0 else 0.0
-        a_f1 = (2 * a_prec * a_rec / (a_prec + a_rec)) if (a_prec + a_rec) > 0 else 0.0
+        a_prec = (a_tp / ap_denom) if ap_denom > 0 else None
+        a_prec_ci = wilson_ci(a_tp, ap_denom) if ap_denom > 0 else None
+        a_rec = (a_tp / ar_denom) if ar_denom > 0 else None
+        a_rec_ci = wilson_ci(a_tp, ar_denom) if ar_denom > 0 else None
+        a_f1 = (
+            round(2 * a_prec * a_rec / (a_prec + a_rec), 4)
+            if (a_prec is not None and a_rec is not None and (a_prec + a_rec) > 0)
+            else None
+        )
 
         tier1_class_agnostic[c] = Tier1Metric(
             tp=a_tp,
             fp=a_fp,
             fn=a_fn,
-            precision=round(a_prec, 4),
-            precision_ci=wilson_ci(a_tp, ap_denom),
+            precision=round(a_prec, 4) if a_prec is not None else None,
+            precision_ci=a_prec_ci,
             precision_kn=f"{a_tp}/{ap_denom}",
-            recall=round(a_rec, 4),
-            recall_ci=wilson_ci(a_tp, ar_denom),
+            recall=round(a_rec, 4) if a_rec is not None else None,
+            recall_ci=a_rec_ci,
             recall_kn=f"{a_tp}/{ar_denom}",
-            f1=round(a_f1, 4),
+            f1=a_f1,
         )
 
     # =========================================================================
@@ -429,20 +442,20 @@ def score_predictions(
         else:
             wrong_links += 1
 
-    false_match_rate = (wrong_links / links_made) if links_made > 0 else 0.0
-    false_match_ci = wilson_ci(wrong_links, links_made)
+    false_match_rate = (wrong_links / links_made) if links_made > 0 else None
+    false_match_ci = wilson_ci(wrong_links, links_made) if links_made > 0 else None
 
     total_true_settlement_rows = sum(1 for sid in truth_map.values() if sid is not None)
-    match_rate = (correct_links / total_true_settlement_rows) if total_true_settlement_rows > 0 else 0.0
-    match_rate_ci = wilson_ci(correct_links, total_true_settlement_rows)
+    match_rate = (correct_links / total_true_settlement_rows) if total_true_settlement_rows > 0 else None
+    match_rate_ci = wilson_ci(correct_links, total_true_settlement_rows) if total_true_settlement_rows > 0 else None
 
     matching_metric = MatchingMetric(
         links_made=links_made,
         correct_links=correct_links,
         wrong_links=wrong_links,
-        false_match_rate=round(false_match_rate, 4),
+        false_match_rate=round(false_match_rate, 4) if false_match_rate is not None else None,
         false_match_ci=false_match_ci,
-        match_rate=round(match_rate, 4),
+        match_rate=round(match_rate, 4) if match_rate is not None else None,
         match_rate_ci=match_rate_ci,
     )
 
@@ -473,14 +486,34 @@ def format_markdown_report(res: ScoringResult) -> str:
         "| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Recall (k/n) | 95% CI | F1 |",
         "|:---|---:|---:|---:|---:|:---:|---:|:---:|---:|",
     ]
+    valid_c_p = [m.precision for m in res.tier1_class_correct.values() if m.precision is not None]
+    valid_c_r = [m.recall for m in res.tier1_class_correct.values() if m.recall is not None]
+    valid_c_f = [m.f1 for m in res.tier1_class_correct.values() if m.f1 is not None]
     for c, m in res.tier1_class_correct.items():
-        prec_str = f"{m.precision * 100:.1f}% ({m.precision_kn})"
-        prec_ci = f"[{m.precision_ci[0]*100:.1f}%, {m.precision_ci[1]*100:.1f}%]"
-        rec_str = f"{m.recall * 100:.1f}% ({m.recall_kn})"
-        rec_ci = f"[{m.recall_ci[0]*100:.1f}%, {m.recall_ci[1]*100:.1f}%]"
+        if m.precision is not None:
+            prec_str = f"{m.precision * 100:.1f}% ({m.precision_kn})"
+            prec_ci = f"[{m.precision_ci[0]*100:.1f}%, {m.precision_ci[1]*100:.1f}%]" if m.precision_ci else "N/A"
+        else:
+            prec_str = f"N/A ({m.precision_kn})"
+            prec_ci = "N/A"
+
+        if m.recall is not None:
+            rec_str = f"{m.recall * 100:.1f}% ({m.recall_kn})"
+            rec_ci = f"[{m.recall_ci[0]*100:.1f}%, {m.recall_ci[1]*100:.1f}%]" if m.recall_ci else "N/A"
+        else:
+            rec_str = f"N/A ({m.recall_kn})"
+            rec_ci = "N/A"
+
+        f1_str = f"{m.f1:.3f}" if m.f1 is not None else "N/A"
         lines.append(
-            f"| {c:<23} | {m.tp:>4} | {m.fp:>4} | {m.fn:>4} | {prec_str:>16} | {prec_ci:^16} | {rec_str:>16} | {rec_ci:^16} | {m.f1:>6.3f} |"
+            f"| {c:<23} | {m.tp:>4} | {m.fp:>4} | {m.fn:>4} | {prec_str:>16} | {prec_ci:^16} | {rec_str:>16} | {rec_ci:^16} | {f1_str:>6} |"
         )
+    macro_p = f"{sum(valid_c_p)/len(valid_c_p)*100:.1f}%" if valid_c_p else "N/A"
+    macro_r = f"{sum(valid_c_r)/len(valid_c_r)*100:.1f}%" if valid_c_r else "N/A"
+    macro_f = f"{sum(valid_c_f)/len(valid_c_f):.3f}" if valid_c_f else "N/A"
+    lines.append(
+        f"| {'Macro-Average':<23} | {'-':>4} | {'-':>4} | {'-':>4} | {macro_p:>16} | {'-':^16} | {macro_r:>16} | {'-':^16} | {macro_f:>6} |"
+    )
 
     lines.extend([
         "",
@@ -488,14 +521,34 @@ def format_markdown_report(res: ScoringResult) -> str:
         "| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Recall (k/n) | 95% CI | F1 |",
         "|:---|---:|---:|---:|---:|:---:|---:|:---:|---:|",
     ])
+    valid_a_p = [m.precision for m in res.tier1_class_agnostic.values() if m.precision is not None]
+    valid_a_r = [m.recall for m in res.tier1_class_agnostic.values() if m.recall is not None]
+    valid_a_f = [m.f1 for m in res.tier1_class_agnostic.values() if m.f1 is not None]
     for c, m in res.tier1_class_agnostic.items():
-        prec_str = f"{m.precision * 100:.1f}% ({m.precision_kn})"
-        prec_ci = f"[{m.precision_ci[0]*100:.1f}%, {m.precision_ci[1]*100:.1f}%]"
-        rec_str = f"{m.recall * 100:.1f}% ({m.recall_kn})"
-        rec_ci = f"[{m.recall_ci[0]*100:.1f}%, {m.recall_ci[1]*100:.1f}%]"
+        if m.precision is not None:
+            prec_str = f"{m.precision * 100:.1f}% ({m.precision_kn})"
+            prec_ci = f"[{m.precision_ci[0]*100:.1f}%, {m.precision_ci[1]*100:.1f}%]" if m.precision_ci else "N/A"
+        else:
+            prec_str = f"N/A ({m.precision_kn})"
+            prec_ci = "N/A"
+
+        if m.recall is not None:
+            rec_str = f"{m.recall * 100:.1f}% ({m.recall_kn})"
+            rec_ci = f"[{m.recall_ci[0]*100:.1f}%, {m.recall_ci[1]*100:.1f}%]" if m.recall_ci else "N/A"
+        else:
+            rec_str = f"N/A ({m.recall_kn})"
+            rec_ci = "N/A"
+
+        f1_str = f"{m.f1:.3f}" if m.f1 is not None else "N/A"
         lines.append(
-            f"| {c:<23} | {m.tp:>4} | {m.fp:>4} | {m.fn:>4} | {prec_str:>16} | {prec_ci:^16} | {rec_str:>16} | {rec_ci:^16} | {m.f1:>6.3f} |"
+            f"| {c:<23} | {m.tp:>4} | {m.fp:>4} | {m.fn:>4} | {prec_str:>16} | {prec_ci:^16} | {rec_str:>16} | {rec_ci:^16} | {f1_str:>6} |"
         )
+    macro_ap = f"{sum(valid_a_p)/len(valid_a_p)*100:.1f}%" if valid_a_p else "N/A"
+    macro_ar = f"{sum(valid_a_r)/len(valid_a_r)*100:.1f}%" if valid_a_r else "N/A"
+    macro_af = f"{sum(valid_a_f)/len(valid_a_f):.3f}" if valid_a_f else "N/A"
+    lines.append(
+        f"| {'Macro-Average':<23} | {'-':>4} | {'-':>4} | {'-':>4} | {macro_ap:>16} | {'-':^16} | {macro_ar:>16} | {'-':^16} | {macro_af:>6} |"
+    )
 
     lines.extend([
         "",
@@ -527,8 +580,24 @@ def format_markdown_report(res: ScoringResult) -> str:
         f"| Links Made | {res.matching.links_made} | N/A |",
         f"| Correct Links | {res.matching.correct_links} | N/A |",
         f"| Wrong Links | {res.matching.wrong_links} | N/A |",
-        f"| False-Match Rate | {res.matching.false_match_rate*100:.2f}% ({res.matching.wrong_links}/{res.matching.links_made}) | [{res.matching.false_match_ci[0]*100:.1f}%, {res.matching.false_match_ci[1]*100:.1f}%] |",
-        f"| Match Rate | {res.matching.match_rate*100:.2f}% | [{res.matching.match_rate_ci[0]*100:.1f}%, {res.matching.match_rate_ci[1]*100:.1f}%] |",
+    ])
+    if res.matching.false_match_rate is not None and res.matching.false_match_ci is not None:
+        fmr_str = f"{res.matching.false_match_rate*100:.2f}% ({res.matching.wrong_links}/{res.matching.links_made})"
+        fmr_ci = f"[{res.matching.false_match_ci[0]*100:.1f}%, {res.matching.false_match_ci[1]*100:.1f}%]"
+    else:
+        fmr_str = f"N/A ({res.matching.wrong_links}/{res.matching.links_made})"
+        fmr_ci = "N/A"
+
+    if res.matching.match_rate is not None and res.matching.match_rate_ci is not None:
+        mr_str = f"{res.matching.match_rate*100:.2f}%"
+        mr_ci = f"[{res.matching.match_rate_ci[0]*100:.1f}%, {res.matching.match_rate_ci[1]*100:.1f}%]"
+    else:
+        mr_str = "N/A"
+        mr_ci = "N/A"
+
+    lines.extend([
+        f"| False-Match Rate | {fmr_str} | {fmr_ci} |",
+        f"| Match Rate | {mr_str} | {mr_ci} |",
         "",
         f"**Clean Data False Positives:** {res.clean_false_positives}",
         f"**Total Flagged Predictions:** {res.total_flagged_predictions}",
@@ -546,5 +615,408 @@ def format_markdown_report(res: ScoringResult) -> str:
     for r_name, r_vals in res.confusion_matrix.items():
         row_str = f"| {r_name:<11} | " + " | ".join(f"{r_vals[c]:>8}" for c in cols) + " |"
         lines.append(row_str)
+
+    return "\n".join(lines)
+
+
+def compute_pooled_results(results: list[ScoringResult]) -> dict[str, Any]:
+    """Pool evaluation counts across multiple seeds with Wilson CIs and per-seed metric ranges."""
+    if not results:
+        raise ValueError("Cannot pool empty results list")
+
+    system_id = results[0].system_id
+    split = results[0].split
+    seeds = [r.seed for r in results]
+
+    # 1. Tier 1 Class-Correct
+    t1_correct: dict[str, dict[str, Any]] = {}
+    valid_c_p_pooled: list[float] = []
+    valid_c_r_pooled: list[float] = []
+    valid_c_f_pooled: list[float] = []
+
+    for c in TIER1_ERROR_CLASSES:
+        tp = sum(r.tier1_class_correct[c].tp for r in results)
+        fp = sum(r.tier1_class_correct[c].fp for r in results)
+        fn = sum(r.tier1_class_correct[c].fn for r in results)
+        p_denom = tp + fp
+        r_denom = tp + fn
+
+        prec = round(tp / p_denom, 4) if p_denom > 0 else None
+        prec_ci = wilson_ci(tp, p_denom) if p_denom > 0 else None
+        rec = round(tp / r_denom, 4) if r_denom > 0 else None
+        rec_ci = wilson_ci(tp, r_denom) if r_denom > 0 else None
+        f1 = (
+            round(2 * prec * rec / (prec + rec), 4)
+            if (prec is not None and rec is not None and (prec + rec) > 0)
+            else None
+        )
+
+        seed_precs = [
+            r.tier1_class_correct[c].precision
+            for r in results
+            if r.tier1_class_correct[c].precision is not None
+        ]
+        seed_recs = [
+            r.tier1_class_correct[c].recall
+            for r in results
+            if r.tier1_class_correct[c].recall is not None
+        ]
+        seed_f1s = [
+            r.tier1_class_correct[c].f1
+            for r in results
+            if r.tier1_class_correct[c].f1 is not None
+        ]
+
+        p_range = (min(seed_precs), max(seed_precs)) if seed_precs else None
+        r_range = (min(seed_recs), max(seed_recs)) if seed_recs else None
+        f_range = (min(seed_f1s), max(seed_f1s)) if seed_f1s else None
+
+        if prec is not None:
+            valid_c_p_pooled.append(prec)
+        if rec is not None:
+            valid_c_r_pooled.append(rec)
+        if f1 is not None:
+            valid_c_f_pooled.append(f1)
+
+        t1_correct[c] = {
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+            "precision": prec,
+            "precision_ci": prec_ci,
+            "precision_kn": f"{tp}/{p_denom}",
+            "precision_range": p_range,
+            "recall": rec,
+            "recall_ci": rec_ci,
+            "recall_kn": f"{tp}/{r_denom}",
+            "recall_range": r_range,
+            "f1": f1,
+            "f1_range": f_range,
+        }
+
+    macro_c_p = round(sum(valid_c_p_pooled) / len(valid_c_p_pooled), 4) if valid_c_p_pooled else None
+    macro_c_r = round(sum(valid_c_r_pooled) / len(valid_c_r_pooled), 4) if valid_c_r_pooled else None
+    macro_c_f = round(sum(valid_c_f_pooled) / len(valid_c_f_pooled), 4) if valid_c_f_pooled else None
+
+    # 2. Tier 1 Class-Agnostic
+    t1_agnostic: dict[str, dict[str, Any]] = {}
+    valid_a_p_pooled: list[float] = []
+    valid_a_r_pooled: list[float] = []
+    valid_a_f_pooled: list[float] = []
+
+    for c in TIER1_ERROR_CLASSES:
+        tp = sum(r.tier1_class_agnostic[c].tp for r in results)
+        fp = sum(r.tier1_class_agnostic[c].fp for r in results)
+        fn = sum(r.tier1_class_agnostic[c].fn for r in results)
+        p_denom = tp + fp
+        r_denom = tp + fn
+
+        prec = round(tp / p_denom, 4) if p_denom > 0 else None
+        prec_ci = wilson_ci(tp, p_denom) if p_denom > 0 else None
+        rec = round(tp / r_denom, 4) if r_denom > 0 else None
+        rec_ci = wilson_ci(tp, r_denom) if r_denom > 0 else None
+        f1 = (
+            round(2 * prec * rec / (prec + rec), 4)
+            if (prec is not None and rec is not None and (prec + rec) > 0)
+            else None
+        )
+
+        seed_precs = [
+            r.tier1_class_agnostic[c].precision
+            for r in results
+            if r.tier1_class_agnostic[c].precision is not None
+        ]
+        seed_recs = [
+            r.tier1_class_agnostic[c].recall
+            for r in results
+            if r.tier1_class_agnostic[c].recall is not None
+        ]
+        seed_f1s = [
+            r.tier1_class_agnostic[c].f1
+            for r in results
+            if r.tier1_class_agnostic[c].f1 is not None
+        ]
+
+        p_range = (min(seed_precs), max(seed_precs)) if seed_precs else None
+        r_range = (min(seed_recs), max(seed_recs)) if seed_recs else None
+        f_range = (min(seed_f1s), max(seed_f1s)) if seed_f1s else None
+
+        if prec is not None:
+            valid_a_p_pooled.append(prec)
+        if rec is not None:
+            valid_a_r_pooled.append(rec)
+        if f1 is not None:
+            valid_a_f_pooled.append(f1)
+
+        t1_agnostic[c] = {
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+            "precision": prec,
+            "precision_ci": prec_ci,
+            "precision_kn": f"{tp}/{p_denom}",
+            "precision_range": p_range,
+            "recall": rec,
+            "recall_ci": rec_ci,
+            "recall_kn": f"{tp}/{r_denom}",
+            "recall_range": r_range,
+            "f1": f1,
+            "f1_range": f_range,
+        }
+
+    macro_a_p = round(sum(valid_a_p_pooled) / len(valid_a_p_pooled), 4) if valid_a_p_pooled else None
+    macro_a_r = round(sum(valid_a_r_pooled) / len(valid_a_r_pooled), 4) if valid_a_r_pooled else None
+    macro_a_f = round(sum(valid_a_f_pooled) / len(valid_a_f_pooled), 4) if valid_a_f_pooled else None
+
+    # 3. Hard Negatives
+    hard_negatives: dict[str, dict[str, Any]] = {}
+    for hn in HARD_NEGATIVE_TYPES:
+        flg = sum(r.hard_negatives[hn].flagged for r in results)
+        tot = sum(r.hard_negatives[hn].total for r in results)
+        fpr = round(flg / tot, 4) if tot > 0 else 0.0
+        fpr_ci = wilson_ci(flg, tot) if tot > 0 else (0.0, 0.0)
+        seed_fprs = [r.hard_negatives[hn].fpr for r in results]
+        hard_negatives[hn] = {
+            "flagged": flg,
+            "total": tot,
+            "fpr": fpr,
+            "fpr_ci": fpr_ci,
+            "fpr_kn": f"{flg}/{tot}",
+            "fpr_range": (min(seed_fprs), max(seed_fprs)),
+        }
+
+    # 4. Ambiguity Tier
+    ambiguity_tier: dict[str, dict[str, Any]] = {}
+    for amb in AMBIGUITY_TYPES:
+        cor = sum(r.ambiguity_tier[amb].correct for r in results)
+        tot = sum(r.ambiguity_tier[amb].total for r in results)
+        acc = round(cor / tot, 4) if tot > 0 else 0.0
+        acc_ci = wilson_ci(cor, tot) if tot > 0 else (0.0, 0.0)
+        seed_accs = [r.ambiguity_tier[amb].accuracy for r in results]
+        ambiguity_tier[amb] = {
+            "correct": cor,
+            "total": tot,
+            "accuracy": acc,
+            "accuracy_ci": acc_ci,
+            "accuracy_kn": f"{cor}/{tot}",
+            "accuracy_range": (min(seed_accs), max(seed_accs)),
+        }
+
+    # 5. Matching
+    links_made = sum(r.matching.links_made for r in results)
+    correct_links = sum(r.matching.correct_links for r in results)
+    wrong_links = sum(r.matching.wrong_links for r in results)
+    fmr = round(wrong_links / links_made, 4) if links_made > 0 else None
+    fmr_ci = wilson_ci(wrong_links, links_made) if links_made > 0 else None
+    seed_fmrs = [
+        r.matching.false_match_rate
+        for r in results
+        if r.matching.false_match_rate is not None
+    ]
+    fmr_range = (min(seed_fmrs), max(seed_fmrs)) if seed_fmrs else None
+
+    total_true_settlements = sum(
+        int(round(r.matching.correct_links / r.matching.match_rate))
+        for r in results
+        if r.matching.match_rate is not None and r.matching.match_rate > 0
+    )
+    mr = round(correct_links / total_true_settlements, 4) if total_true_settlements > 0 else None
+    mr_ci = wilson_ci(correct_links, total_true_settlements) if total_true_settlements > 0 else None
+    seed_mrs = [
+        r.matching.match_rate
+        for r in results
+        if r.matching.match_rate is not None
+    ]
+    mr_range = (min(seed_mrs), max(seed_mrs)) if seed_mrs else None
+
+    matching = {
+        "links_made": links_made,
+        "correct_links": correct_links,
+        "wrong_links": wrong_links,
+        "false_match_rate": fmr,
+        "false_match_ci": fmr_ci,
+        "false_match_range": fmr_range,
+        "match_rate": mr,
+        "match_rate_ci": mr_ci,
+        "match_rate_range": mr_range,
+    }
+
+    pooled_dict = {
+        "system_id": system_id,
+        "split": split,
+        "seeds": seeds,
+        "tier1_class_correct": t1_correct,
+        "tier1_class_correct_macro": {
+            "precision": macro_c_p,
+            "recall": macro_c_r,
+            "f1": macro_c_f,
+        },
+        "tier1_class_agnostic": t1_agnostic,
+        "tier1_class_agnostic_macro": {
+            "precision": macro_a_p,
+            "recall": macro_a_r,
+            "f1": macro_a_f,
+        },
+        "hard_negatives": hard_negatives,
+        "ambiguity_tier": ambiguity_tier,
+        "matching": matching,
+        "clean_false_positives": sum(r.clean_false_positives for r in results),
+        "total_flagged_predictions": sum(r.total_flagged_predictions for r in results),
+        "total_labels": sum(r.total_labels for r in results),
+    }
+
+    markdown_report = format_pooled_markdown_report(pooled_dict)
+    pooled_dict["summary_markdown"] = markdown_report
+    return pooled_dict
+
+
+def format_pooled_markdown_report(pooled: dict[str, Any]) -> str:
+    """Format pooled multi-seed evaluation results into structured markdown tables."""
+    seeds_str = ", ".join(str(s) for s in pooled["seeds"])
+    lines = [
+        f"# Multi-Seed Evaluation Report: {pooled['system_id'].upper()} (Split: {pooled['split']}, Seeds: {seeds_str})",
+        "",
+        "## 1. Tier 1: Deterministic Error Classes (Class-Correct Detection, Pooled)",
+        "| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Seed Range | Recall (k/n) | 95% CI | Seed Range | F1 | Seed Range |",
+        "|:---|---:|---:|---:|---:|:---:|:---:|---:|:---:|:---:|---:|:---:|",
+    ]
+    t1_c = pooled["tier1_class_correct"]
+    for c in TIER1_ERROR_CLASSES:
+        m = t1_c[c]
+        if m["precision"] is not None:
+            prec_str = f"{m['precision'] * 100:.1f}% ({m['precision_kn']})"
+            prec_ci = f"[{m['precision_ci'][0]*100:.1f}%, {m['precision_ci'][1]*100:.1f}%]" if m["precision_ci"] else "N/A"
+            p_range_str = f"[{m['precision_range'][0]*100:.1f}%, {m['precision_range'][1]*100:.1f}%]" if m["precision_range"] else "N/A"
+        else:
+            prec_str = f"N/A ({m['precision_kn']})"
+            prec_ci = "N/A"
+            p_range_str = "N/A"
+
+        if m["recall"] is not None:
+            rec_str = f"{m['recall'] * 100:.1f}% ({m['recall_kn']})"
+            rec_ci = f"[{m['recall_ci'][0]*100:.1f}%, {m['recall_ci'][1]*100:.1f}%]" if m["recall_ci"] else "N/A"
+            r_range_str = f"[{m['recall_range'][0]*100:.1f}%, {m['recall_range'][1]*100:.1f}%]" if m["recall_range"] else "N/A"
+        else:
+            rec_str = f"N/A ({m['recall_kn']})"
+            rec_ci = "N/A"
+            r_range_str = "N/A"
+
+        f1_str = f"{m['f1']:.3f}" if m["f1"] is not None else "N/A"
+        f_range_str = f"[{m['f1_range'][0]:.3f}, {m['f1_range'][1]:.3f}]" if m["f1_range"] else "N/A"
+
+        lines.append(
+            f"| {c:<23} | {m['tp']:>4} | {m['fp']:>4} | {m['fn']:>4} | {prec_str:>16} | {prec_ci:^16} | {p_range_str:^16} | {rec_str:>16} | {rec_ci:^16} | {r_range_str:^16} | {f1_str:>6} | {f_range_str:^14} |"
+        )
+
+    macro_c = pooled["tier1_class_correct_macro"]
+    m_p = f"{macro_c['precision']*100:.1f}%" if macro_c["precision"] is not None else "N/A"
+    m_r = f"{macro_c['recall']*100:.1f}%" if macro_c["recall"] is not None else "N/A"
+    m_f = f"{macro_c['f1']:.3f}" if macro_c["f1"] is not None else "N/A"
+    lines.append(
+        f"| {'Macro-Average':<23} | {'-':>4} | {'-':>4} | {'-':>4} | {m_p:>16} | {'-':^16} | {'-':^16} | {m_r:>16} | {'-':^16} | {'-':^16} | {m_f:>6} | {'-':^14} |"
+    )
+
+    lines.extend([
+        "",
+        "## 2. Tier 1: Anomaly Detection (Class-Agnostic Detection, Pooled)",
+        "| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Seed Range | Recall (k/n) | 95% CI | Seed Range | F1 | Seed Range |",
+        "|:---|---:|---:|---:|---:|:---:|:---:|---:|:---:|:---:|---:|:---:|",
+    ])
+    t1_a = pooled["tier1_class_agnostic"]
+    for c in TIER1_ERROR_CLASSES:
+        m = t1_a[c]
+        if m["precision"] is not None:
+            prec_str = f"{m['precision'] * 100:.1f}% ({m['precision_kn']})"
+            prec_ci = f"[{m['precision_ci'][0]*100:.1f}%, {m['precision_ci'][1]*100:.1f}%]" if m["precision_ci"] else "N/A"
+            p_range_str = f"[{m['precision_range'][0]*100:.1f}%, {m['precision_range'][1]*100:.1f}%]" if m["precision_range"] else "N/A"
+        else:
+            prec_str = f"N/A ({m['precision_kn']})"
+            prec_ci = "N/A"
+            p_range_str = "N/A"
+
+        if m["recall"] is not None:
+            rec_str = f"{m['recall'] * 100:.1f}% ({m['recall_kn']})"
+            rec_ci = f"[{m['recall_ci'][0]*100:.1f}%, {m['recall_ci'][1]*100:.1f}%]" if m["recall_ci"] else "N/A"
+            r_range_str = f"[{m['recall_range'][0]*100:.1f}%, {m['recall_range'][1]*100:.1f}%]" if m["recall_range"] else "N/A"
+        else:
+            rec_str = f"N/A ({m['recall_kn']})"
+            rec_ci = "N/A"
+            r_range_str = "N/A"
+
+        f1_str = f"{m['f1']:.3f}" if m["f1"] is not None else "N/A"
+        f_range_str = f"[{m['f1_range'][0]:.3f}, {m['f1_range'][1]:.3f}]" if m["f1_range"] else "N/A"
+
+        lines.append(
+            f"| {c:<23} | {m['tp']:>4} | {m['fp']:>4} | {m['fn']:>4} | {prec_str:>16} | {prec_ci:^16} | {p_range_str:^16} | {rec_str:>16} | {rec_ci:^16} | {r_range_str:^16} | {f1_str:>6} | {f_range_str:^14} |"
+        )
+
+    macro_a = pooled["tier1_class_agnostic_macro"]
+    ma_p = f"{macro_a['precision']*100:.1f}%" if macro_a["precision"] is not None else "N/A"
+    ma_r = f"{macro_a['recall']*100:.1f}%" if macro_a["recall"] is not None else "N/A"
+    ma_f = f"{macro_a['f1']:.3f}" if macro_a["f1"] is not None else "N/A"
+    lines.append(
+        f"| {'Macro-Average':<23} | {'-':>4} | {'-':>4} | {'-':>4} | {ma_p:>16} | {'-':^16} | {'-':^16} | {ma_r:>16} | {'-':^16} | {'-':^16} | {ma_f:>6} | {'-':^14} |"
+    )
+
+    lines.extend([
+        "",
+        "## 3. Hard Negatives (False Positive Resistance, Pooled)",
+        "| Hard Negative Type | Flagged / Total | False Positive Rate (%) | 95% CI | Per-Seed Range |",
+        "|:---|---:|---:|:---:|:---:|",
+    ])
+    for hn, m in pooled["hard_negatives"].items():
+        fpr_str = f"{m['fpr'] * 100:.2f}%"
+        ci_str = f"[{m['fpr_ci'][0]*100:.1f}%, {m['fpr_ci'][1]*100:.1f}%]"
+        range_str = f"[{m['fpr_range'][0]*100:.1f}%, {m['fpr_range'][1]*100:.1f}%]"
+        lines.append(f"| {hn:<25} | {m['fpr_kn']:>15} | {fpr_str:>23} | {ci_str:^16} | {range_str:^16} |")
+
+    lines.extend([
+        "",
+        "## 4. Ambiguity Tier (Action Accuracy, Pooled)",
+        "| Ambiguity Type | Correct / Total | Action Accuracy (%) | 95% CI | Per-Seed Range |",
+        "|:---|---:|---:|:---:|:---:|",
+    ])
+    for amb, m in pooled["ambiguity_tier"].items():
+        acc_str = f"{m['accuracy'] * 100:.2f}%"
+        ci_str = f"[{m['accuracy_ci'][0]*100:.1f}%, {m['accuracy_ci'][1]*100:.1f}%]"
+        range_str = f"[{m['accuracy_range'][0]*100:.1f}%, {m['accuracy_range'][1]*100:.1f}%]"
+        lines.append(f"| {amb:<25} | {m['accuracy_kn']:>15} | {acc_str:>19} | {ci_str:^16} | {range_str:^16} |")
+
+    m_match = pooled["matching"]
+    lines.extend([
+        "",
+        "## 5. Bank Statement to Settlement Matching (Pooled)",
+        "| Metric | Count / Value | 95% CI | Per-Seed Range |",
+        "|:---|---:|:---:|:---:|",
+        f"| Links Made | {m_match['links_made']} | N/A | N/A |",
+        f"| Correct Links | {m_match['correct_links']} | N/A | N/A |",
+        f"| Wrong Links | {m_match['wrong_links']} | N/A | N/A |",
+    ])
+    if m_match["false_match_rate"] is not None and m_match["false_match_ci"] is not None:
+        fmr_str = f"{m_match['false_match_rate']*100:.2f}% ({m_match['wrong_links']}/{m_match['links_made']})"
+        fmr_ci = f"[{m_match['false_match_ci'][0]*100:.1f}%, {m_match['false_match_ci'][1]*100:.1f}%]"
+        fmr_rng = f"[{m_match['false_match_range'][0]*100:.1f}%, {m_match['false_match_range'][1]*100:.1f}%]" if m_match["false_match_range"] else "N/A"
+    else:
+        fmr_str = f"N/A ({m_match['wrong_links']}/{m_match['links_made']})"
+        fmr_ci = "N/A"
+        fmr_rng = "N/A"
+
+    if m_match["match_rate"] is not None and m_match["match_rate_ci"] is not None:
+        mr_str = f"{m_match['match_rate']*100:.2f}%"
+        mr_ci = f"[{m_match['match_rate_ci'][0]*100:.1f}%, {m_match['match_rate_ci'][1]*100:.1f}%]"
+        mr_rng = f"[{m_match['match_rate_range'][0]*100:.1f}%, {m_match['match_rate_range'][1]*100:.1f}%]" if m_match["match_rate_range"] else "N/A"
+    else:
+        mr_str = "N/A"
+        mr_ci = "N/A"
+        mr_rng = "N/A"
+
+    lines.extend([
+        f"| False-Match Rate | {fmr_str} | {fmr_ci} | {fmr_rng} |",
+        f"| Match Rate | {mr_str} | {mr_ci} | {mr_rng} |",
+        "",
+        f"**Clean Data False Positives (Pooled):** {pooled['clean_false_positives']}",
+        f"**Total Flagged Predictions (Pooled):** {pooled['total_flagged_predictions']}",
+        f"**Total Ground-Truth Labels (Pooled):** {pooled['total_labels']}",
+    ])
 
     return "\n".join(lines)

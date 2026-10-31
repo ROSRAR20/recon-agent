@@ -317,8 +317,15 @@ def inject_errors_and_labels(
 
     rng_mis.shuffle(eligible_missing)
     missing_count = int(round(len(eligible_missing) * get_rate("MISSING_SETTLEMENT", 0.008)))
+    max_per_m_missing = max(2, int(3.0 * missing_count / num_merchants))
+    m_counts_missing: dict[str, int] = {}
+    count_missing = 0
 
-    for p, r, stl in eligible_missing[:missing_count]:
+    for p, r, stl in eligible_missing:
+        if count_missing >= missing_count:
+            break
+        if m_counts_missing.get(p["merchant_id"], 0) >= max_per_m_missing:
+            continue
         bk_row = bank_rows_by_settlement.get(stl["settlement_id"])
         if not bk_row or stl["amount"] - r["credit"] <= 0:
             continue
@@ -332,6 +339,8 @@ def inject_errors_and_labels(
 
         used_entities.update([p["payment_id"], p["order_id"]])
         used_batches.add(stl["settlement_id"])
+        m_counts_missing[p["merchant_id"]] = m_counts_missing.get(p["merchant_id"], 0) + 1
+        count_missing += 1
 
         add_label(
             merchant_id=p["merchant_id"],
@@ -349,18 +358,28 @@ def inject_errors_and_labels(
         if r["type"] == "payment"
         and r["method"] in ("card", "netbanking")
         and r["entity_id"] not in used_entities
+        and r.get("order_id") not in used_entities
         and r["settlement_id"] not in used_batches
     ]
     rng_fee.shuffle(eligible_feetax)
     feetax_count = int(round(len(eligible_feetax) * get_rate("FEE_TAX_MISMATCH", 0.012)))
+    max_per_m_fee = max(2, int(3.0 * feetax_count / num_merchants))
+    m_counts_fee: dict[str, int] = {}
+    count_feetax = 0
 
-    for idx, r in enumerate(eligible_feetax[:feetax_count]):
+    for r in eligible_feetax:
+        if count_feetax >= feetax_count:
+            break
+        if r["entity_id"] in used_entities or r.get("order_id") in used_entities:
+            continue
+        if m_counts_fee.get(r["merchant_id"], 0) >= max_per_m_fee:
+            continue
         stl = settlements_by_id.get(r["settlement_id"])
         bk_row = bank_rows_by_settlement.get(r["settlement_id"])
         if not stl or not bk_row:
             continue
 
-        is_fee_off = (idx % 10) < 6  # 60% fee_off, 40% tax_off
+        is_fee_off = (count_feetax % 10) < 6  # 60% fee_off, 40% tax_off
         if is_fee_off:
             # Fee raised by 5-25%, at least +10 paise vs rate card
             delta_fee = max(10, mul_div_round(r["fee"], rng_fee.randint(500, 2500), 10000))
@@ -384,8 +403,10 @@ def inject_errors_and_labels(
             bk_row["credit"] -= delta_tax
             bk_row["balance"] -= delta_tax
 
-        used_entities.add(r["entity_id"])
+        used_entities.update([r["entity_id"], r["order_id"]] if "order_id" in r else [r["entity_id"]])
         used_batches.add(stl["settlement_id"])
+        m_counts_fee[r["merchant_id"]] = m_counts_fee.get(r["merchant_id"], 0) + 1
+        count_feetax += 1
 
         add_label(
             merchant_id=r["merchant_id"],
@@ -402,6 +423,8 @@ def inject_errors_and_labels(
         for r in data["recon_items"]
         if r["type"] == "refund"
         and r["entity_id"] not in used_entities
+        and r.get("payment_id") not in used_entities
+        and r.get("order_id") not in used_entities
         and r["settlement_id"] not in used_batches
     ]
     rng_ref.shuffle(eligible_refunds)
@@ -418,6 +441,13 @@ def inject_errors_and_labels(
     for r in eligible_refunds:
         if (count_pos_ref + count_neg_ref + count_mis_ref) >= refund_mismatch_count:
             break
+        if (
+            r["entity_id"] in used_entities
+            or r.get("payment_id") in used_entities
+            or r.get("order_id") in used_entities
+            or r["settlement_id"] in used_batches
+        ):
+            continue
         if m_counts_ref.get(r["merchant_id"], 0) >= max_per_m_ref:
             continue
         stl = settlements_by_id.get(r["settlement_id"])
@@ -480,7 +510,7 @@ def inject_errors_and_labels(
     # 5. CUTOFF_DRIFT (1.5% of payments, orders Mon-Thu)
     eligible_cutoff = []
     for p in data["payments"]:
-        if p["status"] != "captured" or p["payment_id"] in used_entities:
+        if p["status"] != "captured" or p["payment_id"] in used_entities or p.get("order_id") in used_entities:
             continue
         tx_dt = datetime.datetime.fromtimestamp(p["created_at"], tz=IST_TZ)
         if tx_dt.weekday() >= 4:  # Only Mon-Thu (0=Mon, 3=Thu)
@@ -494,7 +524,7 @@ def inject_errors_and_labels(
         eligible_cutoff.append((p, r, order, tx_dt))
 
     rng_cut.shuffle(eligible_cutoff)
-    cutoff_count = min(65 if config.profile == "full" else 15, int(round(len(eligible_cutoff) * get_rate("CUTOFF_DRIFT", 0.015))))
+    cutoff_count = min(100 if config.profile == "full" else 20, int(round(len(eligible_cutoff) * get_rate("CUTOFF_DRIFT", 0.015))))
     max_per_m_cutoff = max(2, int(3.0 * cutoff_count / num_merchants))
     m_counts_cutoff: dict[str, int] = {}
     injected_cutoff_count = 0
@@ -502,6 +532,8 @@ def inject_errors_and_labels(
     for p, r, order, tx_dt in eligible_cutoff:
         if injected_cutoff_count >= cutoff_count:
             break
+        if p["payment_id"] in used_entities or order["order_id"] in used_entities:
+            continue
         if m_counts_cutoff.get(p["merchant_id"], 0) >= max_per_m_cutoff:
             continue
         day_D = tx_dt.date()
@@ -706,20 +738,44 @@ def inject_errors_and_labels(
     # =========================================================================
 
     # 1. NEAR_TOLERANCE (3-9 paise fee/tax variance; policy gap between 2-paise rounding and >=10 error)
-    eligible_near = [
+    # Stratify by payment method (75% card, 25% netbanking) to match eligible population null_count
+    target_near_total = 55 if config.profile == "full" else 15
+    target_card_near = int(round(target_near_total * 0.75))
+    target_nb_near = target_near_total - target_card_near
+
+    eligible_card = [
         r
         for r in data["recon_items"]
         if r["type"] == "payment"
-        and r["method"] in ("card", "netbanking")
+        and r["method"] == "card"
         and r["entity_id"] not in used_entities
+        and r.get("order_id") not in used_entities
         and r["settlement_id"] not in used_batches
     ]
-    rng_near.shuffle(eligible_near)
-    target_near_count = 55 if config.profile == "full" else 15
+    eligible_nb = [
+        r
+        for r in data["recon_items"]
+        if r["type"] == "payment"
+        and r["method"] == "netbanking"
+        and r["entity_id"] not in used_entities
+        and r.get("order_id") not in used_entities
+        and r["settlement_id"] not in used_batches
+    ]
+    rng_near.shuffle(eligible_card)
+    rng_near.shuffle(eligible_nb)
 
-    for r in eligible_near:
-        if target_near_count <= 0:
+    max_per_m_near = max(2, int(3.0 * target_near_total / num_merchants))
+    m_counts_near: dict[str, int] = {}
+    count_card = 0
+    count_nb = 0
+
+    for r in eligible_card:
+        if count_card >= target_card_near:
             break
+        if r["entity_id"] in used_entities or r.get("order_id") in used_entities:
+            continue
+        if m_counts_near.get(r["merchant_id"], 0) >= max_per_m_near:
+            continue
         stl = settlements_by_id.get(r["settlement_id"])
         bk_row = bank_rows_by_settlement.get(r["settlement_id"])
         if not stl or not bk_row:
@@ -735,8 +791,10 @@ def inject_errors_and_labels(
         bk_row["credit"] -= delta
         bk_row["balance"] -= delta
 
-        used_entities.add(r["entity_id"])
+        used_entities.update([r["entity_id"], r["order_id"]] if "order_id" in r else [r["entity_id"]])
         used_batches.add(stl["settlement_id"])
+        m_counts_near[r["merchant_id"]] = m_counts_near.get(r["merchant_id"], 0) + 1
+        count_card += 1
 
         add_label(
             merchant_id=r["merchant_id"],
@@ -747,7 +805,43 @@ def inject_errors_and_labels(
             settlement_id=stl["settlement_id"],
             expected_action="escalate_human",
         )
-        target_near_count -= 1
+
+    for r in eligible_nb:
+        if count_nb >= target_nb_near:
+            break
+        if r["entity_id"] in used_entities or r.get("order_id") in used_entities:
+            continue
+        if m_counts_near.get(r["merchant_id"], 0) >= max_per_m_near:
+            continue
+        stl = settlements_by_id.get(r["settlement_id"])
+        bk_row = bank_rows_by_settlement.get(r["settlement_id"])
+        if not stl or not bk_row:
+            continue
+
+        delta = rng_near.choice([-9, -8, -7, -6, -5, -4, -3, 3, 4, 5, 6, 7, 8, 9])
+        if stl["amount"] - delta <= 0 or r["credit"] - delta <= 0:
+            continue
+
+        r["fee"] += delta
+        r["credit"] -= delta
+        stl["amount"] -= delta
+        bk_row["credit"] -= delta
+        bk_row["balance"] -= delta
+
+        used_entities.update([r["entity_id"], r["order_id"]] if "order_id" in r else [r["entity_id"]])
+        used_batches.add(stl["settlement_id"])
+        m_counts_near[r["merchant_id"]] = m_counts_near.get(r["merchant_id"], 0) + 1
+        count_nb += 1
+
+        add_label(
+            merchant_id=r["merchant_id"],
+            error_class=None,
+            hard_negative_type=None,
+            ambiguity_type="NEAR_TOLERANCE",
+            entity_ids=[r["entity_id"]],
+            settlement_id=stl["settlement_id"],
+            expected_action="escalate_human",
+        )
 
     # 2. EXPLAINED REFUNDS: DISJOINT templates for dev vs test
     if config.split == "test":
@@ -764,21 +858,32 @@ def inject_errors_and_labels(
         for r in data["recon_items"]
         if r["type"] == "refund"
         and r["entity_id"] not in used_entities
+        and r.get("payment_id") not in used_entities
+        and r.get("order_id") not in used_entities
         and r["settlement_id"] not in used_batches
     ]
     rng_exp_c.shuffle(eligible_exp)
 
     # 2a. EXPLAINED_CONSISTENT
-    target_exp_c = 55 if config.profile == "full" else 15
-    target_pos_c = target_exp_c // 2
+    target_exp_c = 65 if config.profile == "full" else 15
+    target_pos_c = int(round(target_exp_c * 0.30))
     target_neg_c = target_exp_c - target_pos_c
+    max_per_m_exp_c = max(2, int(3.0 * target_exp_c / num_merchants))
+    m_counts_exp_c: dict[str, int] = {}
     count_pos_c = 0
     count_neg_c = 0
 
     for r in eligible_exp:
         if (count_pos_c + count_neg_c) >= target_exp_c:
             break
-        if r["entity_id"] in used_entities or r["settlement_id"] in used_batches:
+        if (
+            r["entity_id"] in used_entities
+            or r.get("payment_id") in used_entities
+            or r.get("order_id") in used_entities
+            or r["settlement_id"] in used_batches
+        ):
+            continue
+        if m_counts_exp_c.get(r["merchant_id"], 0) >= max_per_m_exp_c:
             continue
 
         stl = settlements_by_id.get(r["settlement_id"])
@@ -804,7 +909,7 @@ def inject_errors_and_labels(
             bk_row["credit"] -= delta_debit
             bk_row["balance"] -= delta_debit
             count_pos_c += 1
-        elif r_amt - 1 >= 100:
+        elif count_neg_c < target_neg_c and (r_amt - 1 >= 100):
             sign = -1
             diff_paise = rng_exp_c.randint(100, min(500, r_amt - 1))
             r_new = r_amt - diff_paise
@@ -831,6 +936,7 @@ def inject_errors_and_labels(
 
         used_entities.update([r["entity_id"], r["payment_id"], r["order_id"]])
         used_batches.add(stl["settlement_id"])
+        m_counts_exp_c[r["merchant_id"]] = m_counts_exp_c.get(r["merchant_id"], 0) + 1
 
         add_label(
             merchant_id=r["merchant_id"],
@@ -843,17 +949,36 @@ def inject_errors_and_labels(
         )
 
     # 2b. EXPLAINED_INCONSISTENT
-    target_exp_i = 55 if config.profile == "full" else 15
-    target_pos_i = target_exp_i // 2
+    target_exp_i = 65 if config.profile == "full" else 15
+    target_pos_i = int(round(target_exp_i * 0.30))
     target_neg_i = target_exp_i - target_pos_i
+    max_per_m_exp_i = max(2, int(3.0 * target_exp_i / num_merchants))
+    m_counts_exp_i: dict[str, int] = {}
     count_pos_i = 0
     count_neg_i = 0
-    rng_exp_i.shuffle(eligible_exp)
 
-    for r in eligible_exp:
+    eligible_exp_i = [
+        r
+        for r in data["recon_items"]
+        if r["type"] == "refund"
+        and r["entity_id"] not in used_entities
+        and r.get("payment_id") not in used_entities
+        and r.get("order_id") not in used_entities
+        and r["settlement_id"] not in used_batches
+    ]
+    rng_exp_i.shuffle(eligible_exp_i)
+
+    for r in eligible_exp_i:
         if (count_pos_i + count_neg_i) >= target_exp_i:
             break
-        if r["entity_id"] in used_entities or r["settlement_id"] in used_batches:
+        if (
+            r["entity_id"] in used_entities
+            or r.get("payment_id") in used_entities
+            or r.get("order_id") in used_entities
+            or r["settlement_id"] in used_batches
+        ):
+            continue
+        if m_counts_exp_i.get(r["merchant_id"], 0) >= max_per_m_exp_i:
             continue
 
         stl = settlements_by_id.get(r["settlement_id"])
@@ -879,7 +1004,7 @@ def inject_errors_and_labels(
             bk_row["credit"] -= delta_debit
             bk_row["balance"] -= delta_debit
             count_pos_i += 1
-        elif r_amt - 1 >= 100:
+        elif count_neg_i < target_neg_i and (r_amt - 1 >= 100):
             sign = -1
             diff_paise = rng_exp_i.randint(100, min(500, r_amt - 1))
             r_new = r_amt - diff_paise
@@ -911,6 +1036,7 @@ def inject_errors_and_labels(
 
         used_entities.update([r["entity_id"], r["payment_id"], r["order_id"]])
         used_batches.add(stl["settlement_id"])
+        m_counts_exp_i[r["merchant_id"]] = m_counts_exp_i.get(r["merchant_id"], 0) + 1
 
         add_label(
             merchant_id=r["merchant_id"],
@@ -923,17 +1049,36 @@ def inject_errors_and_labels(
         )
 
     # 2c. EXPLAINED_NO_AMOUNT
-    target_exp_n = 55 if config.profile == "full" else 15
-    target_pos_n = target_exp_n // 2
+    target_exp_n = 65 if config.profile == "full" else 15
+    target_pos_n = int(round(target_exp_n * 0.30))
     target_neg_n = target_exp_n - target_pos_n
+    max_per_m_exp_n = max(2, int(3.0 * target_exp_n / num_merchants))
+    m_counts_exp_n: dict[str, int] = {}
     count_pos_n = 0
     count_neg_n = 0
-    rng_exp_n.shuffle(eligible_exp)
 
-    for r in eligible_exp:
+    eligible_exp_n = [
+        r
+        for r in data["recon_items"]
+        if r["type"] == "refund"
+        and r["entity_id"] not in used_entities
+        and r.get("payment_id") not in used_entities
+        and r.get("order_id") not in used_entities
+        and r["settlement_id"] not in used_batches
+    ]
+    rng_exp_n.shuffle(eligible_exp_n)
+
+    for r in eligible_exp_n:
         if (count_pos_n + count_neg_n) >= target_exp_n:
             break
-        if r["entity_id"] in used_entities or r["settlement_id"] in used_batches:
+        if (
+            r["entity_id"] in used_entities
+            or r.get("payment_id") in used_entities
+            or r.get("order_id") in used_entities
+            or r["settlement_id"] in used_batches
+        ):
+            continue
+        if m_counts_exp_n.get(r["merchant_id"], 0) >= max_per_m_exp_n:
             continue
 
         stl = settlements_by_id.get(r["settlement_id"])
@@ -959,7 +1104,7 @@ def inject_errors_and_labels(
             bk_row["credit"] -= delta_debit
             bk_row["balance"] -= delta_debit
             count_pos_n += 1
-        elif r_amt - 1 >= 100:
+        elif count_neg_n < target_neg_n and (r_amt - 1 >= 100):
             sign = -1
             diff_paise = rng_exp_n.randint(100, min(500, r_amt - 1))
             r_new = r_amt - diff_paise
@@ -982,6 +1127,7 @@ def inject_errors_and_labels(
 
         used_entities.update([r["entity_id"], r["payment_id"], r["order_id"]])
         used_batches.add(stl["settlement_id"])
+        m_counts_exp_n[r["merchant_id"]] = m_counts_exp_n.get(r["merchant_id"], 0) + 1
 
         add_label(
             merchant_id=r["merchant_id"],
@@ -1191,7 +1337,13 @@ def inject_errors_and_labels(
 
     # 9. PARTIAL_REFUND_CONSISTENT (legitimate partial refund matching ledger)
     for r in data["recon_items"]:
-        if r["type"] == "refund" and r["entity_id"] not in used_entities:
+        if (
+            r["type"] == "refund"
+            and r["entity_id"] not in used_entities
+            and r.get("payment_id") not in used_entities
+            and r.get("order_id") not in used_entities
+        ):
+            used_entities.update([r["entity_id"], r["payment_id"], r["order_id"]])
             add_label(
                 merchant_id=r["merchant_id"],
                 error_class=None,
@@ -1200,6 +1352,26 @@ def inject_errors_and_labels(
                 settlement_id=r["settlement_id"],
                 expected_action="benign_ignore",
             )
+
+    # 10. IN_FLIGHT (captured payments and refunds settling after as_of; benign ignore)
+    for p in data.get("in_flight_payments", []):
+        add_label(
+            merchant_id=p["merchant_id"],
+            error_class=None,
+            hard_negative_type="IN_FLIGHT",
+            entity_ids=[p["payment_id"]],
+            settlement_id=None,
+            expected_action="benign_ignore",
+        )
+    for r in data.get("in_flight_refunds", []):
+        add_label(
+            merchant_id=r["merchant_id"],
+            error_class=None,
+            hard_negative_type="IN_FLIGHT",
+            entity_ids=[r["refund_id"]],
+            settlement_id=None,
+            expected_action="benign_ignore",
+        )
 
     # =========================================================================
     # Finalize Canonical Ordering: Sort Payments, Recon Items, and Bank Statements

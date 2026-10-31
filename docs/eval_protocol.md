@@ -31,9 +31,11 @@ To prevent data contamination and overfitting:
 
 ## 3. Statistical Power and Reporting Standards
 
-- **Raw Counts Mandatory:** All metrics must be reported with explicit integer counts ($k/n$), not solely percentages (e.g., `"49/50 (98.0%)"` instead of `"98%"`).
+- **Raw Counts & Confidence Intervals Mandatory:** All metrics must be reported with explicit integer counts ($k/n$), not solely percentages (e.g., `"49/50 (98.0%)"` instead of `"98%"`). Pooled multi-seed benchmarks report 95% Wilson score confidence intervals and per-seed range bounds `[min, max]`.
+- **Zero-Denominator Semantics:** When a metric has a zero denominator (e.g., zero predictions for a class yielding $TP + FP = 0$), precision, recall, and F1 are reported as `N/A` without a confidence interval, and are excluded from summary macro-averages.
 - **Sample Size Floor:** Each evaluated Tier 1 error class and Tier 2 ambiguity type must contain a **minimum of 50 test cases** in the full benchmark profile to ensure statistical validity.
 - **Reproducibility & Variance:**
+  - Multi-seed pooled benchmarks run across seeds 1, 2, 3.
   - All LLM evaluations require **3 complete reruns at temperature 0** using a pinned model snapshot.
   - Run-to-run classification consistency and variance must be documented across all three iterations.
 
@@ -76,6 +78,7 @@ Systems are evaluated against legitimate operational variations that must NOT be
 - `UNRELATED_BANK_CREDIT`: External non-gateway credits (payroll, interest, other payment processors).
 - `FAILED_PAYMENT`: Standard failed payment authorization attempt.
 - `PARTIAL_REFUND_CONSISTENT`: Compliant partial refund matching internal order ledger.
+- `IN_FLIGHT`: Captured payments and refunds whose scheduled settlement date falls after `as_of`. These transactions legitimately have no recon items, settlement batches, or bank credits and must be ignored by reconciliation systems (`benign_ignore`). Naive systems that omit `as_of` / settlement-lag awareness suffer massive false-positive rates on in-flight transactions (e.g. System B0 flags >93% of in-flight items, collapsing `MISSING_SETTLEMENT` precision to ~7%).
 
 ---
 

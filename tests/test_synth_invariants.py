@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 from src.recon_agent.synth.config import BASE62_ALPHABET, create_config
-from src.recon_agent.synth.generator import IST_TZ, SyntheticDataGenerator
+from src.recon_agent.synth.generator import IST_TZ, SyntheticDataGenerator, get_working_days
 from src.recon_agent.synth.math_utils import mul_div_round
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -146,25 +146,58 @@ def test_invariant_i2_settlement_net_and_bank_credit(
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_invariant_i3_referential_integrity(seed: int) -> None:
-    """I3: captured payment has exactly one recon item; valid settlement_id."""
-    config = create_config("small", "dev", seed=seed)
+@pytest.mark.parametrize("inject", [False, True])
+def test_invariant_i3_referential_integrity(seed: int, inject: bool) -> None:
+    """I3: captured payment with sched_settle <= as_of has exactly one recon item; in-flight have none."""
+    config = create_config("small", "dev", seed=seed, inject_errors=inject)
     gen = SyntheticDataGenerator(config)
     data = gen.generate()
+
+    working_days = get_working_days(config.start_date, config.working_days + 25)
+    as_of_date = working_days[config.working_days - 1]
 
     settlement_ids = {s["settlement_id"] for s in data["settlements"]}
     payment_recon_map: dict[str, list[dict[str, Any]]] = {}
 
+    missing_ids = {
+        eid
+        for lbl in data.get("labels", [])
+        if lbl.get("error_class") == "MISSING_SETTLEMENT"
+        for eid in lbl.get("entity_ids", [])
+    }
+
+    # Zero recon items, settlements or bank rows dated after as_of
     for item in data["recon_items"]:
         assert item["settlement_id"] in settlement_ids
+        settle_date = datetime.datetime.fromtimestamp(item["settled_at"], tz=IST_TZ).date()
+        assert settle_date <= as_of_date
         if item["type"] == "payment":
             payment_recon_map.setdefault(item["entity_id"], []).append(item)
+
+    for s in data["settlements"]:
+        settle_date = datetime.datetime.fromtimestamp(s["settled_at"], tz=IST_TZ).date()
+        assert settle_date <= as_of_date
+
+    for b in data["bank_statement"]:
+        b_date = datetime.date.fromisoformat(b["date"])
+        assert b_date <= as_of_date
 
     for p in data["payments"]:
         pid = p["payment_id"]
         if p["status"] == "captured":
-            # Exactly one recon payment item
-            assert len(payment_recon_map.get(pid, [])) == 1
+            cap_date = datetime.datetime.fromtimestamp(p["captured_at"] or p["created_at"], tz=IST_TZ).date()
+            cap_idx = working_days.index(cap_date)
+            sched_settle_date = working_days[cap_idx + config.payment_settlement_lag_days]
+
+            if sched_settle_date > as_of_date:
+                # In-flight payments have no recon items
+                assert pid not in payment_recon_map
+            elif pid in missing_ids:
+                # Missing settlement error injection removes recon item
+                assert pid not in payment_recon_map
+            else:
+                # Exactly one recon payment item
+                assert len(payment_recon_map.get(pid, [])) == 1
         elif p["status"] == "failed":
             # Failed payment never enters recon
             assert pid not in payment_recon_map
@@ -380,6 +413,7 @@ REQUIRED_HARD_NEGATIVES = [
     "UNRELATED_BANK_CREDIT",
     "FAILED_PAYMENT",
     "PARTIAL_REFUND_CONSISTENT",
+    "IN_FLIGHT",
 ]
 
 
