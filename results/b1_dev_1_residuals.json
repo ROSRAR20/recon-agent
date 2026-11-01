@@ -4,8 +4,24 @@
     "entity_ids": [
       "setl_ho0jYtmqEIBZRg"
     ],
-    "rule_id": "B1_UNMATCHED_SETTLEMENT_EXPIRED",
-    "reason": "Settlement setl_ho0jYtmqEIBZRg settled on 2026-08-12 remains unmatched past grace window (as_of 2026-09-11)"
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Settlement setl_ho0jYtmqEIBZRg left unmatched due to candidate ambiguity (2 bank candidates: ['stmt_0000833', 'stmt_0000957'])"
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "stmt_0000833"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Bank row stmt_0000833 left unmatched due to candidate ambiguity (1 settlement candidates: ['setl_ho0jYtmqEIBZRg'])"
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "stmt_0000957"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Bank row stmt_0000957 left unmatched due to candidate ambiguity (1 settlement candidates: ['setl_ho0jYtmqEIBZRg'])"
   },
   {
     "merchant_id": "mer_49",

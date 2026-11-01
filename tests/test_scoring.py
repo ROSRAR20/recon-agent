@@ -551,3 +551,63 @@ def test_macro_f1_treats_undefined_as_zero() -> None:
     assert "Macro-F1 (undefined as 0) = 0.143" in report
 
 
+def test_ambiguity_prediction_excluded_from_tier1_fp_but_hard_negative_counts() -> None:
+    """A flag on EXPLAINED_INCONSISTENT is excluded from Tier-1 FP, while a flag on hard negative is an FP."""
+    labels = [
+        {
+            "case_id": "case_amb_01",
+            "merchant_id": "mer_01",
+            "ambiguity_type": "EXPLAINED_INCONSISTENT",
+            "entity_ids": ["rfnd_01"],
+            "primary_entity_ids": ["rfnd_01"],
+            "expected_action": "flag_partial_refund_inconsistent",
+        },
+        {
+            "case_id": "case_hn_01",
+            "merchant_id": "mer_01",
+            "hard_negative_type": "ROUNDING",
+            "entity_ids": ["pay_01"],
+            "primary_entity_ids": ["pay_01"],
+            "expected_action": "benign_ignore",
+        },
+    ]
+
+    preds = [
+        # Flag on EXPLAINED_INCONSISTENT
+        Prediction(
+            merchant_id="mer_01",
+            predicted_class="PARTIAL_REFUND_MISMATCH",
+            action="flag",
+            entity_ids=("rfnd_01",),
+        ),
+        # Flag on ROUNDING hard negative
+        Prediction(
+            merchant_id="mer_01",
+            predicted_class="FEE_TAX_MISMATCH",
+            action="flag",
+            entity_ids=("pay_01",),
+        ),
+    ]
+
+    res = score_predictions(preds, labels, truth_links={})
+
+    # Ambiguity: flag on EXPLAINED_INCONSISTENT is correct action in ambiguity tier
+    assert res.ambiguity_tier["EXPLAINED_INCONSISTENT"].accuracy == 1.0
+    assert res.ambiguity_assigned_count == 1
+    assert res.ambiguity_correct_action_count == 1
+
+    # Tier-1: excluded from Tier-1 TP and FP
+    assert res.tier1_class_correct["PARTIAL_REFUND_MISMATCH"].fp == 0
+    assert res.tier1_class_correct["PARTIAL_REFUND_MISMATCH"].tp == 0
+    assert res.tier1_class_agnostic["PARTIAL_REFUND_MISMATCH"].fp == 0
+
+    # Hard negative: flag on ROUNDING IS a Tier-1 FP for FEE_TAX_MISMATCH
+    assert res.hard_negatives["ROUNDING"].flagged == 1
+    assert res.tier1_class_correct["FEE_TAX_MISMATCH"].fp == 1
+    assert res.tier1_class_agnostic["FEE_TAX_MISMATCH"].fp == 1
+
+    # Report includes the separate line
+    assert "predictions assigned to ambiguity labels: 1 (correct action: 1)" in res.summary_markdown
+
+
+

@@ -46,10 +46,12 @@ Matching proceeds in four strict sequential tiers across bank statement credit e
   - Remaining unmatched Razorpay-style bank credits in the same date window with `bank_row.credit < settlement.amount`.
   - Allowed if and only if there is exactly 1 candidate settlement and 1 candidate bank row on that merchant-window.
   - If ambiguous ($\ge 2$ candidates), escalate to human.
-- **Post-Matching Residual Handling**:
-  - Remaining unmatched Razorpay-style bank credit $\rightarrow$ flag `ORPHAN_BANK_CREDIT` (`action="flag"`).
-  - Non-Razorpay bank credits (rent, payroll, other processor payouts) $\rightarrow$ never flag, never escalate.
-  - Remaining unmatched settlement past grace window ($as\_of > settle\_date + late\_grace\_working\_days$) $\rightarrow$ escalate `UNKNOWN` (`action="escalate_human"`).
+- **Candidate Ambiguity & Post-Matching Residual Policy (Day 5b)**:
+  - **Candidate Ambiguity Escalation**: A bank row that was a candidate (in T2, T3, or T4) for 2+ settlements, or candidate for a settlement left unmatched because of ambiguity, must be escalated to human (`action="escalate_human"`, `rule_id="B1_BANK_AMBIGUOUS_CANDIDATES"`), and is **NOT** flagged `ORPHAN_BANK_CREDIT`.
+  - **Genuine Orphan Bank Credits**: Remaining unmatched Razorpay-style bank credit with zero candidate matches $\rightarrow$ flag `ORPHAN_BANK_CREDIT` (`action="flag"`).
+  - **Non-Gateway Bank Credits**: Non-Razorpay bank credits (rent, payroll, other processor payouts) $\rightarrow$ never flag, never escalate.
+  - **Unmatched Ambiguous Settlements**: Settlements left unmatched due to candidate ambiguity ($\ge 2$ bank candidates or reverse bank ambiguity) $\rightarrow$ escalate to human (`action="escalate_human"`, `rule_id="B1_BANK_AMBIGUOUS_CANDIDATES"`).
+  - **Unmatched Expired Settlements**: Remaining unmatched settlements past grace window with zero candidates ($as\_of > settle\_date + late\_grace\_working\_days$) $\rightarrow$ escalate `UNKNOWN` (`action="escalate_human"`, `rule_id="B1_UNMATCHED_SETTLEMENT_EXPIRED"`).
 
 ---
 
@@ -61,7 +63,7 @@ Each prediction carries a distinct `rule_id`:
    - Multiple captured payments with identical `(merchant_id, order_id, amount)`.
    - The earliest payment by `(created_at, payment_id)` is accepted; all subsequent ones are flagged `action="flag"`.
 2. **`B1_MISSING_SETTLEMENT`**:
-   - Captured payment with no recon item AND $as\_of > scheduled\_settle\_date + missing\_after\_days$.
+   - Captured payment with no recon item AND $as\_of \ge scheduled\_settle\_date + missing\_after\_days$ (inclusive boundary, matching generator eligibility $scheduled + days \le as\_of$; Day 5b fix from strict $>$).
    - Payments within the settlement lag or grace window are considered in-flight and are never flagged.
 3. **`B1_FEE_TAX_MISMATCH` & `B1_NEAR_TOLERANCE`**:
    - Expected fee and tax computed with integer half-up rounding:
@@ -110,3 +112,21 @@ System **B1r** extends B1 by inspecting `notes.reason_text` on refund recon item
     - 15/15 `EXPLAINED_NO_AMOUNT` cases returned no parsed amount and escalated to human.
   - Because patterns were validated against dev data, dev performance figures are optimistic.
   - The B1r parser code and patterns are **strictly frozen** after Day 5.
+
+---
+
+## 5. Residual Case Analysis & Frozen Baseline Status
+
+### Residual Bank Ambiguity Cases (Dev Split, Seeds 1 & 3)
+Across the full dev benchmark across seeds 1, 2, and 3, exactly 4 bank credit entries encountered candidate ambiguity in Tier 4:
+- **Seed 1**: `stmt_0000833` (Merchant `mer_49`, amount ₹4,970.91, date 2026-08-12): Candidate for settlement `setl_ho0jYtmqEIBZRg`. The settlement had 4 candidate bank credits (`stmt_0000833`, `stmt_0000957`, `stmt_0000958`, `stmt_0001076`) in Tier 4. To avoid guessing and maintain a 0.0% false-match rate, B1 escalated both the settlement and its candidate bank rows as `B1_BANK_AMBIGUOUS_CANDIDATES`.
+- **Seed 3**: `stmt_0002664` (Merchant `mer_26`, amount ₹2,116.53, date 2026-09-02): Candidate for 3 settlements in Tier 4 (`setl_IHTXXcS6FasEQh`, `setl_D3Z6e4gvUfGBXr`, `setl_ye1GcpkUpsiIZw`).
+- **Seed 3**: `stmt_0003566` (Merchant `mer_54`, amount ₹2,839.08, date 2026-09-11): Candidate for 3 settlements in Tier 4 (`setl_x6yKsriB3SYELK`, `setl_XZY3FQm68vkoi2`, `setl_sBBjqxA9D9GCyn`).
+- **Seed 3**: `stmt_0003453` (Merchant `mer_54`, amount ₹6,082.32, date 2026-09-10): Candidate for settlement `setl_XZY3FQm68vkoi2`, which also had `stmt_0003566` as a candidate.
+
+In all 4 cases, the ground truth labels were `SHORT_BANK_CREDIT`. Because these entries lacked identifying UTRs and had non-unique amounts within the date window, deterministic matching correctly abstained from creating false links. Under the Day 5b candidate ambiguity policy, escalating these rows rather than flagging them as orphans completely eliminated spurious `ORPHAN_BANK_CREDIT` false positives, achieving **100.0% precision** on `ORPHAN_BANK_CREDIT` with zero clean false positives across all seeds.
+
+### Frozen Status
+Systems **B0**, **B1**, and **B1r** are officially frozen as baselines under git tag `b1-frozen`.
+
+

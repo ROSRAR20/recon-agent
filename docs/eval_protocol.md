@@ -59,6 +59,10 @@ Tier 1 evaluates the system's ability to catch unambiguous structural and financ
 ### Tier 2: Ambiguity & Text Reasoning Tier (Informational Accuracy & Headroom)
 Tier 2 evaluates policy boundary compliance, human escalation logic, and free-text comprehension. **Tier 2 metrics are never blended into Tier 1 pass/fail rates**; they are reported independently:
 
+- **Tier-1 Exclusion Rule (Day 5b)**: Every prediction assigned to an ambiguity-tier label (regardless of predicted class or action) is scored **exclusively in the ambiguity tier** and is strictly excluded from Tier-1 TP, FP, and FN across all classes. For example, flagging an `EXPLAINED_INCONSISTENT` refund is the correct action in the ambiguity tier and does not incur a Tier-1 `PARTIAL_REFUND_MISMATCH` false positive. Conversely, spurious flags on hard negatives continue to generate Tier-1 false positives.
+- **Reporting Requirement**: Reports must explicitly emit a separate summary line:
+  `predictions assigned to ambiguity labels: n (correct action: k)`
+
 1. `NEAR_TOLERANCE`: Fee or tax variance in the 3–9 paise escalation band ($3 \le |\Delta| \le 9$ paise). Evaluates whether the system properly abstains and routes to `escalate_human` rather than forcing an arbitrary binary decision.
 2. `EXPLAINED_CONSISTENT`: Partial refund difference justified by free-text notes where stated deduction matches numerical ledger deficit. Evaluates ability to reconcile qualitative assertions with quantitative records (`benign_explained`).
 3. `EXPLAINED_INCONSISTENT`: Partial refund where notes claim an explanation but the stated amount contradicts actual ledger arithmetic. Evaluates ability to catch deceptive or inaccurate textual claims (`flag_partial_refund_mismatch`).

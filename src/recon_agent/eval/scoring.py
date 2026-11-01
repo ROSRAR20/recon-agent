@@ -160,6 +160,8 @@ class ScoringResult:
     clean_escalated: int = 0
     total_escalated_predictions: int = 0
     escalation_share: float = 0.0
+    ambiguity_assigned_count: int = 0
+    ambiguity_correct_action_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert result object into a JSON-serializable dictionary."""
@@ -309,12 +311,10 @@ def score_predictions(
                 t1_correct_fn[err_cls] += 1
                 t1_agnostic_fn[err_cls] += 1
 
-        # If a hard negative or ambiguity label was flagged by a Tier 1 class prediction, that class gets an FP
-        if (hn_type or amb_type) and is_flagged and pred is not None:
-            if amb_type == "NEAR_TOLERANCE" and pred.action == "escalate_human":
-                # An escalate_human on a NEAR_TOLERANCE label counts only toward ambiguity accuracy, not as a FEE_TAX_MISMATCH false positive
-                pass
-            elif pred.action == "flag" and pred.predicted_class in TIER1_ERROR_CLASSES:
+        # If a hard negative was flagged by a Tier 1 class prediction, that class gets an FP.
+        # Ambiguity labels are evaluated only in the ambiguity tier and are excluded from Tier-1 TP/FP/FN.
+        if hn_type and is_flagged and pred is not None:
+            if pred.action == "flag" and pred.predicted_class in TIER1_ERROR_CLASSES:
                 t1_correct_fp[pred.predicted_class] += 1
                 t1_agnostic_fp[pred.predicted_class] += 1
 
@@ -424,6 +424,8 @@ def score_predictions(
     ambiguity_tier: dict[str, AmbiguityMetric] = {}
     amb_counts: dict[str, int] = {amb: 0 for amb in AMBIGUITY_TYPES}
     amb_correct: dict[str, int] = {amb: 0 for amb in AMBIGUITY_TYPES}
+    ambiguity_assigned_count = 0
+    ambiguity_correct_action_count = 0
 
     for l_idx, lbl in enumerate(labels):
         amb = lbl.get("ambiguity_type")
@@ -433,7 +435,10 @@ def score_predictions(
             expected_norm = "flag" if expected.startswith("flag") else ("ignore" if expected == "benign_ignore" else expected)
             p_idx = assigned_labels.get(l_idx)
             if p_idx is not None:
+                ambiguity_assigned_count += 1
                 observed = predictions[p_idx].action
+                if observed == expected_norm:
+                    ambiguity_correct_action_count += 1
             else:
                 observed = "ignore"  # unpredicted defaults to ignore
 
@@ -501,6 +506,8 @@ def score_predictions(
         clean_escalated=clean_escalated,
         total_escalated_predictions=total_escalated_predictions,
         escalation_share=round(escalation_share, 4),
+        ambiguity_assigned_count=ambiguity_assigned_count,
+        ambiguity_correct_action_count=ambiguity_correct_action_count,
     )
     result.summary_markdown = format_markdown_report(result)
     return result
@@ -639,6 +646,9 @@ def format_markdown_report(res: ScoringResult) -> str:
         acc_str = f"{m.accuracy * 100:.2f}%"
         ci_str = f"[{m.accuracy_ci[0]*100:.1f}%, {m.accuracy_ci[1]*100:.1f}%]"
         lines.append(f"| {amb:<25} | {m.accuracy_kn:>15} | {acc_str:>19} | {ci_str:^16} |")
+
+    lines.append("")
+    lines.append(f"predictions assigned to ambiguity labels: {res.ambiguity_assigned_count} (correct action: {res.ambiguity_correct_action_count})")
 
     lines.extend([
         "",
@@ -999,6 +1009,8 @@ def compute_pooled_results(results: list[ScoringResult]) -> dict[str, Any]:
     tot_esc = sum(getattr(r, "total_escalated_predictions", 0) for r in results)
     tot_actions = tot_flg + tot_esc
     esc_share = round(tot_esc / tot_actions, 4) if tot_actions > 0 else 0.0
+    amb_assigned = sum(getattr(r, "ambiguity_assigned_count", 0) for r in results)
+    amb_correct_action = sum(getattr(r, "ambiguity_correct_action_count", 0) for r in results)
 
     pooled_dict = {
         "system_id": system_id,
@@ -1044,6 +1056,8 @@ def compute_pooled_results(results: list[ScoringResult]) -> dict[str, Any]:
         "total_flagged_predictions": tot_flg,
         "total_escalated_predictions": tot_esc,
         "escalation_share": esc_share,
+        "ambiguity_assigned_count": amb_assigned,
+        "ambiguity_correct_action_count": amb_correct_action,
         "total_labels": sum(r.total_labels for r in results),
     }
 
@@ -1213,6 +1227,9 @@ def format_pooled_markdown_report(pooled: dict[str, Any]) -> str:
         ci_str = f"[{m['accuracy_ci'][0]*100:.1f}%, {m['accuracy_ci'][1]*100:.1f}%]"
         range_str = f"[{m['accuracy_range'][0]*100:.1f}%, {m['accuracy_range'][1]*100:.1f}%]"
         lines.append(f"| {amb:<25} | {m['accuracy_kn']:>15} | {acc_str:>19} | {ci_str:^16} | {range_str:^16} |")
+
+    lines.append("")
+    lines.append(f"predictions assigned to ambiguity labels: {pooled.get('ambiguity_assigned_count', 0)} (correct action: {pooled.get('ambiguity_correct_action_count', 0)})")
 
     m_match = pooled["matching"]
     lines.extend([

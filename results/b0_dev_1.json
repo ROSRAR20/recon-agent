@@ -240,7 +240,9 @@
         0.0,
         0.0289
       ],
-      "fpr_kn": "0/129"
+      "fpr_kn": "0/129",
+      "escalated": 0,
+      "escalated_kn": "0/129"
     },
     "LEGIT_ADJUSTMENT": {
       "flagged": 0,
@@ -250,7 +252,9 @@
         0.0,
         0.0513
       ],
-      "fpr_kn": "0/71"
+      "fpr_kn": "0/71",
+      "escalated": 0,
+      "escalated_kn": "0/71"
     },
     "LATE_SETTLEMENT": {
       "flagged": 16,
@@ -260,7 +264,9 @@
         0.1842,
         0.4148
       ],
-      "fpr_kn": "16/56"
+      "fpr_kn": "16/56",
+      "escalated": 0,
+      "escalated_kn": "0/56"
     },
     "RETRY_AFTER_FAIL": {
       "flagged": 0,
@@ -270,7 +276,9 @@
         0.0,
         0.0039
       ],
-      "fpr_kn": "0/981"
+      "fpr_kn": "0/981",
+      "escalated": 0,
+      "escalated_kn": "0/981"
     },
     "NOISY_BANK_NARRATION": {
       "flagged": 46,
@@ -280,7 +288,9 @@
         0.5584,
         0.7756
       ],
-      "fpr_kn": "46/68"
+      "fpr_kn": "46/68",
+      "escalated": 0,
+      "escalated_kn": "0/68"
     },
     "NO_UTR_NARRATION": {
       "flagged": 55,
@@ -290,7 +300,9 @@
         0.9347,
         1.0
       ],
-      "fpr_kn": "55/55"
+      "fpr_kn": "55/55",
+      "escalated": 0,
+      "escalated_kn": "0/55"
     },
     "UNRELATED_BANK_CREDIT": {
       "flagged": 0,
@@ -300,7 +312,9 @@
         0.0,
         0.0058
       ],
-      "fpr_kn": "0/657"
+      "fpr_kn": "0/657",
+      "escalated": 0,
+      "escalated_kn": "0/657"
     },
     "FAILED_PAYMENT": {
       "flagged": 0,
@@ -310,7 +324,9 @@
         0.0,
         0.0019
       ],
-      "fpr_kn": "0/2070"
+      "fpr_kn": "0/2070",
+      "escalated": 0,
+      "escalated_kn": "0/2070"
     },
     "PARTIAL_REFUND_CONSISTENT": {
       "flagged": 0,
@@ -320,7 +336,9 @@
         0.0,
         0.004
       ],
-      "fpr_kn": "0/947"
+      "fpr_kn": "0/947",
+      "escalated": 0,
+      "escalated_kn": "0/947"
     },
     "IN_FLIGHT": {
       "flagged": 2245,
@@ -330,7 +348,9 @@
         0.9634,
         0.9771
       ],
-      "fpr_kn": "2245/2312"
+      "fpr_kn": "2245/2312",
+      "escalated": 0,
+      "escalated_kn": "0/2312"
     }
   },
   "ambiguity_tier": {
@@ -505,5 +525,10 @@
       "NONE": 0
     }
   },
-  "summary_markdown": "# Evaluation Report: B0 (Split: dev, Seed: 1)\n\n## 1. Tier 1: Deterministic Error Classes (Class-Correct Detection)\n| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Recall (k/n) | 95% CI | F1 |\n|:---|---:|---:|---:|---:|:---:|---:|:---:|---:|\n| DUPLICATE_PAYMENT       |    0 |    0 |  278 |        N/A (0/0) |       N/A        |     0.0% (0/278) |   [0.0%, 1.4%]   |    N/A |\n| MISSING_SETTLEMENT      |  171 | 2245 |    0 |  7.1% (171/2416) |   [6.1%, 8.2%]   | 100.0% (171/171) | [97.8%, 100.0%]  |  0.132 |\n| FEE_TAX_MISMATCH        |    0 |    0 |  165 |        N/A (0/0) |       N/A        |     0.0% (0/165) |   [0.0%, 2.3%]   |    N/A |\n| PARTIAL_REFUND_MISMATCH |    0 |    0 |  123 |        N/A (0/0) |       N/A        |     0.0% (0/123) |   [0.0%, 3.0%]   |    N/A |\n| CUTOFF_DRIFT            |    0 |    0 |  100 |        N/A (0/0) |       N/A        |     0.0% (0/100) |   [0.0%, 3.7%]   |    N/A |\n| SHORT_BANK_CREDIT       |    0 |    0 |  101 |        N/A (0/0) |       N/A        |     0.0% (0/101) |   [0.0%, 3.7%]   |    N/A |\n| ORPHAN_BANK_CREDIT      |  101 |  457 |    0 |  18.1% (101/558) |  [15.1%, 21.5%]  | 100.0% (101/101) | [96.3%, 100.0%]  |  0.306 |\n| Overall (Micro)         |  272 | 2702 |  767 |  9.1% (272/2974) |  [8.2%, 10.2%]   | 26.2% (272/1039) |  [23.6%, 28.9%]  |  0.136 |\n**Secondary Metric:** Macro-F1 (undefined as 0) = 0.063\n\n## 2. Tier 1: Anomaly Detection (Class-Agnostic Detection)\n| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Recall (k/n) | 95% CI | F1 |\n|:---|---:|---:|---:|---:|:---:|---:|:---:|---:|\n| DUPLICATE_PAYMENT       |    0 |    0 |  278 |        N/A (0/0) |       N/A        |     0.0% (0/278) |   [0.0%, 1.4%]   |    N/A |\n| MISSING_SETTLEMENT      |  171 | 2245 |    0 |  7.1% (171/2416) |   [6.1%, 8.2%]   | 100.0% (171/171) | [97.8%, 100.0%]  |  0.132 |\n| FEE_TAX_MISMATCH        |    0 |    0 |  165 |        N/A (0/0) |       N/A        |     0.0% (0/165) |   [0.0%, 2.3%]   |    N/A |\n| PARTIAL_REFUND_MISMATCH |    0 |    0 |  123 |        N/A (0/0) |       N/A        |     0.0% (0/123) |   [0.0%, 3.0%]   |    N/A |\n| CUTOFF_DRIFT            |    0 |    0 |  100 |        N/A (0/0) |       N/A        |     0.0% (0/100) |   [0.0%, 3.7%]   |    N/A |\n| SHORT_BANK_CREDIT       |   25 |    0 |   76 |   100.0% (25/25) | [86.7%, 100.0%]  |   24.8% (25/101) |  [17.4%, 34.0%]  |  0.397 |\n| ORPHAN_BANK_CREDIT      |  101 |  432 |    0 |  18.9% (101/533) |  [15.8%, 22.5%]  | 100.0% (101/101) | [96.3%, 100.0%]  |  0.319 |\n| Overall (Micro)         |  297 | 2677 |  742 | 10.0% (297/2974) |  [9.0%, 11.1%]   | 28.6% (297/1039) |  [25.9%, 31.4%]  |  0.148 |\n**Secondary Metric:** Macro-F1 (undefined as 0) = 0.121\n\n## 3. Hard Negatives (False Positive Resistance)\n| Hard Negative Type | Flagged / Total | False Positive Rate (%) | 95% CI |\n|:---|---:|---:|:---:|\n| ROUNDING                  |           0/129 |                   0.00% |   [0.0%, 2.9%]   |\n| LEGIT_ADJUSTMENT          |            0/71 |                   0.00% |   [0.0%, 5.1%]   |\n| LATE_SETTLEMENT           |           16/56 |                  28.57% |  [18.4%, 41.5%]  |\n| RETRY_AFTER_FAIL          |           0/981 |                   0.00% |   [0.0%, 0.4%]   |\n| NOISY_BANK_NARRATION      |           46/68 |                  67.65% |  [55.8%, 77.6%]  |\n| NO_UTR_NARRATION          |           55/55 |                 100.00% | [93.5%, 100.0%]  |\n| UNRELATED_BANK_CREDIT     |           0/657 |                   0.00% |   [0.0%, 0.6%]   |\n| FAILED_PAYMENT            |          0/2070 |                   0.00% |   [0.0%, 0.2%]   |\n| PARTIAL_REFUND_CONSISTENT |           0/947 |                   0.00% |   [0.0%, 0.4%]   |\n| IN_FLIGHT                 |       2245/2312 |                  97.10% |  [96.3%, 97.7%]  |\n\n## 4. Ambiguity Tier (Action Accuracy)\n| Ambiguity Type | Correct / Total | Action Accuracy (%) | 95% CI |\n|:---|---:|---:|:---:|\n| NEAR_TOLERANCE            |            0/55 |               0.00% |   [0.0%, 6.5%]   |\n| EXPLAINED_CONSISTENT      |            0/65 |               0.00% |   [0.0%, 5.6%]   |\n| EXPLAINED_INCONSISTENT    |            0/65 |               0.00% |   [0.0%, 5.6%]   |\n| EXPLAINED_NO_AMOUNT       |            0/65 |               0.00% |   [0.0%, 5.6%]   |\n\n## 5. Bank Statement to Settlement Matching\n| Metric | Count / Value | 95% CI |\n|:---|---:|:---:|\n| Links Made | 1223 | N/A |\n| Correct Links | 1223 | N/A |\n| Wrong Links | 0 | N/A |\n| False-Match Rate | 0.00% (0/1223) | [0.0%, 0.3%] |\n| Match Rate | 72.80% | [70.6%, 74.9%] |\n\n**Clean Data False Positives:** 772\n**Total Flagged Predictions:** 3431\n**Total Ground-Truth Labels:** 8635\n\n## 6. Confusion Matrix\n| True \\ Pred | DUPLICAT | MISSING_ | FEE_TAX_ | PARTIAL_ | CUTOFF_D | SHORT_BA | ORPHAN_B | UNKNOWN | NONE |\n|:---| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n| DUPLICATE_PAYMENT |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |      278 |\n| MISSING_SETTLEMENT |        0 |      171 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |\n| FEE_TAX_MISMATCH |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |      165 |\n| PARTIAL_REFUND_MISMATCH |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |      123 |\n| CUTOFF_DRIFT |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |      100 |\n| SHORT_BANK_CREDIT |        0 |        0 |        0 |        0 |        0 |        0 |       25 |        0 |       76 |\n| ORPHAN_BANK_CREDIT |        0 |        0 |        0 |        0 |        0 |        0 |      101 |        0 |        0 |\n| HARD_NEGATIVE |        0 |     2245 |        0 |        0 |        0 |        0 |      101 |       16 |     4984 |\n| AMBIGUITY   |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |      250 |\n| CLEAN       |        0 |        0 |        0 |        0 |        0 |        0 |      331 |      441 |        0 |"
+  "summary_markdown": "# Evaluation Report: B0 (Split: dev, Seed: 1)\n\n## 1. Tier 1: Deterministic Error Classes (Class-Correct Detection)\n| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Recall (k/n) | 95% CI | F1 |\n|:---|---:|---:|---:|---:|:---:|---:|:---:|---:|\n| DUPLICATE_PAYMENT       |    0 |    0 |  278 |        N/A (0/0) |       N/A        |     0.0% (0/278) |   [0.0%, 1.4%]   |    N/A |\n| MISSING_SETTLEMENT      |  171 | 2245 |    0 |  7.1% (171/2416) |   [6.1%, 8.2%]   | 100.0% (171/171) | [97.8%, 100.0%]  |  0.132 |\n| FEE_TAX_MISMATCH        |    0 |    0 |  165 |        N/A (0/0) |       N/A        |     0.0% (0/165) |   [0.0%, 2.3%]   |    N/A |\n| PARTIAL_REFUND_MISMATCH |    0 |    0 |  123 |        N/A (0/0) |       N/A        |     0.0% (0/123) |   [0.0%, 3.0%]   |    N/A |\n| CUTOFF_DRIFT            |    0 |    0 |  100 |        N/A (0/0) |       N/A        |     0.0% (0/100) |   [0.0%, 3.7%]   |    N/A |\n| SHORT_BANK_CREDIT       |    0 |    0 |  101 |        N/A (0/0) |       N/A        |     0.0% (0/101) |   [0.0%, 3.7%]   |    N/A |\n| ORPHAN_BANK_CREDIT      |  101 |  457 |    0 |  18.1% (101/558) |  [15.1%, 21.5%]  | 100.0% (101/101) | [96.3%, 100.0%]  |  0.306 |\n| Overall (Micro)         |  272 | 2702 |  767 |  9.1% (272/2974) |  [8.2%, 10.2%]   | 26.2% (272/1039) |  [23.6%, 28.9%]  |  0.136 |\n**Secondary Metric:** Macro-F1 (undefined as 0) = 0.063\n\n## 2. Tier 1: Anomaly Detection (Class-Agnostic Detection)\n| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Recall (k/n) | 95% CI | F1 |\n|:---|---:|---:|---:|---:|:---:|---:|:---:|---:|\n| DUPLICATE_PAYMENT       |    0 |    0 |  278 |        N/A (0/0) |       N/A        |     0.0% (0/278) |   [0.0%, 1.4%]   |    N/A |\n| MISSING_SETTLEMENT      |  171 | 2245 |    0 |  7.1% (171/2416) |   [6.1%, 8.2%]   | 100.0% (171/171) | [97.8%, 100.0%]  |  0.132 |\n| FEE_TAX_MISMATCH        |    0 |    0 |  165 |        N/A (0/0) |       N/A        |     0.0% (0/165) |   [0.0%, 2.3%]   |    N/A |\n| PARTIAL_REFUND_MISMATCH |    0 |    0 |  123 |        N/A (0/0) |       N/A        |     0.0% (0/123) |   [0.0%, 3.0%]   |    N/A |\n| CUTOFF_DRIFT            |    0 |    0 |  100 |        N/A (0/0) |       N/A        |     0.0% (0/100) |   [0.0%, 3.7%]   |    N/A |\n| SHORT_BANK_CREDIT       |   25 |    0 |   76 |   100.0% (25/25) | [86.7%, 100.0%]  |   24.8% (25/101) |  [17.4%, 34.0%]  |  0.397 |\n| ORPHAN_BANK_CREDIT      |  101 |  432 |    0 |  18.9% (101/533) |  [15.8%, 22.5%]  | 100.0% (101/101) | [96.3%, 100.0%]  |  0.319 |\n| Overall (Micro)         |  297 | 2677 |  742 | 10.0% (297/2974) |  [9.0%, 11.1%]   | 28.6% (297/1039) |  [25.9%, 31.4%]  |  0.148 |\n**Secondary Metric:** Macro-F1 (undefined as 0) = 0.121\n\n## 3. Hard Negatives (False Positive Resistance)\n| Hard Negative Type | Flagged / Total | Escalated / Total | False Positive Rate (%) | 95% CI |\n|:---|---:|---:|---:|:---:|\n| ROUNDING                  |           0/129 |             0/129 |                   0.00% |   [0.0%, 2.9%]   |\n| LEGIT_ADJUSTMENT          |            0/71 |              0/71 |                   0.00% |   [0.0%, 5.1%]   |\n| LATE_SETTLEMENT           |           16/56 |              0/56 |                  28.57% |  [18.4%, 41.5%]  |\n| RETRY_AFTER_FAIL          |           0/981 |             0/981 |                   0.00% |   [0.0%, 0.4%]   |\n| NOISY_BANK_NARRATION      |           46/68 |              0/68 |                  67.65% |  [55.8%, 77.6%]  |\n| NO_UTR_NARRATION          |           55/55 |              0/55 |                 100.00% | [93.5%, 100.0%]  |\n| UNRELATED_BANK_CREDIT     |           0/657 |             0/657 |                   0.00% |   [0.0%, 0.6%]   |\n| FAILED_PAYMENT            |          0/2070 |            0/2070 |                   0.00% |   [0.0%, 0.2%]   |\n| PARTIAL_REFUND_CONSISTENT |           0/947 |             0/947 |                   0.00% |   [0.0%, 0.4%]   |\n| IN_FLIGHT                 |       2245/2312 |            0/2312 |                  97.10% |  [96.3%, 97.7%]  |\n\n## 4. Ambiguity Tier (Action Accuracy)\n| Ambiguity Type | Correct / Total | Action Accuracy (%) | 95% CI |\n|:---|---:|---:|:---:|\n| NEAR_TOLERANCE            |            0/55 |               0.00% |   [0.0%, 6.5%]   |\n| EXPLAINED_CONSISTENT      |            0/65 |               0.00% |   [0.0%, 5.6%]   |\n| EXPLAINED_INCONSISTENT    |            0/65 |               0.00% |   [0.0%, 5.6%]   |\n| EXPLAINED_NO_AMOUNT       |            0/65 |               0.00% |   [0.0%, 5.6%]   |\n\npredictions assigned to ambiguity labels: 0 (correct action: 0)\n\n## 5. Bank Statement to Settlement Matching\n| Metric | Count / Value | 95% CI |\n|:---|---:|:---:|\n| Links Made | 1223 | N/A |\n| Correct Links | 1223 | N/A |\n| Wrong Links | 0 | N/A |\n| False-Match Rate | 0.00% (0/1223) | [0.0%, 0.3%] |\n| Match Rate | 72.80% | [70.6%, 74.9%] |\n\n**Clean Data False Positives (Flagged):** 772\n**Clean Data Escalations:** 0\n**Total Flagged Predictions:** 3431\n**Total Escalated Predictions:** 0\n**Escalation Share:** 0.00%\n**Total Ground-Truth Labels:** 8635\n\n## 6. Confusion Matrix\n| True \\ Pred | DUPLICAT | MISSING_ | FEE_TAX_ | PARTIAL_ | CUTOFF_D | SHORT_BA | ORPHAN_B | UNKNOWN | NONE |\n|:---| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n| DUPLICATE_PAYMENT |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |      278 |\n| MISSING_SETTLEMENT |        0 |      171 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |\n| FEE_TAX_MISMATCH |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |      165 |\n| PARTIAL_REFUND_MISMATCH |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |      123 |\n| CUTOFF_DRIFT |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |      100 |\n| SHORT_BANK_CREDIT |        0 |        0 |        0 |        0 |        0 |        0 |       25 |        0 |       76 |\n| ORPHAN_BANK_CREDIT |        0 |        0 |        0 |        0 |        0 |        0 |      101 |        0 |        0 |\n| HARD_NEGATIVE |        0 |     2245 |        0 |        0 |        0 |        0 |      101 |       16 |     4984 |\n| AMBIGUITY   |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |      250 |\n| CLEAN       |        0 |        0 |        0 |        0 |        0 |        0 |      331 |      441 |        0 |",
+  "clean_escalated": 0,
+  "total_escalated_predictions": 0,
+  "escalation_share": 0.0,
+  "ambiguity_assigned_count": 0,
+  "ambiguity_correct_action_count": 0
 }

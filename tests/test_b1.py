@@ -298,3 +298,29 @@ def test_b1_flags_zero_in_flight_on_dev_seed1() -> None:
 
     overlap = inflight_primary_ids & flagged_ids
     assert len(overlap) == 0, f"B1 erroneously flagged IN_FLIGHT entities: {overlap}"
+
+
+def test_b1_orphan_precision_and_missing_recall_on_dev() -> None:
+    """Verify B1 achieves 100% missing settlement recall and 100% orphan precision on dev seed 1."""
+    from src.recon_agent.eval.scoring import load_ground_truth, score_predictions
+    from src.recon_agent.pipeline.loader import load_dataset
+
+    dev_dir = os.path.join(REPO_ROOT, "data", "synth", "full", "dev_seed1")
+    if not os.path.isdir(dev_dir):
+        pytest.skip(f"Dev dataset not found at {dev_dir}")
+
+    dataset = load_dataset(dev_dir)
+    labels, truth_links = load_ground_truth(dev_dir)
+    out = run_b1(dataset)
+    res = score_predictions(out, labels, truth_links)
+
+    mis = res.tier1_class_correct["MISSING_SETTLEMENT"]
+    assert mis.tp + mis.fn > 0
+    assert mis.recall == 1.0
+
+    orp = res.tier1_class_correct["ORPHAN_BANK_CREDIT"]
+    assert orp.tp + orp.fp > 0
+    assert orp.precision == 1.0
+
+    assert res.clean_false_positives == 0
+

@@ -4,8 +4,56 @@
     "entity_ids": [
       "setl_ye1GcpkUpsiIZw"
     ],
-    "rule_id": "B1_UNMATCHED_SETTLEMENT_EXPIRED",
-    "reason": "Settlement setl_ye1GcpkUpsiIZw settled on 2026-09-02 remains unmatched past grace window (as_of 2026-09-11)"
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Settlement setl_ye1GcpkUpsiIZw left unmatched due to candidate ambiguity (2 bank candidates: ['stmt_0002664', 'stmt_0002783'])"
+  },
+  {
+    "merchant_id": "mer_26",
+    "entity_ids": [
+      "stmt_0002664"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Bank row stmt_0002664 left unmatched due to candidate ambiguity (1 settlement candidates: ['setl_ye1GcpkUpsiIZw'])"
+  },
+  {
+    "merchant_id": "mer_26",
+    "entity_ids": [
+      "stmt_0002783"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Bank row stmt_0002783 left unmatched due to candidate ambiguity (1 settlement candidates: ['setl_ye1GcpkUpsiIZw'])"
+  },
+  {
+    "merchant_id": "mer_54",
+    "entity_ids": [
+      "setl_XZY3FQm68vkoi2"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Settlement setl_XZY3FQm68vkoi2 left unmatched due to candidate ambiguity (2 bank candidates: ['stmt_0003453', 'stmt_0003566'])"
+  },
+  {
+    "merchant_id": "mer_54",
+    "entity_ids": [
+      "setl_sBBjqxA9D9GCyn"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Settlement setl_sBBjqxA9D9GCyn left unmatched due to candidate ambiguity (1 bank candidates: ['stmt_0003566'])"
+  },
+  {
+    "merchant_id": "mer_54",
+    "entity_ids": [
+      "stmt_0003453"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Bank row stmt_0003453 left unmatched due to candidate ambiguity (1 settlement candidates: ['setl_XZY3FQm68vkoi2'])"
+  },
+  {
+    "merchant_id": "mer_54",
+    "entity_ids": [
+      "stmt_0003566"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Bank row stmt_0003566 left unmatched due to candidate ambiguity (2 settlement candidates: ['setl_XZY3FQm68vkoi2', 'setl_sBBjqxA9D9GCyn'])"
   },
   {
     "merchant_id": "mer_44",
