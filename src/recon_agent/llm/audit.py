@@ -75,3 +75,4 @@ class AuditLogger:
             f.write(json.dumps(asdict(record)) + "\n")
 
         return record
+

@@ -155,3 +155,4 @@ def validate_llm_output(raw_json: str | dict[str, Any]) -> tuple[bool, LLMOutput
         verbatim_quote=verbatim_quote,
     )
     return True, parsed, []
+

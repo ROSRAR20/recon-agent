@@ -537,3 +537,4 @@ def test_llm_boundary_no_synth_or_eval() -> None:
                 elif isinstance(node, ast.ImportFrom):
                     if node.module:
                         assert "synth" not in node.module, f"Illegal synth import-from in {path}: {node.module}"
+

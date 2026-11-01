@@ -82,3 +82,4 @@ To maintain engineering clarity, the verifier explicitly does **NOT** guarantee:
 | **`ACCEPT`** | All checks V1–V7 passed. | Execute LLM decision (`flag`, `benign_explained`, or `escalate_human`). |
 | **`REJECT`** | One or more checks failed due to schema violation, fabricated numbers, or ungrounded data. | Fallback to safe `escalate_human`. Log failed checks. |
 | **`ABSTAIN`** | Verifier cannot confirm (ambiguous quote amounts, number words). | Fallback to safe `escalate_human`. Log failed checks. |
+
