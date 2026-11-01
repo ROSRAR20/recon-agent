@@ -65,17 +65,38 @@ class BankSettlementLink:
 
 
 @dataclass(frozen=True)
+class ResidualCase:
+    """A case requiring human escalation or special residual review."""
+
+    merchant_id: str
+    entity_ids: tuple[str, ...]
+    rule_id: str
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "merchant_id": self.merchant_id,
+            "entity_ids": list(self.entity_ids),
+            "rule_id": self.rule_id,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
 class SystemOutput:
     """Standardized output collection from a reconciliation system."""
 
     predictions: tuple[Prediction, ...]
     bank_links: tuple[BankSettlementLink, ...] = ()
+    residuals: tuple[ResidualCase, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.predictions, tuple):
             object.__setattr__(self, "predictions", tuple(self.predictions))
         if not isinstance(self.bank_links, tuple):
             object.__setattr__(self, "bank_links", tuple(self.bank_links))
+        if not isinstance(self.residuals, tuple):
+            object.__setattr__(self, "residuals", tuple(self.residuals))
 
 
 # =============================================================================

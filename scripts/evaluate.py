@@ -20,9 +20,13 @@ from src.recon_agent.pipeline.loader import load_dataset
 from src.recon_agent.synth.config import create_config
 from src.recon_agent.synth.generator import SyntheticDataGenerator
 from src.recon_agent.systems.b0 import run_b0
+from src.recon_agent.systems.b1 import run_b1
+from src.recon_agent.systems.b1r import run_b1r
 
 SYSTEMS = {
     "b0": run_b0,
+    "b1": run_b1,
+    "b1r": run_b1r,
 }
 
 
@@ -155,6 +159,13 @@ def main() -> None:
         with open(out_json_path, "w", encoding="utf-8") as f:
             json.dump(result.to_dict(), f, indent=2)
         print(f"[+] Seed {seed} results saved to {out_json_path}")
+
+        # Save residuals if generated
+        if system_output.residuals:
+            residuals_path = os.path.join(results_dir, f"{args.system}_{args.split}_{seed}_residuals.json")
+            with open(residuals_path, "w", encoding="utf-8") as f:
+                json.dump([r.to_dict() for r in system_output.residuals], f, indent=2)
+            print(f"[+] Seed {seed} residuals saved to {residuals_path} ({len(system_output.residuals)} cases)")
 
         results_list.append(result)
 

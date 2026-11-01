@@ -112,6 +112,8 @@ class HardNegativeMetric:
     fpr: float
     fpr_ci: tuple[float, float]
     fpr_kn: str
+    escalated: int = 0
+    escalated_kn: str = ""
 
 
 @dataclass(frozen=True)
@@ -155,6 +157,9 @@ class ScoringResult:
     total_labels: int
     confusion_matrix: dict[str, dict[str, int]]
     summary_markdown: str = ""
+    clean_escalated: int = 0
+    total_escalated_predictions: int = 0
+    escalation_share: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert result object into a JSON-serializable dictionary."""
@@ -233,22 +238,30 @@ def score_predictions(
     t1_agnostic_fn = {c: 0 for c in TIER1_ERROR_CLASSES}
 
     clean_false_positives = 0
+    clean_escalated = 0
     total_flagged_predictions = 0
+    total_escalated_predictions = 0
 
     # Categorize unmatched predictions
     for p_idx, pred in enumerate(predictions):
-        is_flagged = pred.action in ("flag", "escalate_human")
-        if is_flagged:
+        if pred.action == "flag":
             total_flagged_predictions += 1
+        elif pred.action == "escalate_human":
+            total_escalated_predictions += 1
 
+        is_flagged = pred.action in ("flag", "escalate_human")
         if p_idx not in assigned_preds:
-            if is_flagged:
+            if pred.action == "flag":
                 clean_false_positives += 1
                 pred_c = pred.predicted_class if pred.predicted_class in matrix_cols else "UNKNOWN"
                 confusion_matrix["CLEAN"][pred_c] += 1
                 if pred.predicted_class in TIER1_ERROR_CLASSES:
                     t1_correct_fp[pred.predicted_class] += 1
                     t1_agnostic_fp[pred.predicted_class] += 1
+            elif pred.action == "escalate_human":
+                clean_escalated += 1
+                pred_c = pred.predicted_class if pred.predicted_class in matrix_cols else "UNKNOWN"
+                confusion_matrix["CLEAN"][pred_c] += 1
 
     # Categorize labels
     for l_idx, lbl in enumerate(labels):
@@ -298,7 +311,10 @@ def score_predictions(
 
         # If a hard negative or ambiguity label was flagged by a Tier 1 class prediction, that class gets an FP
         if (hn_type or amb_type) and is_flagged and pred is not None:
-            if pred.predicted_class in TIER1_ERROR_CLASSES:
+            if amb_type == "NEAR_TOLERANCE" and pred.action == "escalate_human":
+                # An escalate_human on a NEAR_TOLERANCE label counts only toward ambiguity accuracy, not as a FEE_TAX_MISMATCH false positive
+                pass
+            elif pred.action == "flag" and pred.predicted_class in TIER1_ERROR_CLASSES:
                 t1_correct_fp[pred.predicted_class] += 1
                 t1_agnostic_fp[pred.predicted_class] += 1
 
@@ -373,6 +389,7 @@ def score_predictions(
     hard_negatives: dict[str, HardNegativeMetric] = {}
     hn_counts: dict[str, int] = {hn: 0 for hn in HARD_NEGATIVE_TYPES}
     hn_flagged: dict[str, int] = {hn: 0 for hn in HARD_NEGATIVE_TYPES}
+    hn_escalated: dict[str, int] = {hn: 0 for hn in HARD_NEGATIVE_TYPES}
 
     for l_idx, lbl in enumerate(labels):
         hn = lbl.get("hard_negative_type")
@@ -381,12 +398,15 @@ def score_predictions(
             p_idx = assigned_labels.get(l_idx)
             if p_idx is not None:
                 pred = predictions[p_idx]
-                if pred.action in ("flag", "escalate_human"):
+                if pred.action == "flag":
                     hn_flagged[hn] += 1
+                elif pred.action == "escalate_human":
+                    hn_escalated[hn] += 1
 
     for hn in HARD_NEGATIVE_TYPES:
         tot = hn_counts[hn]
         flg = hn_flagged[hn]
+        esc = hn_escalated[hn]
         fpr = (flg / tot) if tot > 0 else 0.0
         hard_negatives[hn] = HardNegativeMetric(
             flagged=flg,
@@ -394,6 +414,8 @@ def score_predictions(
             fpr=round(fpr, 4),
             fpr_ci=wilson_ci(flg, tot),
             fpr_kn=f"{flg}/{tot}",
+            escalated=esc,
+            escalated_kn=f"{esc}/{tot}",
         )
 
     # =========================================================================
@@ -408,13 +430,14 @@ def score_predictions(
         if amb and amb in amb_counts:
             amb_counts[amb] += 1
             expected = lbl.get("expected_action", "ignore")
+            expected_norm = "flag" if expected.startswith("flag") else ("ignore" if expected == "benign_ignore" else expected)
             p_idx = assigned_labels.get(l_idx)
             if p_idx is not None:
                 observed = predictions[p_idx].action
             else:
                 observed = "ignore"  # unpredicted defaults to ignore
 
-            if observed == expected:
+            if observed == expected_norm:
                 amb_correct[amb] += 1
 
     for amb in AMBIGUITY_TYPES:
@@ -459,6 +482,9 @@ def score_predictions(
         match_rate_ci=match_rate_ci,
     )
 
+    total_actions = total_flagged_predictions + total_escalated_predictions
+    escalation_share = (total_escalated_predictions / total_actions) if total_actions > 0 else 0.0
+
     result = ScoringResult(
         system_id=system_id,
         split=split,
@@ -472,6 +498,9 @@ def score_predictions(
         total_flagged_predictions=total_flagged_predictions,
         total_labels=len(labels),
         confusion_matrix=confusion_matrix,
+        clean_escalated=clean_escalated,
+        total_escalated_predictions=total_escalated_predictions,
+        escalation_share=round(escalation_share, 4),
     )
     result.summary_markdown = format_markdown_report(result)
     return result
@@ -591,13 +620,14 @@ def format_markdown_report(res: ScoringResult) -> str:
     lines.extend([
         "",
         "## 3. Hard Negatives (False Positive Resistance)",
-        "| Hard Negative Type | Flagged / Total | False Positive Rate (%) | 95% CI |",
-        "|:---|---:|---:|:---:|",
+        "| Hard Negative Type | Flagged / Total | Escalated / Total | False Positive Rate (%) | 95% CI |",
+        "|:---|---:|---:|---:|:---:|",
     ])
     for hn, m in res.hard_negatives.items():
         fpr_str = f"{m.fpr * 100:.2f}%"
         ci_str = f"[{m.fpr_ci[0]*100:.1f}%, {m.fpr_ci[1]*100:.1f}%]"
-        lines.append(f"| {hn:<25} | {m.fpr_kn:>15} | {fpr_str:>23} | {ci_str:^16} |")
+        esc_str = getattr(m, "escalated_kn", f"{getattr(m, 'escalated', 0)}/{m.total}")
+        lines.append(f"| {hn:<25} | {m.fpr_kn:>15} | {esc_str:>17} | {fpr_str:>23} | {ci_str:^16} |")
 
     lines.extend([
         "",
@@ -637,8 +667,11 @@ def format_markdown_report(res: ScoringResult) -> str:
         f"| False-Match Rate | {fmr_str} | {fmr_ci} |",
         f"| Match Rate | {mr_str} | {mr_ci} |",
         "",
-        f"**Clean Data False Positives:** {res.clean_false_positives}",
+        f"**Clean Data False Positives (Flagged):** {res.clean_false_positives}",
+        f"**Clean Data Escalations:** {res.clean_escalated}",
         f"**Total Flagged Predictions:** {res.total_flagged_predictions}",
+        f"**Total Escalated Predictions:** {res.total_escalated_predictions}",
+        f"**Escalation Share:** {res.escalation_share * 100:.2f}%",
         f"**Total Ground-Truth Labels:** {res.total_labels}",
         "",
         "## 6. Confusion Matrix",
@@ -889,15 +922,18 @@ def compute_pooled_results(results: list[ScoringResult]) -> dict[str, Any]:
     for hn in HARD_NEGATIVE_TYPES:
         flg = sum(r.hard_negatives[hn].flagged for r in results)
         tot = sum(r.hard_negatives[hn].total for r in results)
+        esc = sum(getattr(r.hard_negatives[hn], "escalated", 0) for r in results)
         fpr = round(flg / tot, 4) if tot > 0 else 0.0
         fpr_ci = wilson_ci(flg, tot) if tot > 0 else (0.0, 0.0)
         seed_fprs = [r.hard_negatives[hn].fpr for r in results]
         hard_negatives[hn] = {
             "flagged": flg,
             "total": tot,
+            "escalated": esc,
             "fpr": fpr,
             "fpr_ci": fpr_ci,
             "fpr_kn": f"{flg}/{tot}",
+            "escalated_kn": f"{esc}/{tot}",
             "fpr_range": (min(seed_fprs), max(seed_fprs)),
         }
 
@@ -957,6 +993,13 @@ def compute_pooled_results(results: list[ScoringResult]) -> dict[str, Any]:
         "match_rate_range": mr_range,
     }
 
+    clean_fp = sum(r.clean_false_positives for r in results)
+    clean_esc = sum(getattr(r, "clean_escalated", 0) for r in results)
+    tot_flg = sum(r.total_flagged_predictions for r in results)
+    tot_esc = sum(getattr(r, "total_escalated_predictions", 0) for r in results)
+    tot_actions = tot_flg + tot_esc
+    esc_share = round(tot_esc / tot_actions, 4) if tot_actions > 0 else 0.0
+
     pooled_dict = {
         "system_id": system_id,
         "split": split,
@@ -996,8 +1039,11 @@ def compute_pooled_results(results: list[ScoringResult]) -> dict[str, Any]:
         "hard_negatives": hard_negatives,
         "ambiguity_tier": ambiguity_tier,
         "matching": matching,
-        "clean_false_positives": sum(r.clean_false_positives for r in results),
-        "total_flagged_predictions": sum(r.total_flagged_predictions for r in results),
+        "clean_false_positives": clean_fp,
+        "clean_escalated": clean_esc,
+        "total_flagged_predictions": tot_flg,
+        "total_escalated_predictions": tot_esc,
+        "escalation_share": esc_share,
         "total_labels": sum(r.total_labels for r in results),
     }
 
@@ -1145,14 +1191,16 @@ def format_pooled_markdown_report(pooled: dict[str, Any]) -> str:
     lines.extend([
         "",
         "## 3. Hard Negatives (False Positive Resistance, Pooled)",
-        "| Hard Negative Type | Flagged / Total | False Positive Rate (%) | 95% CI | Per-Seed Range |",
-        "|:---|---:|---:|:---:|:---:|",
+        "| Hard Negative Type | Flagged / Total | Escalated / Total | False Positive Rate (%) | 95% CI | Per-Seed Range |",
+        "|:---|---:|---:|---:|:---:|:---:|",
     ])
     for hn, m in pooled["hard_negatives"].items():
         fpr_str = f"{m['fpr'] * 100:.2f}%"
         ci_str = f"[{m['fpr_ci'][0]*100:.1f}%, {m['fpr_ci'][1]*100:.1f}%]"
         range_str = f"[{m['fpr_range'][0]*100:.1f}%, {m['fpr_range'][1]*100:.1f}%]"
-        lines.append(f"| {hn:<25} | {m['fpr_kn']:>15} | {fpr_str:>23} | {ci_str:^16} | {range_str:^16} |")
+        flg_kn = m.get("fpr_kn", f"{m['flagged']}/{m['total']}")
+        esc_kn = m.get("escalated_kn", f"{m.get('escalated', 0)}/{m['total']}")
+        lines.append(f"| {hn:<25} | {flg_kn:>15} | {esc_kn:>17} | {fpr_str:>23} | {ci_str:^16} | {range_str:^16} |")
 
     lines.extend([
         "",
@@ -1198,8 +1246,11 @@ def format_pooled_markdown_report(pooled: dict[str, Any]) -> str:
         f"| False-Match Rate | {fmr_str} | {fmr_ci} | {fmr_rng} |",
         f"| Match Rate | {mr_str} | {mr_ci} | {mr_rng} |",
         "",
-        f"**Clean Data False Positives (Pooled):** {pooled['clean_false_positives']}",
+        f"**Clean Data False Positives (Flagged):** {pooled['clean_false_positives']}",
+        f"**Clean Data Escalations:** {pooled.get('clean_escalated', 0)}",
         f"**Total Flagged Predictions (Pooled):** {pooled['total_flagged_predictions']}",
+        f"**Total Escalated Predictions (Pooled):** {pooled.get('total_escalated_predictions', 0)}",
+        f"**Escalation Share (Pooled):** {pooled.get('escalation_share', 0.0) * 100:.2f}%",
         f"**Total Ground-Truth Labels (Pooled):** {pooled['total_labels']}",
     ])
 
