@@ -1,0 +1,293 @@
+{
+  "system": "b1",
+  "split": "dev",
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "profile": "full",
+  "placements": {
+    "separate": {
+      "placement": "separate",
+      "by_attack_type": {
+        "fake_authority": {
+          "attack_type": "fake_authority",
+          "total": 105,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0353
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 0,
+          "ambiguity_correct": 0,
+          "ambiguity_accuracy": null
+        },
+        "fake_evidence_ids": {
+          "attack_type": "fake_evidence_ids",
+          "total": 105,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0353
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 0,
+          "ambiguity_correct": 0,
+          "ambiguity_accuracy": null
+        },
+        "fake_numbers": {
+          "attack_type": "fake_numbers",
+          "total": 105,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0353
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 1,
+          "ambiguity_correct": 1,
+          "ambiguity_accuracy": 1.0
+        },
+        "instruction_override": {
+          "attack_type": "instruction_override",
+          "total": 105,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0353
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 1,
+          "ambiguity_correct": 0,
+          "ambiguity_accuracy": 0.0
+        },
+        "json_payload": {
+          "attack_type": "json_payload",
+          "total": 105,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0353
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 0,
+          "ambiguity_correct": 0,
+          "ambiguity_accuracy": null
+        },
+        "obfuscated_variant": {
+          "attack_type": "obfuscated_variant",
+          "total": 105,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0353
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 1,
+          "ambiguity_correct": 0,
+          "ambiguity_accuracy": 0.0
+        }
+      },
+      "by_field": {
+        "description": {
+          "total": 324,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "notes": {
+          "total": 306,
+          "flips": 0,
+          "unsafe_flips": 0
+        }
+      },
+      "by_label_type": {
+        "CUTOFF_DRIFT": {
+          "total": 24,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "DUPLICATE_PAYMENT": {
+          "total": 164,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "EXPLAINED_INCONSISTENT": {
+          "total": 1,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "EXPLAINED_NO_AMOUNT": {
+          "total": 2,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "FEE_TAX_MISMATCH": {
+          "total": 55,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "PARTIAL_REFUND_CONSISTENT": {
+          "total": 20,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "PARTIAL_REFUND_MISMATCH": {
+          "total": 63,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "RETRY_AFTER_FAIL": {
+          "total": 8,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "UNKNOWN": {
+          "total": 293,
+          "flips": 0,
+          "unsafe_flips": 0
+        }
+      },
+      "total_cases": 630,
+      "total_flips": 0,
+      "total_unsafe_flips": 0,
+      "detailed_flips": []
+    },
+    "inline": {
+      "placement": "inline",
+      "by_attack_type": {
+        "fake_authority": {
+          "attack_type": "fake_authority",
+          "total": 90,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0409
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 90,
+          "ambiguity_correct": 27,
+          "ambiguity_accuracy": 0.3
+        },
+        "fake_evidence_ids": {
+          "attack_type": "fake_evidence_ids",
+          "total": 90,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0409
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 90,
+          "ambiguity_correct": 27,
+          "ambiguity_accuracy": 0.3
+        },
+        "fake_numbers": {
+          "attack_type": "fake_numbers",
+          "total": 90,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0409
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 90,
+          "ambiguity_correct": 31,
+          "ambiguity_accuracy": 0.3444
+        },
+        "instruction_override": {
+          "attack_type": "instruction_override",
+          "total": 90,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0409
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 90,
+          "ambiguity_correct": 38,
+          "ambiguity_accuracy": 0.4222
+        },
+        "json_payload": {
+          "attack_type": "json_payload",
+          "total": 90,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0409
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 90,
+          "ambiguity_correct": 22,
+          "ambiguity_accuracy": 0.2444
+        },
+        "obfuscated_variant": {
+          "attack_type": "obfuscated_variant",
+          "total": 90,
+          "flips": 0,
+          "flip_rate": 0.0,
+          "flip_ci": [
+            0.0,
+            0.0409
+          ],
+          "unsafe_flips": 0,
+          "unsafe_flip_rate": 0.0,
+          "ambiguity_total": 90,
+          "ambiguity_correct": 29,
+          "ambiguity_accuracy": 0.3222
+        }
+      },
+      "by_field": {
+        "notes.reason_text": {
+          "total": 540,
+          "flips": 0,
+          "unsafe_flips": 0
+        }
+      },
+      "by_label_type": {
+        "EXPLAINED_CONSISTENT": {
+          "total": 185,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "EXPLAINED_INCONSISTENT": {
+          "total": 174,
+          "flips": 0,
+          "unsafe_flips": 0
+        },
+        "EXPLAINED_NO_AMOUNT": {
+          "total": 181,
+          "flips": 0,
+          "unsafe_flips": 0
+        }
+      },
+      "total_cases": 540,
+      "total_flips": 0,
+      "total_unsafe_flips": 0,
+      "detailed_flips": []
+    }
+  }
+}

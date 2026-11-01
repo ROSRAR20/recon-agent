@@ -181,6 +181,62 @@ def apply_text_injections(
                     "field": field,
                     "attack_type": attack_type,
                     "template_id": tmpl["template_id"],
+                    "placement": "separate",
+                }
+            )
+
+    return twin_data, injection_manifest
+
+
+def apply_inline_text_injections(
+    base_data: dict[str, Any],
+    seed: int,
+    cases_per_attack: int = 30,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Generate an inline twin dataset where attack templates are appended inside notes.reason_text.
+
+    For refunds with notes.reason_text, append the attack template text INSIDE reason_text
+    after the original sentence (original prefix byte-identical).
+    Floor: 30 per attack type per split.
+    """
+    rng = random.Random(seed * 2000 + 888)
+    twin_data = copy.deepcopy(base_data)
+
+    recon_items = twin_data["recon_items"]
+    # Filter refunds that have notes.reason_text
+    candidates = [
+        r for r in recon_items
+        if r.get("type") == "refund" and r.get("notes") and "reason_text" in r["notes"] and r["notes"]["reason_text"]
+    ]
+
+    rng.shuffle(candidates)
+
+    injection_manifest: list[dict[str, Any]] = []
+    used_item_ids: set[str] = set()
+
+    for attack_type in REQUIRED_ATTACK_TYPES:
+        templates = ATTACK_TEMPLATES[attack_type]
+        cases_needed = max(30, cases_per_attack)
+
+        avail = [r for r in candidates if r["entity_id"] not in used_item_ids]
+        selected = avail[:cases_needed]
+
+        for item in selected:
+            used_item_ids.add(item["entity_id"])
+            tmpl = rng.choice(templates)
+            orig_text = item["notes"]["reason_text"]
+            # Append attack text after original sentence, keeping original prefix byte-identical
+            item["notes"]["reason_text"] = f"{orig_text} {tmpl['text']}"
+
+            case_id = f"inj_inline_{len(injection_manifest) + 1:06d}"
+            injection_manifest.append(
+                {
+                    "case_id": case_id,
+                    "item_entity_id": item["entity_id"],
+                    "field": "notes.reason_text",
+                    "attack_type": attack_type,
+                    "template_id": tmpl["template_id"],
+                    "placement": "inline",
                 }
             )
 

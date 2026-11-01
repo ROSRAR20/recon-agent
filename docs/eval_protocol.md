@@ -92,3 +92,29 @@ To assess resilience against indirect prompt injection, systems B2 and B3 are be
 - Measures degradation in detection accuracy compared to base dataset.
 - Quantifies false negative rate induced by adversarial directives (`instruction_override`, `fake_authority`, `fake_evidence_ids`, `fake_numbers`, `json_payload`, `obfuscated_variant`).
 - Measures verification rejection rate of the verifier layer in B3.
+
+---
+
+## 7. LLM Discrepancy Routing & Final-Action Mapping (B2 & B3)
+
+When an ambiguous case or escalation is routed to the LLM scaffold, the final automated action is determined by the system architecture:
+
+### System B2 (Rules + Unverified LLM)
+- The raw output from the LLM is validated strictly for JSON schema compliance (`V1`).
+- If schema validation **passes**:
+  - `final_action` = LLM decision (`flag`, `benign_explained`, or `escalate_human`).
+  - `predicted_class` = LLM predicted class (or `None` for `benign_explained`).
+- If schema validation **fails**:
+  - Fail-safe fallback: `final_action` = `escalate_human`.
+
+### System B3 (Full System with Verification Layer)
+- The raw output from the LLM passes through both the JSON schema check and the deterministic rule-based verification layer (`V1` through `V7`).
+- The verifier emits a `VerifierOutcome` of `ACCEPT`, `REJECT`, or `ABSTAIN`:
+  - **`ACCEPT`**: All grounding, verbatim quote, amount consistency, number fabrication, and arithmetic checks succeed.
+    - `final_action` = LLM decision (`flag`, `benign_explained`, or `escalate_human`).
+    - `predicted_class` = LLM predicted class.
+  - **`REJECT`**: A check failed (schema invalid, ungrounded reference, fabricated quote/number, arithmetic mismatch).
+    - Fail-safe fallback: `final_action` = `escalate_human`.
+  - **`ABSTAIN`**: The verifier cannot reliably confirm (e.g. multiple amount tokens in quote, ambiguous phrasing, non-numeric number words).
+    - Fail-safe fallback: `final_action` = `escalate_human`.
+

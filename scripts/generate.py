@@ -14,6 +14,7 @@ if REPO_ROOT not in sys.path:
 from src.recon_agent.synth import SyntheticDataGenerator, create_config
 from src.recon_agent.synth.text_inject import (
     REQUIRED_ATTACK_TYPES,
+    apply_inline_text_injections,
     apply_text_injections,
     write_twin_dataset,
 )
@@ -54,6 +55,7 @@ def verify_floors(
     hard_neg_counts: dict[str, int],
     ambiguity_counts: dict[str, int] | None = None,
     attack_counts: dict[str, int] | None = None,
+    inline_attack_counts: dict[str, int] | None = None,
 ) -> None:
     """Verify that in full profile, all classes meet minimum threshold floors."""
     errors = []
@@ -79,6 +81,12 @@ def verify_floors(
             if cnt < 30:
                 errors.append(f"Attack type {atk_name} count {cnt} < 30 floor")
 
+    if inline_attack_counts is not None:
+        for atk_name in REQUIRED_ATTACK_TYPES:
+            cnt = inline_attack_counts.get(atk_name, 0)
+            if cnt < 30:
+                errors.append(f"Inline attack type {atk_name} count {cnt} < 30 floor")
+
     if errors:
         for err in errors:
             print(f"[ERROR] Floor violation: {err}", file=sys.stderr)
@@ -87,7 +95,9 @@ def verify_floors(
     if ambiguity_counts is not None:
         msg += ", ambiguity types (>= 50)"
     if attack_counts is not None:
-        msg += ", and attack types (>= 30)"
+        msg += ", separate attack types (>= 30)"
+    if inline_attack_counts is not None:
+        msg += ", and inline attack types (>= 30)"
     msg += " meet required volume floors."
     print(msg)
 
@@ -150,7 +160,10 @@ def main() -> None:
     )
     generator = SyntheticDataGenerator(config)
 
-    target_dir = os.path.join(args.out, args.profile, args.split)
+    if args.seed is not None:
+        target_dir = os.path.join(args.out, args.profile, f"{args.split}_seed{args.seed}")
+    else:
+        target_dir = os.path.join(args.out, args.profile, args.split)
 
     if args.dry_run:
         print(
@@ -160,12 +173,19 @@ def main() -> None:
         data = generator.generate()
         counts = data["manifest"]["counts"]
         attack_counts: dict[str, int] = {}
+        inline_attack_counts: dict[str, int] = {}
         if inject_errors:
             twin_data, inj_manifest = apply_text_injections(data, seed=config.seed)
             for entry in inj_manifest:
                 atk = entry["attack_type"]
                 attack_counts[atk] = attack_counts.get(atk, 0) + 1
             counts["attack_type_counts"] = attack_counts
+
+            twin_inline_data, inj_inline_manifest = apply_inline_text_injections(data, seed=config.seed)
+            for entry in inj_inline_manifest:
+                atk = entry["attack_type"]
+                inline_attack_counts[atk] = inline_attack_counts.get(atk, 0) + 1
+            counts["inline_attack_type_counts"] = inline_attack_counts
 
         print("[*] Dry-run complete. Counts summary:")
         print(json.dumps(counts, indent=2))
@@ -174,7 +194,7 @@ def main() -> None:
             err_counts = counts.get("error_class_counts", {})
             hn_counts = counts.get("hard_negative_counts", {})
             amb_counts = counts.get("ambiguity_type_counts", {})
-            verify_floors(err_counts, hn_counts, amb_counts, attack_counts)
+            verify_floors(err_counts, hn_counts, amb_counts, attack_counts, inline_attack_counts)
         return
 
     print(
@@ -184,6 +204,7 @@ def main() -> None:
     data = generator.generate()
     paths = generator.write_to_directory(target_dir, data=data)
     attack_counts = {}
+    inline_attack_counts = {}
     if inject_errors:
         twin_data, inj_manifest = apply_text_injections(data, seed=config.seed)
         injected_dir = os.path.join(target_dir, "injected")
@@ -192,6 +213,14 @@ def main() -> None:
         for entry in inj_manifest:
             atk = entry["attack_type"]
             attack_counts[atk] = attack_counts.get(atk, 0) + 1
+
+        twin_inline_data, inj_inline_manifest = apply_inline_text_injections(data, seed=config.seed)
+        injected_inline_dir = os.path.join(target_dir, "injected_inline")
+        twin_inline_paths = write_twin_dataset(twin_inline_data, inj_inline_manifest, injected_inline_dir)
+        paths.update({f"twin_inline_{k}": v for k, v in twin_inline_paths.items()})
+        for entry in inj_inline_manifest:
+            atk = entry["attack_type"]
+            inline_attack_counts[atk] = inline_attack_counts.get(atk, 0) + 1
 
     print(f"[*] Successfully generated {len(paths)} dataset files:")
     for name, path in paths.items():
@@ -204,7 +233,7 @@ def main() -> None:
         err_counts = manifest["counts"].get("error_class_counts", {})
         hn_counts = manifest["counts"].get("hard_negative_counts", {})
         amb_counts = manifest["counts"].get("ambiguity_type_counts", {})
-        verify_floors(err_counts, hn_counts, amb_counts, attack_counts)
+        verify_floors(err_counts, hn_counts, amb_counts, attack_counts, inline_attack_counts)
 
 
 if __name__ == "__main__":
