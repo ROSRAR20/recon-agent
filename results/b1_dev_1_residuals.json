@@ -1,0 +1,466 @@
+[
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "setl_ho0jYtmqEIBZRg"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Settlement setl_ho0jYtmqEIBZRg left unmatched due to candidate ambiguity (2 bank candidates: ['stmt_0000833', 'stmt_0000957'])"
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "stmt_0000833"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Bank row stmt_0000833 left unmatched due to candidate ambiguity (1 settlement candidates: ['setl_ho0jYtmqEIBZRg'])"
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "stmt_0000957"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Bank row stmt_0000957 left unmatched due to candidate ambiguity (1 settlement candidates: ['setl_ho0jYtmqEIBZRg'])"
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "pay_D8nHBuk7k3Uwmc"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_06",
+    "entity_ids": [
+      "pay_U7zhClBxfM8yj3"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 6 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_03",
+    "entity_ids": [
+      "pay_ZwUeEUWuS4Yca1"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_50",
+    "entity_ids": [
+      "pay_6ajXrfgOOGtQlI"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_01",
+    "entity_ids": [
+      "pay_PnewSNVou9W6FS"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_44",
+    "entity_ids": [
+      "pay_y5cRzY4n8OYY7S"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_57",
+    "entity_ids": [
+      "pay_4FgLb95Os8awf1"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_50",
+    "entity_ids": [
+      "pay_rShDpG2A1YXZV6"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_39",
+    "entity_ids": [
+      "pay_0XvHEr4KGwTZPX"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_03",
+    "entity_ids": [
+      "pay_R1A7bclgI6kSwX"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_38",
+    "entity_ids": [
+      "pay_1NoChbGClQXAPb"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_40",
+    "entity_ids": [
+      "pay_xChWDblmupppHH"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 8 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_08",
+    "entity_ids": [
+      "pay_Ez5r3Hj1bBcdoV"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_21",
+    "entity_ids": [
+      "pay_bvy7XsxTd7bcgN"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_37",
+    "entity_ids": [
+      "pay_N5myPHhd9TL8RF"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_02",
+    "entity_ids": [
+      "pay_MlALyGDrQnKqAM"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 6 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_33",
+    "entity_ids": [
+      "pay_fve2LcYya3Rx1f"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_58",
+    "entity_ids": [
+      "pay_3GfKDZRmLPy2M5"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_15",
+    "entity_ids": [
+      "pay_j9YFKyDYpsRJE4"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_20",
+    "entity_ids": [
+      "pay_1RyCYZeQsQcGk1"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_16",
+    "entity_ids": [
+      "pay_MGoF4obPFXDfbQ"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_60",
+    "entity_ids": [
+      "pay_naG49p1LIzvaKZ"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_09",
+    "entity_ids": [
+      "pay_mlPDV4Ry3enA5q"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 6 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_55",
+    "entity_ids": [
+      "pay_Tfry2Vx3aLU2xn"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_19",
+    "entity_ids": [
+      "pay_UeZvUnEbZazKQp"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_19",
+    "entity_ids": [
+      "pay_FW8JfHJNHIbgJC"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_47",
+    "entity_ids": [
+      "pay_U1VTmvCBLXes5t"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_04",
+    "entity_ids": [
+      "pay_kkrzHodxBrYWw5"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_11",
+    "entity_ids": [
+      "pay_0lCFURIOu2f6Is"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_39",
+    "entity_ids": [
+      "pay_BYzAfOHkMxH9lo"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_05",
+    "entity_ids": [
+      "pay_mBQ2wqeFCnbqq5"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_54",
+    "entity_ids": [
+      "pay_jSpKMdlve0hMIX"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_36",
+    "entity_ids": [
+      "pay_mpIzfn68nY8Xt7"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_35",
+    "entity_ids": [
+      "pay_JQhwWWamHA2tmc"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_20",
+    "entity_ids": [
+      "pay_noAnQZ3NqP2FSj"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 8 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_36",
+    "entity_ids": [
+      "pay_xnHNLhlZ6RSKe7"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_46",
+    "entity_ids": [
+      "pay_oWjui5Ib1dDYqj"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_23",
+    "entity_ids": [
+      "pay_5Wh2C8bodyTmEg"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 8 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_45",
+    "entity_ids": [
+      "pay_Mj6Jsnvt5nIr2X"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_45",
+    "entity_ids": [
+      "pay_j1v3DbCRCiEPdb"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_51",
+    "entity_ids": [
+      "pay_0eNZC23CDmN2PD"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_51",
+    "entity_ids": [
+      "pay_s0QYbs3vRmP2Zw"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_42",
+    "entity_ids": [
+      "pay_pCweEsxBGVogWG"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 6 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_48",
+    "entity_ids": [
+      "pay_qDcIKh6pm8488Z"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_42",
+    "entity_ids": [
+      "pay_lDXLIM4AcBlY4f"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "pay_UPEkPiQkEibg5V"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_35",
+    "entity_ids": [
+      "pay_JXTbhSjtCxQAjo"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 8 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_23",
+    "entity_ids": [
+      "pay_pEN4cWs3zqwtrn"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_52",
+    "entity_ids": [
+      "pay_WmDm9ZW5dI5B1u"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_22",
+    "entity_ids": [
+      "pay_oxzQVT0tOOJJFO"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_30",
+    "entity_ids": [
+      "pay_xvj4VMhDdg4aCI"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_09",
+    "entity_ids": [
+      "pay_KmLJjiem6jeKOO"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_30",
+    "entity_ids": [
+      "pay_7S0BhEl4UZA6vf"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_38",
+    "entity_ids": [
+      "pay_YQaxYsFKisYara"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_10",
+    "entity_ids": [
+      "pay_M7kYdJujTt0XNp"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 6 paise falls within escalation band (3-9 paise)"
+  }
+]

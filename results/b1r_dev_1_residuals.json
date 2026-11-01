@@ -1,0 +1,986 @@
+[
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "setl_ho0jYtmqEIBZRg"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Settlement setl_ho0jYtmqEIBZRg left unmatched due to candidate ambiguity (2 bank candidates: ['stmt_0000833', 'stmt_0000957'])"
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "stmt_0000833"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Bank row stmt_0000833 left unmatched due to candidate ambiguity (1 settlement candidates: ['setl_ho0jYtmqEIBZRg'])"
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "stmt_0000957"
+    ],
+    "rule_id": "B1_BANK_AMBIGUOUS_CANDIDATES",
+    "reason": "Bank row stmt_0000957 left unmatched due to candidate ambiguity (1 settlement candidates: ['setl_ho0jYtmqEIBZRg'])"
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "pay_D8nHBuk7k3Uwmc"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_06",
+    "entity_ids": [
+      "pay_U7zhClBxfM8yj3"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 6 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_03",
+    "entity_ids": [
+      "pay_ZwUeEUWuS4Yca1"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_50",
+    "entity_ids": [
+      "pay_6ajXrfgOOGtQlI"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_01",
+    "entity_ids": [
+      "pay_PnewSNVou9W6FS"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_44",
+    "entity_ids": [
+      "pay_y5cRzY4n8OYY7S"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_57",
+    "entity_ids": [
+      "pay_4FgLb95Os8awf1"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_50",
+    "entity_ids": [
+      "pay_rShDpG2A1YXZV6"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_39",
+    "entity_ids": [
+      "pay_0XvHEr4KGwTZPX"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_03",
+    "entity_ids": [
+      "pay_R1A7bclgI6kSwX"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_38",
+    "entity_ids": [
+      "pay_1NoChbGClQXAPb"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_40",
+    "entity_ids": [
+      "pay_xChWDblmupppHH"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 8 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_08",
+    "entity_ids": [
+      "pay_Ez5r3Hj1bBcdoV"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_21",
+    "entity_ids": [
+      "pay_bvy7XsxTd7bcgN"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_37",
+    "entity_ids": [
+      "pay_N5myPHhd9TL8RF"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_02",
+    "entity_ids": [
+      "pay_MlALyGDrQnKqAM"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 6 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_33",
+    "entity_ids": [
+      "pay_fve2LcYya3Rx1f"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_58",
+    "entity_ids": [
+      "pay_3GfKDZRmLPy2M5"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_15",
+    "entity_ids": [
+      "pay_j9YFKyDYpsRJE4"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_20",
+    "entity_ids": [
+      "pay_1RyCYZeQsQcGk1"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_16",
+    "entity_ids": [
+      "pay_MGoF4obPFXDfbQ"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_60",
+    "entity_ids": [
+      "pay_naG49p1LIzvaKZ"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_09",
+    "entity_ids": [
+      "pay_mlPDV4Ry3enA5q"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 6 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_55",
+    "entity_ids": [
+      "pay_Tfry2Vx3aLU2xn"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_19",
+    "entity_ids": [
+      "pay_UeZvUnEbZazKQp"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_19",
+    "entity_ids": [
+      "pay_FW8JfHJNHIbgJC"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_47",
+    "entity_ids": [
+      "pay_U1VTmvCBLXes5t"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_04",
+    "entity_ids": [
+      "pay_kkrzHodxBrYWw5"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_11",
+    "entity_ids": [
+      "pay_0lCFURIOu2f6Is"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_39",
+    "entity_ids": [
+      "pay_BYzAfOHkMxH9lo"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_05",
+    "entity_ids": [
+      "pay_mBQ2wqeFCnbqq5"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_54",
+    "entity_ids": [
+      "pay_jSpKMdlve0hMIX"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_36",
+    "entity_ids": [
+      "pay_mpIzfn68nY8Xt7"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_35",
+    "entity_ids": [
+      "pay_JQhwWWamHA2tmc"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_20",
+    "entity_ids": [
+      "pay_noAnQZ3NqP2FSj"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 8 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_36",
+    "entity_ids": [
+      "pay_xnHNLhlZ6RSKe7"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_46",
+    "entity_ids": [
+      "pay_oWjui5Ib1dDYqj"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_23",
+    "entity_ids": [
+      "pay_5Wh2C8bodyTmEg"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 8 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_45",
+    "entity_ids": [
+      "pay_Mj6Jsnvt5nIr2X"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_45",
+    "entity_ids": [
+      "pay_j1v3DbCRCiEPdb"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_51",
+    "entity_ids": [
+      "pay_0eNZC23CDmN2PD"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_51",
+    "entity_ids": [
+      "pay_s0QYbs3vRmP2Zw"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_42",
+    "entity_ids": [
+      "pay_pCweEsxBGVogWG"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 6 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_48",
+    "entity_ids": [
+      "pay_qDcIKh6pm8488Z"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_42",
+    "entity_ids": [
+      "pay_lDXLIM4AcBlY4f"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "pay_UPEkPiQkEibg5V"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_35",
+    "entity_ids": [
+      "pay_JXTbhSjtCxQAjo"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 8 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_23",
+    "entity_ids": [
+      "pay_pEN4cWs3zqwtrn"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_52",
+    "entity_ids": [
+      "pay_WmDm9ZW5dI5B1u"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 5 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_22",
+    "entity_ids": [
+      "pay_oxzQVT0tOOJJFO"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 7 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_30",
+    "entity_ids": [
+      "pay_xvj4VMhDdg4aCI"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_09",
+    "entity_ids": [
+      "pay_KmLJjiem6jeKOO"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 3 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_30",
+    "entity_ids": [
+      "pay_7S0BhEl4UZA6vf"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 4 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_38",
+    "entity_ids": [
+      "pay_YQaxYsFKisYara"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 9 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_10",
+    "entity_ids": [
+      "pay_M7kYdJujTt0XNp"
+    ],
+    "rule_id": "B1_NEAR_TOLERANCE",
+    "reason": "Fee/tax deviation 6 paise falls within escalation band (3-9 paise)"
+  },
+  {
+    "merchant_id": "mer_03",
+    "entity_ids": [
+      "rfnd_Zah2hTJxYiz0yl"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 427 paise has explanation text without parseable amount: Manual dispute adjustment authorized by merchant operations."
+  },
+  {
+    "merchant_id": "mer_08",
+    "entity_ids": [
+      "rfnd_Yv6qWUbLSpqh6O"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 184 paise has explanation text without parseable amount: Cancellation charge withheld according to return schedule."
+  },
+  {
+    "merchant_id": "mer_01",
+    "entity_ids": [
+      "rfnd_0kF6cL49WAGiSJ"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 213 paise has explanation text without parseable amount: Courier return handling fee retained by logistics partner."
+  },
+  {
+    "merchant_id": "mer_22",
+    "entity_ids": [
+      "rfnd_l5KbuDXvZKZZsn"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 301 paise has explanation text without parseable amount: Goodwill waiver deducted following supervisory review."
+  },
+  {
+    "merchant_id": "mer_18",
+    "entity_ids": [
+      "rfnd_FQtXYkFl5QrMKL"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 389 paise has explanation text without parseable amount: Customer appeasement allowance adjusted against refund."
+  },
+  {
+    "merchant_id": "mer_55",
+    "entity_ids": [
+      "rfnd_4930WC5shF7J4z"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 452 paise has explanation text without parseable amount: Cancellation charge withheld according to return schedule."
+  },
+  {
+    "merchant_id": "mer_18",
+    "entity_ids": [
+      "rfnd_eFcJWbU8CnhB1y"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 122 paise has explanation text without parseable amount: Promotional coupon discount clawed back on partial return."
+  },
+  {
+    "merchant_id": "mer_59",
+    "entity_ids": [
+      "rfnd_9wVuVxTqtO7U5q"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 488 paise has explanation text without parseable amount: Goodwill waiver deducted following supervisory review."
+  },
+  {
+    "merchant_id": "mer_42",
+    "entity_ids": [
+      "rfnd_N6GBtxztIUdIYm"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 326 paise has explanation text without parseable amount: Promotional coupon discount clawed back on partial return."
+  },
+  {
+    "merchant_id": "mer_52",
+    "entity_ids": [
+      "rfnd_nN8C1XF0ND8o5K"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 194 paise has explanation text without parseable amount: Cancellation charge withheld according to return schedule."
+  },
+  {
+    "merchant_id": "mer_07",
+    "entity_ids": [
+      "rfnd_Ewlq9XpZBhDJYU"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 311 paise has explanation text without parseable amount: Customer appeasement allowance adjusted against refund."
+  },
+  {
+    "merchant_id": "mer_16",
+    "entity_ids": [
+      "rfnd_c0GlDoFtEOhx1g"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 412 paise has explanation text without parseable amount: Cancellation charge withheld according to return schedule."
+  },
+  {
+    "merchant_id": "mer_41",
+    "entity_ids": [
+      "rfnd_pBM0rsmF7abkv1"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 119 paise has explanation text without parseable amount: Administrative processing debit approved by billing team."
+  },
+  {
+    "merchant_id": "mer_33",
+    "entity_ids": [
+      "rfnd_ap0PBaXOoTiw7p"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 188 paise has explanation text without parseable amount: Goodwill waiver deducted following supervisory review."
+  },
+  {
+    "merchant_id": "mer_30",
+    "entity_ids": [
+      "rfnd_v6P9RPuP4tKUFB"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 350 paise has explanation text without parseable amount: Partial retention fee applied as per terms of service."
+  },
+  {
+    "merchant_id": "mer_13",
+    "entity_ids": [
+      "rfnd_5gpkCFBKRVOXMw"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 203 paise has explanation text without parseable amount: Promotional coupon discount clawed back on partial return."
+  },
+  {
+    "merchant_id": "mer_39",
+    "entity_ids": [
+      "rfnd_yqW8yL6x3KifOo"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 271 paise has explanation text without parseable amount: Currency conversion fee withheld per cross-border policy."
+  },
+  {
+    "merchant_id": "mer_28",
+    "entity_ids": [
+      "rfnd_p8OO3dyIRJAbNq"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 413 paise has explanation text without parseable amount: Partial retention fee applied as per terms of service."
+  },
+  {
+    "merchant_id": "mer_27",
+    "entity_ids": [
+      "rfnd_T2o3y1P3ir0Mg4"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 284 paise has explanation text without parseable amount: Administrative processing debit approved by billing team."
+  },
+  {
+    "merchant_id": "mer_23",
+    "entity_ids": [
+      "rfnd_wmrvGX82JCrtS2"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 212 paise has explanation text without parseable amount: Damaged packaging penalty deducted per merchant assessment."
+  },
+  {
+    "merchant_id": "mer_45",
+    "entity_ids": [
+      "rfnd_JuOgJSawvTwIsP"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 339 paise has explanation text without parseable amount: Manual dispute adjustment authorized by merchant operations."
+  },
+  {
+    "merchant_id": "mer_42",
+    "entity_ids": [
+      "rfnd_u1z8y4H3JfxsoF"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 252 paise has explanation text without parseable amount: Manual dispute adjustment authorized by merchant operations."
+  },
+  {
+    "merchant_id": "mer_08",
+    "entity_ids": [
+      "rfnd_Aq0IgvgvXs4efu"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 248 paise has explanation text without parseable amount: Customer appeasement allowance adjusted against refund."
+  },
+  {
+    "merchant_id": "mer_31",
+    "entity_ids": [
+      "rfnd_PZO4ahl1vqNqx8"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 136 paise has explanation text without parseable amount: Manual dispute adjustment authorized by merchant operations."
+  },
+  {
+    "merchant_id": "mer_34",
+    "entity_ids": [
+      "rfnd_ZJJV3VFBH0R0uF"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 279 paise has explanation text without parseable amount: Manual dispute adjustment authorized by merchant operations."
+  },
+  {
+    "merchant_id": "mer_36",
+    "entity_ids": [
+      "rfnd_759RQ71gRTKDjc"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 413 paise has explanation text without parseable amount: Promotional coupon discount clawed back on partial return."
+  },
+  {
+    "merchant_id": "mer_29",
+    "entity_ids": [
+      "rfnd_wtmOTg1e40S6Tc"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 348 paise has explanation text without parseable amount: Customer appeasement allowance adjusted against refund."
+  },
+  {
+    "merchant_id": "mer_60",
+    "entity_ids": [
+      "rfnd_5PBKejFGL8fNWc"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 249 paise has explanation text without parseable amount: Manual dispute adjustment authorized by merchant operations."
+  },
+  {
+    "merchant_id": "mer_09",
+    "entity_ids": [
+      "rfnd_9QIvdSN27ciEfm"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 235 paise has explanation text without parseable amount: Restocking deduction approved per customer support ticket."
+  },
+  {
+    "merchant_id": "mer_22",
+    "entity_ids": [
+      "rfnd_PSqKapIdxlJidO"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 321 paise has explanation text without parseable amount: Currency conversion fee withheld per cross-border policy."
+  },
+  {
+    "merchant_id": "mer_54",
+    "entity_ids": [
+      "rfnd_1vIN4oqEyeBAMs"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 427 paise has explanation text without parseable amount: Cancellation charge withheld according to return schedule."
+  },
+  {
+    "merchant_id": "mer_04",
+    "entity_ids": [
+      "rfnd_ecHFovpz1frsCY"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 182 paise has explanation text without parseable amount: Currency conversion fee withheld per cross-border policy."
+  },
+  {
+    "merchant_id": "mer_44",
+    "entity_ids": [
+      "rfnd_s0NijQ7kBh4bSp"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 429 paise has explanation text without parseable amount: Courier return handling fee retained by logistics partner."
+  },
+  {
+    "merchant_id": "mer_26",
+    "entity_ids": [
+      "rfnd_p2uf2AX1ysN8Ik"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 338 paise has explanation text without parseable amount: Partial retention fee applied as per terms of service."
+  },
+  {
+    "merchant_id": "mer_07",
+    "entity_ids": [
+      "rfnd_7IIwRWr48OfkA8"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 329 paise has explanation text without parseable amount: Promotional coupon discount clawed back on partial return."
+  },
+  {
+    "merchant_id": "mer_36",
+    "entity_ids": [
+      "rfnd_6kYlQuP39EmOWB"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 403 paise has explanation text without parseable amount: Cancellation charge withheld according to return schedule."
+  },
+  {
+    "merchant_id": "mer_35",
+    "entity_ids": [
+      "rfnd_32uI91e2GIh9ix"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 427 paise has explanation text without parseable amount: Manual dispute adjustment authorized by merchant operations."
+  },
+  {
+    "merchant_id": "mer_28",
+    "entity_ids": [
+      "rfnd_aRH1kWlAx3ZEvJ"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 345 paise has explanation text without parseable amount: Customer appeasement allowance adjusted against refund."
+  },
+  {
+    "merchant_id": "mer_43",
+    "entity_ids": [
+      "rfnd_TwahiQaAvYs512"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 260 paise has explanation text without parseable amount: Service fee retention cleared by account manager."
+  },
+  {
+    "merchant_id": "mer_04",
+    "entity_ids": [
+      "rfnd_Q4i8kXNzlm9oNq"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 191 paise has explanation text without parseable amount: Currency conversion fee withheld per cross-border policy."
+  },
+  {
+    "merchant_id": "mer_57",
+    "entity_ids": [
+      "rfnd_JS7C4AzXJfyiC4"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 415 paise has explanation text without parseable amount: Customer appeasement allowance adjusted against refund."
+  },
+  {
+    "merchant_id": "mer_13",
+    "entity_ids": [
+      "rfnd_ZoUINZSeM0APnA"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 376 paise has explanation text without parseable amount: Restocking deduction approved per customer support ticket."
+  },
+  {
+    "merchant_id": "mer_49",
+    "entity_ids": [
+      "rfnd_lrDkHRg4MVhqXo"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 169 paise has explanation text without parseable amount: Currency conversion fee withheld per cross-border policy."
+  },
+  {
+    "merchant_id": "mer_41",
+    "entity_ids": [
+      "rfnd_4IaYWezFbGkOuF"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 138 paise has explanation text without parseable amount: Damaged packaging penalty deducted per merchant assessment."
+  },
+  {
+    "merchant_id": "mer_57",
+    "entity_ids": [
+      "rfnd_aaAQ0XBww81OFk"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 106 paise has explanation text without parseable amount: Manual dispute adjustment authorized by merchant operations."
+  },
+  {
+    "merchant_id": "mer_51",
+    "entity_ids": [
+      "rfnd_cu5i4jfzwyST7W"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 476 paise has explanation text without parseable amount: Promotional coupon discount clawed back on partial return."
+  },
+  {
+    "merchant_id": "mer_02",
+    "entity_ids": [
+      "rfnd_LBZPAHnwZG7dNw"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 200 paise has explanation text without parseable amount: Restocking deduction approved per customer support ticket."
+  },
+  {
+    "merchant_id": "mer_26",
+    "entity_ids": [
+      "rfnd_8Vnx4kNsEkRT6d"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 392 paise has explanation text without parseable amount: Partial retention fee applied as per terms of service."
+  },
+  {
+    "merchant_id": "mer_17",
+    "entity_ids": [
+      "rfnd_8l5Pk439oGdc7I"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 369 paise has explanation text without parseable amount: Service fee retention cleared by account manager."
+  },
+  {
+    "merchant_id": "mer_54",
+    "entity_ids": [
+      "rfnd_2gbOZUo2et5OI9"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 132 paise has explanation text without parseable amount: Promotional coupon discount clawed back on partial return."
+  },
+  {
+    "merchant_id": "mer_40",
+    "entity_ids": [
+      "rfnd_f0oumMfy5L4jVk"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 410 paise has explanation text without parseable amount: Courier return handling fee retained by logistics partner."
+  },
+  {
+    "merchant_id": "mer_52",
+    "entity_ids": [
+      "rfnd_bG9O1iiTtHDuF1"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 104 paise has explanation text without parseable amount: Damaged packaging penalty deducted per merchant assessment."
+  },
+  {
+    "merchant_id": "mer_57",
+    "entity_ids": [
+      "rfnd_UAUwI7ApIu7Pt6"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 321 paise has explanation text without parseable amount: Restocking deduction approved per customer support ticket."
+  },
+  {
+    "merchant_id": "mer_27",
+    "entity_ids": [
+      "rfnd_ogmV2k1AQDpFSk"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 272 paise has explanation text without parseable amount: Partial retention fee applied as per terms of service."
+  },
+  {
+    "merchant_id": "mer_37",
+    "entity_ids": [
+      "rfnd_mDI4aZZNbYDZBd"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 156 paise has explanation text without parseable amount: Customer appeasement allowance adjusted against refund."
+  },
+  {
+    "merchant_id": "mer_27",
+    "entity_ids": [
+      "rfnd_3ZAg2kdGQJ7XSl"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 315 paise has explanation text without parseable amount: Courier return handling fee retained by logistics partner."
+  },
+  {
+    "merchant_id": "mer_36",
+    "entity_ids": [
+      "rfnd_jhl8J7Gju7qBhQ"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 263 paise has explanation text without parseable amount: Promotional coupon discount clawed back on partial return."
+  },
+  {
+    "merchant_id": "mer_44",
+    "entity_ids": [
+      "rfnd_ujg4rzKs5UQLb3"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 133 paise has explanation text without parseable amount: Customer appeasement allowance adjusted against refund."
+  },
+  {
+    "merchant_id": "mer_44",
+    "entity_ids": [
+      "rfnd_yM0MugzUV8d7yK"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 373 paise has explanation text without parseable amount: Courier return handling fee retained by logistics partner."
+  },
+  {
+    "merchant_id": "mer_53",
+    "entity_ids": [
+      "rfnd_6a4Eq1kyFKqoeJ"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 279 paise has explanation text without parseable amount: Promotional coupon discount clawed back on partial return."
+  },
+  {
+    "merchant_id": "mer_25",
+    "entity_ids": [
+      "rfnd_t2lSvJnvvnjezK"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 325 paise has explanation text without parseable amount: Currency conversion fee withheld per cross-border policy."
+  },
+  {
+    "merchant_id": "mer_51",
+    "entity_ids": [
+      "rfnd_XXzX7vy3mLquxl"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 254 paise has explanation text without parseable amount: Manual dispute adjustment authorized by merchant operations."
+  },
+  {
+    "merchant_id": "mer_45",
+    "entity_ids": [
+      "rfnd_s0AllokUBZ7hJ7"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 262 paise has explanation text without parseable amount: Service fee retention cleared by account manager."
+  },
+  {
+    "merchant_id": "mer_40",
+    "entity_ids": [
+      "rfnd_7ufDNNrKvPtZB9"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 436 paise has explanation text without parseable amount: Manual dispute adjustment authorized by merchant operations."
+  },
+  {
+    "merchant_id": "mer_03",
+    "entity_ids": [
+      "rfnd_jsexmDWSse6pVN"
+    ],
+    "rule_id": "B1R_EXPLAINED_NO_AMOUNT",
+    "reason": "Refund discrepancy of 159 paise has explanation text without parseable amount: Service fee retention cleared by account manager."
+  }
+]

@@ -1,0 +1,561 @@
+{
+  "system_id": "b1r",
+  "split": "dev",
+  "seed": 3,
+  "tier1_class_correct": {
+    "DUPLICATE_PAYMENT": {
+      "tp": 280,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9865,
+        1.0
+      ],
+      "precision_kn": "280/280",
+      "recall": 1.0,
+      "recall_ci": [
+        0.9865,
+        1.0
+      ],
+      "recall_kn": "280/280",
+      "f1": 1.0
+    },
+    "MISSING_SETTLEMENT": {
+      "tp": 173,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9783,
+        1.0
+      ],
+      "precision_kn": "173/173",
+      "recall": 1.0,
+      "recall_ci": [
+        0.9783,
+        1.0
+      ],
+      "recall_kn": "173/173",
+      "f1": 1.0
+    },
+    "FEE_TAX_MISMATCH": {
+      "tp": 164,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9771,
+        1.0
+      ],
+      "precision_kn": "164/164",
+      "recall": 1.0,
+      "recall_ci": [
+        0.9771,
+        1.0
+      ],
+      "recall_kn": "164/164",
+      "f1": 1.0
+    },
+    "PARTIAL_REFUND_MISMATCH": {
+      "tp": 117,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9682,
+        1.0
+      ],
+      "precision_kn": "117/117",
+      "recall": 1.0,
+      "recall_ci": [
+        0.9682,
+        1.0
+      ],
+      "recall_kn": "117/117",
+      "f1": 1.0
+    },
+    "CUTOFF_DRIFT": {
+      "tp": 100,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.963,
+        1.0
+      ],
+      "precision_kn": "100/100",
+      "recall": 1.0,
+      "recall_ci": [
+        0.963,
+        1.0
+      ],
+      "recall_kn": "100/100",
+      "f1": 1.0
+    },
+    "SHORT_BANK_CREDIT": {
+      "tp": 98,
+      "fp": 0,
+      "fn": 3,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9623,
+        1.0
+      ],
+      "precision_kn": "98/98",
+      "recall": 0.9703,
+      "recall_ci": [
+        0.9163,
+        0.9898
+      ],
+      "recall_kn": "98/101",
+      "f1": 0.9849
+    },
+    "ORPHAN_BANK_CREDIT": {
+      "tp": 100,
+      "fp": 0,
+      "fn": 1,
+      "precision": 1.0,
+      "precision_ci": [
+        0.963,
+        1.0
+      ],
+      "precision_kn": "100/100",
+      "recall": 0.9901,
+      "recall_ci": [
+        0.946,
+        0.9983
+      ],
+      "recall_kn": "100/101",
+      "f1": 0.995
+    }
+  },
+  "tier1_class_agnostic": {
+    "DUPLICATE_PAYMENT": {
+      "tp": 280,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9865,
+        1.0
+      ],
+      "precision_kn": "280/280",
+      "recall": 1.0,
+      "recall_ci": [
+        0.9865,
+        1.0
+      ],
+      "recall_kn": "280/280",
+      "f1": 1.0
+    },
+    "MISSING_SETTLEMENT": {
+      "tp": 173,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9783,
+        1.0
+      ],
+      "precision_kn": "173/173",
+      "recall": 1.0,
+      "recall_ci": [
+        0.9783,
+        1.0
+      ],
+      "recall_kn": "173/173",
+      "f1": 1.0
+    },
+    "FEE_TAX_MISMATCH": {
+      "tp": 164,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9771,
+        1.0
+      ],
+      "precision_kn": "164/164",
+      "recall": 1.0,
+      "recall_ci": [
+        0.9771,
+        1.0
+      ],
+      "recall_kn": "164/164",
+      "f1": 1.0
+    },
+    "PARTIAL_REFUND_MISMATCH": {
+      "tp": 117,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9682,
+        1.0
+      ],
+      "precision_kn": "117/117",
+      "recall": 1.0,
+      "recall_ci": [
+        0.9682,
+        1.0
+      ],
+      "recall_kn": "117/117",
+      "f1": 1.0
+    },
+    "CUTOFF_DRIFT": {
+      "tp": 100,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.963,
+        1.0
+      ],
+      "precision_kn": "100/100",
+      "recall": 1.0,
+      "recall_ci": [
+        0.963,
+        1.0
+      ],
+      "recall_kn": "100/100",
+      "f1": 1.0
+    },
+    "SHORT_BANK_CREDIT": {
+      "tp": 101,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9634,
+        1.0
+      ],
+      "precision_kn": "101/101",
+      "recall": 1.0,
+      "recall_ci": [
+        0.9634,
+        1.0
+      ],
+      "recall_kn": "101/101",
+      "f1": 1.0
+    },
+    "ORPHAN_BANK_CREDIT": {
+      "tp": 101,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "precision_ci": [
+        0.9634,
+        1.0
+      ],
+      "precision_kn": "101/101",
+      "recall": 1.0,
+      "recall_ci": [
+        0.9634,
+        1.0
+      ],
+      "recall_kn": "101/101",
+      "f1": 1.0
+    }
+  },
+  "hard_negatives": {
+    "ROUNDING": {
+      "flagged": 0,
+      "total": 132,
+      "fpr": 0.0,
+      "fpr_ci": [
+        0.0,
+        0.0283
+      ],
+      "fpr_kn": "0/132",
+      "escalated": 0,
+      "escalated_kn": "0/132"
+    },
+    "LEGIT_ADJUSTMENT": {
+      "flagged": 0,
+      "total": 63,
+      "fpr": 0.0,
+      "fpr_ci": [
+        0.0,
+        0.0575
+      ],
+      "fpr_kn": "0/63",
+      "escalated": 0,
+      "escalated_kn": "0/63"
+    },
+    "LATE_SETTLEMENT": {
+      "flagged": 0,
+      "total": 57,
+      "fpr": 0.0,
+      "fpr_ci": [
+        0.0,
+        0.0631
+      ],
+      "fpr_kn": "0/57",
+      "escalated": 0,
+      "escalated_kn": "0/57"
+    },
+    "RETRY_AFTER_FAIL": {
+      "flagged": 0,
+      "total": 989,
+      "fpr": 0.0,
+      "fpr_ci": [
+        0.0,
+        0.0039
+      ],
+      "fpr_kn": "0/989",
+      "escalated": 0,
+      "escalated_kn": "0/989"
+    },
+    "NOISY_BANK_NARRATION": {
+      "flagged": 0,
+      "total": 57,
+      "fpr": 0.0,
+      "fpr_ci": [
+        0.0,
+        0.0631
+      ],
+      "fpr_kn": "0/57",
+      "escalated": 0,
+      "escalated_kn": "0/57"
+    },
+    "NO_UTR_NARRATION": {
+      "flagged": 0,
+      "total": 52,
+      "fpr": 0.0,
+      "fpr_ci": [
+        0.0,
+        0.0688
+      ],
+      "fpr_kn": "0/52",
+      "escalated": 0,
+      "escalated_kn": "0/52"
+    },
+    "UNRELATED_BANK_CREDIT": {
+      "flagged": 0,
+      "total": 664,
+      "fpr": 0.0,
+      "fpr_ci": [
+        0.0,
+        0.0058
+      ],
+      "fpr_kn": "0/664",
+      "escalated": 0,
+      "escalated_kn": "0/664"
+    },
+    "FAILED_PAYMENT": {
+      "flagged": 0,
+      "total": 2142,
+      "fpr": 0.0,
+      "fpr_ci": [
+        0.0,
+        0.0018
+      ],
+      "fpr_kn": "0/2142",
+      "escalated": 0,
+      "escalated_kn": "0/2142"
+    },
+    "PARTIAL_REFUND_CONSISTENT": {
+      "flagged": 0,
+      "total": 918,
+      "fpr": 0.0,
+      "fpr_ci": [
+        0.0,
+        0.0042
+      ],
+      "fpr_kn": "0/918",
+      "escalated": 0,
+      "escalated_kn": "0/918"
+    },
+    "IN_FLIGHT": {
+      "flagged": 0,
+      "total": 2377,
+      "fpr": 0.0,
+      "fpr_ci": [
+        0.0,
+        0.0016
+      ],
+      "fpr_kn": "0/2377",
+      "escalated": 0,
+      "escalated_kn": "0/2377"
+    }
+  },
+  "ambiguity_tier": {
+    "NEAR_TOLERANCE": {
+      "correct": 55,
+      "total": 55,
+      "accuracy": 1.0,
+      "accuracy_ci": [
+        0.9347,
+        1.0
+      ],
+      "accuracy_kn": "55/55"
+    },
+    "EXPLAINED_CONSISTENT": {
+      "correct": 65,
+      "total": 65,
+      "accuracy": 1.0,
+      "accuracy_ci": [
+        0.9442,
+        1.0
+      ],
+      "accuracy_kn": "65/65"
+    },
+    "EXPLAINED_INCONSISTENT": {
+      "correct": 65,
+      "total": 65,
+      "accuracy": 1.0,
+      "accuracy_ci": [
+        0.9442,
+        1.0
+      ],
+      "accuracy_kn": "65/65"
+    },
+    "EXPLAINED_NO_AMOUNT": {
+      "correct": 65,
+      "total": 65,
+      "accuracy": 1.0,
+      "accuracy_ci": [
+        0.9442,
+        1.0
+      ],
+      "accuracy_kn": "65/65"
+    }
+  },
+  "matching": {
+    "links_made": 1677,
+    "correct_links": 1677,
+    "wrong_links": 0,
+    "false_match_rate": 0.0,
+    "false_match_ci": [
+      0.0,
+      0.0023
+    ],
+    "match_rate": 0.9982,
+    "match_rate_ci": [
+      0.9948,
+      0.9994
+    ]
+  },
+  "clean_false_positives": 0,
+  "total_flagged_predictions": 1097,
+  "total_labels": 8737,
+  "confusion_matrix": {
+    "DUPLICATE_PAYMENT": {
+      "DUPLICATE_PAYMENT": 280,
+      "MISSING_SETTLEMENT": 0,
+      "FEE_TAX_MISMATCH": 0,
+      "PARTIAL_REFUND_MISMATCH": 0,
+      "CUTOFF_DRIFT": 0,
+      "SHORT_BANK_CREDIT": 0,
+      "ORPHAN_BANK_CREDIT": 0,
+      "UNKNOWN": 0,
+      "NONE": 0
+    },
+    "MISSING_SETTLEMENT": {
+      "DUPLICATE_PAYMENT": 0,
+      "MISSING_SETTLEMENT": 173,
+      "FEE_TAX_MISMATCH": 0,
+      "PARTIAL_REFUND_MISMATCH": 0,
+      "CUTOFF_DRIFT": 0,
+      "SHORT_BANK_CREDIT": 0,
+      "ORPHAN_BANK_CREDIT": 0,
+      "UNKNOWN": 0,
+      "NONE": 0
+    },
+    "FEE_TAX_MISMATCH": {
+      "DUPLICATE_PAYMENT": 0,
+      "MISSING_SETTLEMENT": 0,
+      "FEE_TAX_MISMATCH": 164,
+      "PARTIAL_REFUND_MISMATCH": 0,
+      "CUTOFF_DRIFT": 0,
+      "SHORT_BANK_CREDIT": 0,
+      "ORPHAN_BANK_CREDIT": 0,
+      "UNKNOWN": 0,
+      "NONE": 0
+    },
+    "PARTIAL_REFUND_MISMATCH": {
+      "DUPLICATE_PAYMENT": 0,
+      "MISSING_SETTLEMENT": 0,
+      "FEE_TAX_MISMATCH": 0,
+      "PARTIAL_REFUND_MISMATCH": 117,
+      "CUTOFF_DRIFT": 0,
+      "SHORT_BANK_CREDIT": 0,
+      "ORPHAN_BANK_CREDIT": 0,
+      "UNKNOWN": 0,
+      "NONE": 0
+    },
+    "CUTOFF_DRIFT": {
+      "DUPLICATE_PAYMENT": 0,
+      "MISSING_SETTLEMENT": 0,
+      "FEE_TAX_MISMATCH": 0,
+      "PARTIAL_REFUND_MISMATCH": 0,
+      "CUTOFF_DRIFT": 100,
+      "SHORT_BANK_CREDIT": 0,
+      "ORPHAN_BANK_CREDIT": 0,
+      "UNKNOWN": 0,
+      "NONE": 0
+    },
+    "SHORT_BANK_CREDIT": {
+      "DUPLICATE_PAYMENT": 0,
+      "MISSING_SETTLEMENT": 0,
+      "FEE_TAX_MISMATCH": 0,
+      "PARTIAL_REFUND_MISMATCH": 0,
+      "CUTOFF_DRIFT": 0,
+      "SHORT_BANK_CREDIT": 98,
+      "ORPHAN_BANK_CREDIT": 0,
+      "UNKNOWN": 3,
+      "NONE": 0
+    },
+    "ORPHAN_BANK_CREDIT": {
+      "DUPLICATE_PAYMENT": 0,
+      "MISSING_SETTLEMENT": 0,
+      "FEE_TAX_MISMATCH": 0,
+      "PARTIAL_REFUND_MISMATCH": 0,
+      "CUTOFF_DRIFT": 0,
+      "SHORT_BANK_CREDIT": 0,
+      "ORPHAN_BANK_CREDIT": 100,
+      "UNKNOWN": 1,
+      "NONE": 0
+    },
+    "HARD_NEGATIVE": {
+      "DUPLICATE_PAYMENT": 0,
+      "MISSING_SETTLEMENT": 0,
+      "FEE_TAX_MISMATCH": 0,
+      "PARTIAL_REFUND_MISMATCH": 0,
+      "CUTOFF_DRIFT": 0,
+      "SHORT_BANK_CREDIT": 0,
+      "ORPHAN_BANK_CREDIT": 0,
+      "UNKNOWN": 0,
+      "NONE": 7451
+    },
+    "AMBIGUITY": {
+      "DUPLICATE_PAYMENT": 0,
+      "MISSING_SETTLEMENT": 0,
+      "FEE_TAX_MISMATCH": 55,
+      "PARTIAL_REFUND_MISMATCH": 130,
+      "CUTOFF_DRIFT": 0,
+      "SHORT_BANK_CREDIT": 0,
+      "ORPHAN_BANK_CREDIT": 0,
+      "UNKNOWN": 0,
+      "NONE": 65
+    },
+    "CLEAN": {
+      "DUPLICATE_PAYMENT": 0,
+      "MISSING_SETTLEMENT": 0,
+      "FEE_TAX_MISMATCH": 0,
+      "PARTIAL_REFUND_MISMATCH": 0,
+      "CUTOFF_DRIFT": 0,
+      "SHORT_BANK_CREDIT": 0,
+      "ORPHAN_BANK_CREDIT": 0,
+      "UNKNOWN": 3,
+      "NONE": 0
+    }
+  },
+  "summary_markdown": "# Evaluation Report: B1R (Split: dev, Seed: 3)\n\n## 1. Tier 1: Deterministic Error Classes (Class-Correct Detection)\n| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Recall (k/n) | 95% CI | F1 |\n|:---|---:|---:|---:|---:|:---:|---:|:---:|---:|\n| DUPLICATE_PAYMENT       |  280 |    0 |    0 | 100.0% (280/280) | [98.7%, 100.0%]  | 100.0% (280/280) | [98.7%, 100.0%]  |  1.000 |\n| MISSING_SETTLEMENT      |  173 |    0 |    0 | 100.0% (173/173) | [97.8%, 100.0%]  | 100.0% (173/173) | [97.8%, 100.0%]  |  1.000 |\n| FEE_TAX_MISMATCH        |  164 |    0 |    0 | 100.0% (164/164) | [97.7%, 100.0%]  | 100.0% (164/164) | [97.7%, 100.0%]  |  1.000 |\n| PARTIAL_REFUND_MISMATCH |  117 |    0 |    0 | 100.0% (117/117) | [96.8%, 100.0%]  | 100.0% (117/117) | [96.8%, 100.0%]  |  1.000 |\n| CUTOFF_DRIFT            |  100 |    0 |    0 | 100.0% (100/100) | [96.3%, 100.0%]  | 100.0% (100/100) | [96.3%, 100.0%]  |  1.000 |\n| SHORT_BANK_CREDIT       |   98 |    0 |    3 |   100.0% (98/98) | [96.2%, 100.0%]  |   97.0% (98/101) |  [91.6%, 99.0%]  |  0.985 |\n| ORPHAN_BANK_CREDIT      |  100 |    0 |    1 | 100.0% (100/100) | [96.3%, 100.0%]  |  99.0% (100/101) |  [94.6%, 99.8%]  |  0.995 |\n| Overall (Micro)         | 1032 |    0 |    4 | 100.0% (1032/1032) | [99.6%, 100.0%]  | 99.6% (1032/1036) |  [99.0%, 99.9%]  |  0.998 |\n**Secondary Metric:** Macro-F1 (undefined as 0) = 0.997\n\n## 2. Tier 1: Anomaly Detection (Class-Agnostic Detection)\n| Error Class | TP | FP | FN | Precision (k/n) | 95% CI | Recall (k/n) | 95% CI | F1 |\n|:---|---:|---:|---:|---:|:---:|---:|:---:|---:|\n| DUPLICATE_PAYMENT       |  280 |    0 |    0 | 100.0% (280/280) | [98.7%, 100.0%]  | 100.0% (280/280) | [98.7%, 100.0%]  |  1.000 |\n| MISSING_SETTLEMENT      |  173 |    0 |    0 | 100.0% (173/173) | [97.8%, 100.0%]  | 100.0% (173/173) | [97.8%, 100.0%]  |  1.000 |\n| FEE_TAX_MISMATCH        |  164 |    0 |    0 | 100.0% (164/164) | [97.7%, 100.0%]  | 100.0% (164/164) | [97.7%, 100.0%]  |  1.000 |\n| PARTIAL_REFUND_MISMATCH |  117 |    0 |    0 | 100.0% (117/117) | [96.8%, 100.0%]  | 100.0% (117/117) | [96.8%, 100.0%]  |  1.000 |\n| CUTOFF_DRIFT            |  100 |    0 |    0 | 100.0% (100/100) | [96.3%, 100.0%]  | 100.0% (100/100) | [96.3%, 100.0%]  |  1.000 |\n| SHORT_BANK_CREDIT       |  101 |    0 |    0 | 100.0% (101/101) | [96.3%, 100.0%]  | 100.0% (101/101) | [96.3%, 100.0%]  |  1.000 |\n| ORPHAN_BANK_CREDIT      |  101 |    0 |    0 | 100.0% (101/101) | [96.3%, 100.0%]  | 100.0% (101/101) | [96.3%, 100.0%]  |  1.000 |\n| Overall (Micro)         | 1036 |    0 |    0 | 100.0% (1036/1036) | [99.6%, 100.0%]  | 100.0% (1036/1036) | [99.6%, 100.0%]  |  1.000 |\n**Secondary Metric:** Macro-F1 (undefined as 0) = 1.000\n\n## 3. Hard Negatives (False Positive Resistance)\n| Hard Negative Type | Flagged / Total | Escalated / Total | False Positive Rate (%) | 95% CI |\n|:---|---:|---:|---:|:---:|\n| ROUNDING                  |           0/132 |             0/132 |                   0.00% |   [0.0%, 2.8%]   |\n| LEGIT_ADJUSTMENT          |            0/63 |              0/63 |                   0.00% |   [0.0%, 5.8%]   |\n| LATE_SETTLEMENT           |            0/57 |              0/57 |                   0.00% |   [0.0%, 6.3%]   |\n| RETRY_AFTER_FAIL          |           0/989 |             0/989 |                   0.00% |   [0.0%, 0.4%]   |\n| NOISY_BANK_NARRATION      |            0/57 |              0/57 |                   0.00% |   [0.0%, 6.3%]   |\n| NO_UTR_NARRATION          |            0/52 |              0/52 |                   0.00% |   [0.0%, 6.9%]   |\n| UNRELATED_BANK_CREDIT     |           0/664 |             0/664 |                   0.00% |   [0.0%, 0.6%]   |\n| FAILED_PAYMENT            |          0/2142 |            0/2142 |                   0.00% |   [0.0%, 0.2%]   |\n| PARTIAL_REFUND_CONSISTENT |           0/918 |             0/918 |                   0.00% |   [0.0%, 0.4%]   |\n| IN_FLIGHT                 |          0/2377 |            0/2377 |                   0.00% |   [0.0%, 0.2%]   |\n\n## 4. Ambiguity Tier (Action Accuracy)\n| Ambiguity Type | Correct / Total | Action Accuracy (%) | 95% CI |\n|:---|---:|---:|:---:|\n| NEAR_TOLERANCE            |           55/55 |             100.00% | [93.5%, 100.0%]  |\n| EXPLAINED_CONSISTENT      |           65/65 |             100.00% | [94.4%, 100.0%]  |\n| EXPLAINED_INCONSISTENT    |           65/65 |             100.00% | [94.4%, 100.0%]  |\n| EXPLAINED_NO_AMOUNT       |           65/65 |             100.00% | [94.4%, 100.0%]  |\n\npredictions assigned to ambiguity labels: 250 (correct action: 250)\n\n## 5. Bank Statement to Settlement Matching\n| Metric | Count / Value | 95% CI |\n|:---|---:|:---:|\n| Links Made | 1677 | N/A |\n| Correct Links | 1677 | N/A |\n| Wrong Links | 0 | N/A |\n| False-Match Rate | 0.00% (0/1677) | [0.0%, 0.2%] |\n| Match Rate | 99.82% | [99.5%, 99.9%] |\n\n**Clean Data False Positives (Flagged):** 0\n**Clean Data Escalations:** 3\n**Total Flagged Predictions:** 1097\n**Total Escalated Predictions:** 127\n**Escalation Share:** 10.38%\n**Total Ground-Truth Labels:** 8737\n\n## 6. Confusion Matrix\n| True \\ Pred | DUPLICAT | MISSING_ | FEE_TAX_ | PARTIAL_ | CUTOFF_D | SHORT_BA | ORPHAN_B | UNKNOWN | NONE |\n|:---| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n| DUPLICATE_PAYMENT |      280 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |\n| MISSING_SETTLEMENT |        0 |      173 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |\n| FEE_TAX_MISMATCH |        0 |        0 |      164 |        0 |        0 |        0 |        0 |        0 |        0 |\n| PARTIAL_REFUND_MISMATCH |        0 |        0 |        0 |      117 |        0 |        0 |        0 |        0 |        0 |\n| CUTOFF_DRIFT |        0 |        0 |        0 |        0 |      100 |        0 |        0 |        0 |        0 |\n| SHORT_BANK_CREDIT |        0 |        0 |        0 |        0 |        0 |       98 |        0 |        3 |        0 |\n| ORPHAN_BANK_CREDIT |        0 |        0 |        0 |        0 |        0 |        0 |      100 |        1 |        0 |\n| HARD_NEGATIVE |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        0 |     7451 |\n| AMBIGUITY   |        0 |        0 |       55 |      130 |        0 |        0 |        0 |        0 |       65 |\n| CLEAN       |        0 |        0 |        0 |        0 |        0 |        0 |        0 |        3 |        0 |",
+  "clean_escalated": 3,
+  "total_escalated_predictions": 127,
+  "escalation_share": 0.1038,
+  "ambiguity_assigned_count": 250,
+  "ambiguity_correct_action_count": 250
+}
