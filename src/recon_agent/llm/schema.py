@@ -2,6 +2,7 @@
 
 Ensures LLM responses conform to strict schema boundaries:
 - Closed enums for decisions and predicted classes.
+- Single source of truth: get_llm_json_schema() generates the exact schema sent to API.
 - Closed or validated reason codes.
 - Strict length limits: explanation <= 280 chars, verbatim_quote <= 160 chars.
 - Strict rejection of extra keys.
@@ -10,11 +11,12 @@ Ensures LLM responses conform to strict schema boundaries:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from typing import Any
 
-ALLOWED_DECISIONS: tuple[str, ...] = ("flag", "benign_explained", "escalate_human")
+ALLOWED_DECISIONS: tuple[str, ...] = ("flag", "benign_explained", "escalate_human", "no_issue")
 
 ALLOWED_CLASSES: tuple[str, ...] = (
     "DUPLICATE_PAYMENT",
@@ -36,6 +38,7 @@ REASON_CODES: tuple[str, ...] = (
     "ARITHMETIC_MISMATCH",
     "MISSING_EVIDENCE",
     "POLICY_UNCERTAINTY",
+    "WITHIN_POLICY_TOLERANCE",
 )
 
 ALLOWED_SCHEMA_KEYS: frozenset[str] = frozenset({
@@ -47,6 +50,69 @@ ALLOWED_SCHEMA_KEYS: frozenset[str] = frozenset({
     "cited_amount_paise",
     "verbatim_quote",
 })
+
+
+def get_llm_json_schema() -> dict[str, Any]:
+    """Generate the OpenAPI 3.0 / JSON schema for structured output.
+
+    Acts as the single source of truth for both LLM output configuration
+    and local validation logic.
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "decision": {
+                "type": "string",
+                "enum": list(ALLOWED_DECISIONS),
+                "description": "Reconciliation decision for the case.",
+            },
+            "predicted_class": {
+                "type": "string",
+                "enum": list(ALLOWED_CLASSES),
+                "nullable": True,
+                "description": "Tier 1 error class if decision is 'flag', otherwise null.",
+            },
+            "reason_code": {
+                "type": "string",
+                "description": "Short code categorizing the decision reason.",
+            },
+            "explanation": {
+                "type": "string",
+                "maxLength": 280,
+                "description": "Concise plain-English explanation (max 280 chars).",
+            },
+            "evidence": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "field": {"type": "string"},
+                        "value": {},
+                    },
+                    "required": ["field"],
+                },
+                "description": "Grounded citations from bundle facts or untrusted text.",
+            },
+            "cited_amount_paise": {
+                "type": "integer",
+                "nullable": True,
+                "description": "Verified integer amount in paise, or null.",
+            },
+            "verbatim_quote": {
+                "type": "string",
+                "maxLength": 160,
+                "nullable": True,
+                "description": "Exact byte-for-byte substring from untrusted text, or null.",
+            },
+        },
+        "required": ["decision", "reason_code", "explanation", "evidence"],
+    }
+
+
+def get_schema_hash() -> str:
+    """Compute SHA-256 hash of the canonical JSON schema."""
+    schema_canonical = json.dumps(get_llm_json_schema(), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(schema_canonical.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -101,10 +167,15 @@ def validate_llm_output(raw_json: str | dict[str, Any]) -> tuple[bool, LLMOutput
         errors.append(f"Invalid decision '{decision}', expected one of {ALLOWED_DECISIONS}")
 
     predicted_class = data.get("predicted_class")
-    if decision == "benign_explained":
+    if decision in ("benign_explained", "no_issue"):
         if predicted_class is not None:
-            errors.append("predicted_class must be null when decision is 'benign_explained'")
-    else:
+            errors.append(f"predicted_class must be null when decision is '{decision}'")
+    elif decision == "flag":
+        if predicted_class is None:
+            errors.append("predicted_class must not be null when decision is 'flag'")
+        elif predicted_class not in ALLOWED_CLASSES:
+            errors.append(f"Invalid predicted_class '{predicted_class}', expected one of {ALLOWED_CLASSES}")
+    else:  # escalate_human
         if predicted_class is not None and predicted_class not in ALLOWED_CLASSES:
             errors.append(f"Invalid predicted_class '{predicted_class}', expected one of {ALLOWED_CLASSES} or null")
 
@@ -155,4 +226,3 @@ def validate_llm_output(raw_json: str | dict[str, Any]) -> tuple[bool, LLMOutput
         verbatim_quote=verbatim_quote,
     )
     return True, parsed, []
-

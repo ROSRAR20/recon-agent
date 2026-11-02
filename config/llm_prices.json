@@ -1,0 +1,68 @@
+{
+  "_metadata": {
+    "source_url": "https://ai.google.dev/pricing",
+    "retrieved_date": "2026-11-02",
+    "verified": true,
+    "cost_reporting_label": "estimated cost",
+    "unit": "USD per 1,000,000 tokens"
+  },
+  "models": {
+    "gemini-3.8-flash": {
+      "rates": [
+        {
+          "tier": "introductory",
+          "effective_from": "2026-01-01",
+          "effective_to": "2026-12-31",
+          "input_cost_per_million": 0.75,
+          "output_cost_per_million": 3.75,
+          "thinking_cost_per_million": 3.75,
+          "cache_read_cost_per_million": 0.075,
+          "source_url": "https://ai.google.dev/pricing",
+          "verified": true
+        },
+        {
+          "tier": "standard",
+          "effective_from": "2027-01-01",
+          "effective_to": null,
+          "input_cost_per_million": 1.50,
+          "output_cost_per_million": 7.50,
+          "thinking_cost_per_million": 7.50,
+          "cache_read_cost_per_million": 0.15,
+          "source_url": "https://ai.google.dev/pricing",
+          "verified": true
+        }
+      ]
+    },
+    "gemini-2.5-flash": {
+      "rates": [
+        {
+          "tier": "standard",
+          "effective_from": "2025-01-01",
+          "effective_to": null,
+          "input_cost_per_million": 0.075,
+          "output_cost_per_million": 0.30,
+          "thinking_cost_per_million": 0.30,
+          "cache_read_cost_per_million": 0.01875,
+          "source_url": "https://ai.google.dev/pricing",
+          "verified": true
+        }
+      ]
+    },
+    "gemini-2.5-pro": {
+      "rates": [
+        {
+          "tier": "standard",
+          "effective_from": "2025-01-01",
+          "effective_to": null,
+          "input_cost_per_million": 1.25,
+          "output_cost_per_million": 5.00,
+          "thinking_cost_per_million": 5.00,
+          "cache_read_cost_per_million": 0.3125,
+          "source_url": "https://ai.google.dev/pricing",
+          "verified": true
+        }
+      ]
+    }
+  }
+}
+

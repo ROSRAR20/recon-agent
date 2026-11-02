@@ -344,6 +344,44 @@ class Verifier:
                     details="Flag decision lacks supporting evidence or cited amount.",
                 )
 
+        elif llm_output.decision == "no_issue":
+            # V7 for no_issue requires facts to show item within policy:
+            # 1. Fee/tax delta <= rounding tolerance (2 paise)
+            if bundle.case_type == "payment" or "fee_paise" in bundle.facts:
+                if bundle.rule_id in ("B1_NEAR_TOLERANCE", "B1_FEE_TAX_MISMATCH"):
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.REJECT,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="POLICY_VIOLATION_TOLERANCE",
+                        details=f"Item has rule {bundle.rule_id} exceeding rounding tolerance (2 paise); no_issue rejected.",
+                    )
+
+            # 2. Refund difference == 0
+            if bundle.case_type == "refund" or "refund_difference_paise" in bundle.facts:
+                refund_diff = bundle.facts.get("refund_difference_paise")
+                if refund_diff is None and "debit_paise" in bundle.facts and "amount_paise" in bundle.facts:
+                    refund_diff = bundle.facts.get("debit_paise", 0) - bundle.facts.get("amount_paise", 0)
+                if refund_diff is not None and abs(refund_diff) != 0:
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.REJECT,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="POLICY_VIOLATION_REFUND_DIFF",
+                        details=f"Refund has non-zero difference ({refund_diff} paise); no_issue rejected.",
+                    )
+
+            # 3. Bank match unambiguous
+            if bundle.case_type == "bank_statement":
+                if bundle.rule_id == "B1_BANK_AMBIGUOUS_CANDIDATES":
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.REJECT,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="POLICY_VIOLATION_AMBIGUOUS_BANK",
+                        details="Bank statement item has ambiguous candidates; no_issue rejected.",
+                    )
+
         return VerifierResult(
             outcome=VerifierOutcome.ACCEPT,
             failed_checks=(),

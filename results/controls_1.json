@@ -1,0 +1,312 @@
+{
+  "seed": 1,
+  "n_requested": 60,
+  "counts": {
+    "fee_tax": 20,
+    "refunds": 20,
+    "bank_matches": 20,
+    "total": 60
+  },
+  "controls": {
+    "pay_tWsgrQPiQU6DMq": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_iil4LIHxhOHcCS": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_sAzA4LjvgWDGEk": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_OLs12YbN8H3eP1": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_IgRvmEFD5MerRR": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_lP1tdrkvwIwe1H": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_S4RENJyxJVR8Xb": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_bxKVR00P7BH31e": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_hZ6dgP8hBOFsou": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_uLPPvw1U093OmX": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_q1sH2JuoReKel9": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_o4rWPLcDtxKvFQ": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_ed0s3kQUbR1SqV": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_wUGcEJRD4OUhqU": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_8Odkj6l45zs14h": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_rYm9n6VkA7fL4L": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_Jap4XP8yGUPw80": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_1AHqxdhKsLxXJ0": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_eDlMA3HwNmiSgq": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "pay_FK2UFOsd5n54l7": {
+      "family": "fee_tax",
+      "is_control": "true",
+      "case_type": "payment"
+    },
+    "rfnd_O2B1I5zG8v1jFY": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_Dfnw3W3LqPWszS": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_qQgleHlqgEI5gj": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_50EYNixmd7Zjcl": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_MNB3MmdlaIIw6M": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_awVk2x3gAnCNab": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_6kXFPnhyjXUhL6": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_M1YksIM4gLLa1T": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_i7590gB3SigfIn": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_NFJh1qWOdYE615": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_Nbaryys4La2VhZ": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_rdlk2PNgAmbOAK": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_KySxlNgq7e660b": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_LrOBEozMeuNXkH": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_JrwquKPafQqgVt": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_GJ5noayifGvQOC": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_c5CHPjhbARL3NJ": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_nnxC0qTmeDm06F": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_mBcx1gysFBoUBB": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "rfnd_Y8cxTX3D1K7yWg": {
+      "family": "refunds",
+      "is_control": "true",
+      "case_type": "refund"
+    },
+    "stmt_0000585": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0001016": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0002617": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0000194": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0000395": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0002201": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0001025": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0001842": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0000779": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0003034": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0001266": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0000579": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0001920": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0001201": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0002885": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0001127": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0002656": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0001992": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0000885": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    },
+    "stmt_0003063": {
+      "family": "bank_matches",
+      "is_control": "true",
+      "case_type": "bank_statement"
+    }
+  }
+}

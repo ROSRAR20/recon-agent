@@ -17,6 +17,7 @@ import ast
 import json
 import os
 import tempfile
+import urllib.error
 import pytest
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -25,14 +26,21 @@ from src.recon_agent.llm.audit import AuditLogger
 from src.recon_agent.llm.bundle import (
     CaseBundle,
     build_case_bundles,
+    build_control_bundles,
     create_case_bundle,
 )
 from src.recon_agent.llm.cache import LLMCache
 from src.recon_agent.llm.client import MockClient
+from src.recon_agent.llm.gemini_client import (
+    FatalAPIError,
+    GeminiClient,
+    NonRetriableAPIError,
+)
 from src.recon_agent.llm.schema import (
     ALLOWED_CLASSES,
     ALLOWED_DECISIONS,
     LLMOutput,
+    get_llm_json_schema,
     validate_llm_output,
 )
 from src.recon_agent.llm.verifier import (
@@ -537,4 +545,279 @@ def test_llm_boundary_no_synth_or_eval() -> None:
                 elif isinstance(node, ast.ImportFrom):
                     if node.module:
                         assert "synth" not in node.module, f"Illegal synth import-from in {path}: {node.module}"
+
+
+# ---------------------------------------------------------------------------
+# 7. Day 7a Tests: no_issue, Negative Controls & GeminiClient Offline Tests
+# ---------------------------------------------------------------------------
+
+def test_schema_no_issue_accept() -> None:
+    """Valid no_issue output with predicted_class=None passes schema validation."""
+    payload = {
+        "decision": "no_issue",
+        "predicted_class": None,
+        "explanation": "Calculated fee and tax match expected values within 2 paise tolerance.",
+        "evidence": [{"field": "fee_paise", "value": 2360}, {"field": "tax_paise", "value": 360}],
+        "verbatim_quote": None,
+        "cited_amount_paise": None,
+        "reason_code": "WITHIN_TOLERANCE",
+    }
+    is_valid, parsed, errors = validate_llm_output(json.dumps(payload))
+    assert is_valid, f"Validation failed with: {errors}"
+    assert parsed is not None
+    assert parsed.decision == "no_issue"
+    assert parsed.predicted_class is None
+
+
+def test_schema_no_issue_reject_with_class() -> None:
+    """no_issue with non-null predicted_class fails schema validation."""
+    payload = {
+        "decision": "no_issue",
+        "predicted_class": "FEE_TAX_MISMATCH",
+        "explanation": "Calculated fee and tax match within tolerance.",
+        "evidence": [],
+        "verbatim_quote": None,
+        "cited_amount_paise": None,
+        "reason_code": "WITHIN_TOLERANCE",
+    }
+    is_valid, parsed, errors = validate_llm_output(json.dumps(payload))
+    assert not is_valid
+    assert any("must be null" in err.lower() for err in errors)
+
+
+def test_schema_json_single_source_of_truth() -> None:
+    """get_llm_json_schema() enum choices and structure agree with validate_llm_output."""
+    schema = get_llm_json_schema()
+    assert schema["type"] == "object"
+    props = schema["properties"]
+    assert "decision" in props
+    assert set(props["decision"]["enum"]) == set(ALLOWED_DECISIONS)
+    assert "predicted_class" in props
+    assert props["predicted_class"].get("nullable") is True
+    assert set(props["predicted_class"]["enum"]) == set(ALLOWED_CLASSES)
+
+
+def test_verifier_no_issue_within_tolerance() -> None:
+    """no_issue decision on payment within tolerance ACCEPTs."""
+    verifier = Verifier()
+    bundle = create_case_bundle(
+        bundle_id="bundle_pay_ctrl",
+        entity_id="pay_ctrl_1",
+        merchant_id="mer_01",
+        case_type="payment",
+        rule_id="B1_MATCH_EXACT",
+        facts={
+            "entity_id": "pay_ctrl_1",
+            "type": "payment",
+            "amount_paise": 100000,
+            "fee_paise": 2360,
+            "tax_paise": 360,
+        },
+        untrusted_text={
+            "recon_item_description": "Clean transaction",
+            "recon_item_notes_comment": None,
+            "recon_item_notes_reason_text": None,
+            "bank_narration": None,
+        },
+    )
+    llm_out = LLMOutput(
+        decision="no_issue",
+        predicted_class=None,
+        explanation="Payment fee and tax are verified correct within policy tolerance.",
+        evidence=[{"field": "fee_paise", "value": 2360}, {"field": "tax_paise", "value": 360}],
+        verbatim_quote=None,
+        cited_amount_paise=None,
+        reason_code="VERIFIED_TOLERANCE",
+    )
+    res = verifier.verify(bundle, llm_out)
+    assert res.outcome == VerifierOutcome.ACCEPT
+
+
+def test_verifier_no_issue_rejects_discrepancies() -> None:
+    """no_issue on NEAR_TOLERANCE payment, non-zero refund diff, or ambiguous bank match REJECTs (V7)."""
+    verifier = Verifier()
+    llm_out = LLMOutput(
+        decision="no_issue",
+        predicted_class=None,
+        explanation="Everything looks normal.",
+        evidence=[],
+        verbatim_quote=None,
+        cited_amount_paise=None,
+        reason_code=None,
+    )
+
+    # 1. NEAR_TOLERANCE payment
+    pay_bundle = create_case_bundle(
+        bundle_id="bundle_pay_disc",
+        entity_id="pay_disc_1",
+        merchant_id="mer_01",
+        case_type="payment",
+        rule_id="B1_NEAR_TOLERANCE",
+        facts={"entity_id": "pay_disc_1", "type": "payment", "amount_paise": 50000, "fee_paise": 1180},
+        untrusted_text={},
+    )
+    res_pay = verifier.verify(pay_bundle, llm_out)
+    assert res_pay.outcome == VerifierOutcome.REJECT
+    assert "V7" in res_pay.failed_checks
+    assert res_pay.reason_code == "POLICY_VIOLATION_TOLERANCE"
+
+    # 2. Refund with non-zero difference
+    rfnd_bundle = create_case_bundle(
+        bundle_id="bundle_rfnd_disc",
+        entity_id="rfnd_disc_1",
+        merchant_id="mer_01",
+        case_type="refund",
+        rule_id="B1R_EXPLAINED_NO_AMOUNT",
+        facts={
+            "entity_id": "rfnd_disc_1",
+            "type": "refund",
+            "amount_paise": 5000,
+            "debit_paise": 4000,
+            "refund_difference_paise": -1000,
+        },
+        untrusted_text={},
+    )
+    res_rfnd = verifier.verify(rfnd_bundle, llm_out)
+    assert res_rfnd.outcome == VerifierOutcome.REJECT
+    assert "V7" in res_rfnd.failed_checks
+    assert res_rfnd.reason_code == "POLICY_VIOLATION_REFUND_DIFF"
+
+    # 3. Bank match with ambiguous candidates
+    bank_bundle = create_case_bundle(
+        bundle_id="bundle_bank_disc",
+        entity_id="stmt_disc_1",
+        merchant_id="mer_01",
+        case_type="bank_statement",
+        rule_id="B1_BANK_AMBIGUOUS_CANDIDATES",
+        facts={"entity_id": "stmt_disc_1", "type": "bank_statement", "credit_paise": 100000},
+        untrusted_text={},
+    )
+    res_bank = verifier.verify(bank_bundle, llm_out)
+    assert res_bank.outcome == VerifierOutcome.REJECT
+    assert "V7" in res_bank.failed_checks
+    assert res_bank.reason_code == "POLICY_VIOLATION_AMBIGUOUS_BANK"
+
+
+def test_control_bundles_symmetry_and_persistence() -> None:
+    """build_control_bundles produces symmetric bundles with identical key sets and writes results/controls_<seed>.json."""
+    from src.recon_agent.systems.b1 import run_b1
+
+    dev_dir = os.path.join(REPO_ROOT, "data", "synth", "full", "dev_seed1")
+    if not os.path.isdir(dev_dir):
+        pytest.skip(f"Dev dataset not found at {dev_dir}")
+
+    dataset = load_dataset(dev_dir)
+    output = run_b1(dataset)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        bundles = build_control_bundles(
+            dataset=dataset,
+            system_output=output,
+            n_per_seed=15,
+            rng_seed=42,
+            results_dir=tmp_dir,
+        )
+        assert len(bundles) == 15  # 5 * 3 families
+        out_files = [f for f in os.listdir(tmp_dir) if f.startswith("controls_") and f.endswith(".json")]
+        assert len(out_files) == 1
+        with open(os.path.join(tmp_dir, out_files[0]), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        assert "counts" in data
+        assert data["counts"]["fee_tax"] == 5
+        assert data["counts"]["refunds"] == 5
+        assert data["counts"]["bank_matches"] == 5
+
+        # Check bundle schema symmetry
+        first_untrusted_keys = list(bundles[0].untrusted_text.keys())
+        for b in bundles:
+            assert list(b.untrusted_text.keys()) == first_untrusted_keys
+
+
+def test_gemini_client_fatal_errors_offline() -> None:
+    """HTTP 401, 402, 403 raise FatalAPIError immediately without retrying."""
+    from unittest.mock import MagicMock, patch
+
+    client = GeminiClient(api_key="test-api-key")
+    bundle = _make_test_bundle()
+
+    for code in (401, 402, 403):
+        with patch("urllib.request.urlopen") as mock_url:
+            mock_err = urllib.error.HTTPError(
+                url="https://generativelanguage.googleapis.com/v1beta/interactions",
+                code=code,
+                msg="Forbidden",
+                hdrs=MagicMock(),
+                fp=None,
+            )
+            mock_url.side_effect = mock_err
+            with pytest.raises(FatalAPIError) as exc_info:
+                client.complete(bundle, system_prompt="System prompt", run_id=0)
+            assert f"Fatal Gemini API HTTP error {code}" in str(exc_info.value)
+            assert mock_url.call_count == 1
+
+
+def test_gemini_client_non_retriable_400_offline() -> None:
+    """HTTP 400 raises NonRetriableAPIError immediately without retrying."""
+    from unittest.mock import MagicMock, patch
+
+    client = GeminiClient(api_key="test-api-key")
+    bundle = _make_test_bundle()
+
+    with patch("urllib.request.urlopen") as mock_url:
+        mock_err = urllib.error.HTTPError(
+            url="https://generativelanguage.googleapis.com/v1beta/interactions",
+            code=400,
+            msg="Bad Request",
+            hdrs=MagicMock(),
+            fp=None,
+        )
+        mock_url.side_effect = mock_err
+        with pytest.raises(NonRetriableAPIError):
+            client.complete(bundle, system_prompt="System prompt", run_id=0)
+        assert mock_url.call_count == 1
+
+
+def test_gemini_client_retries_429_then_succeeds() -> None:
+    """HTTP 429 triggers retry with backoff and succeeds on subsequent attempt."""
+    from unittest.mock import MagicMock, patch
+
+    client = GeminiClient(api_key="test-api-key", max_retries=2)
+    bundle = _make_test_bundle()
+
+    success_payload = {
+        "output_text": json.dumps({
+            "decision": "escalate_human",
+            "predicted_class": "BENIGN_AMBIGUITY",
+            "explanation": "Multiple candidate explanations found.",
+            "evidence": [],
+            "verbatim_quote": None,
+            "cited_amount_paise": None,
+            "reason_code": "AMBIGUOUS",
+        }),
+        "usage": {
+            "total_input_tokens": 100,
+            "total_output_tokens": 30,
+            "total_thought_tokens": 10,
+        },
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = json.dumps(success_payload).encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+
+    mock_err_429 = urllib.error.HTTPError(
+        url="https://generativelanguage.googleapis.com/v1beta/interactions",
+        code=429,
+        msg="Rate limit",
+        hdrs={"Retry-After": "0.01"},
+        fp=None,
+    )
+
+    with patch("urllib.request.urlopen") as mock_url, patch("time.sleep") as mock_sleep:
+        mock_url.side_effect = [mock_err_429, mock_resp]
+        result = client.complete(bundle, system_prompt="System prompt", run_id=0)
+        assert mock_url.call_count == 2
+        assert mock_sleep.call_count == 1
+        assert "escalate_human" in result
+
 

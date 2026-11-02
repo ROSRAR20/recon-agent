@@ -36,8 +36,8 @@ To prevent data contamination and overfitting:
 - **Sample Size Floor:** Each evaluated Tier 1 error class and Tier 2 ambiguity type must contain a **minimum of 50 test cases** in the full benchmark profile to ensure statistical validity.
 - **Reproducibility & Variance:**
   - Multi-seed pooled benchmarks run across seeds 1, 2, 3.
-  - All LLM evaluations require **3 complete reruns at temperature 0** using a pinned model snapshot.
-  - Run-to-run classification consistency and variance must be documented across all three iterations.
+  - Model `gemini-3.8-flash` offers no sampling control (`temperature`, `top_p`, and `top_k` are deprecated/removed), so reproducibility is achieved via the deterministic on-disk response cache plus 3 independent reruns (`run_id` included in the cache key) with run-to-run classification agreement reported.
+  - `thinking_level` is chosen on dev only and frozen before any test run.
 
 ---
 
