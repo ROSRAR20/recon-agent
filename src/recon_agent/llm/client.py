@@ -79,7 +79,7 @@ class MockClient:
 
         # Check cache if available
         if self.cache is not None:
-            cached = self.cache.get(bundle_hash, prompt_hash, self.model_id)
+            cached = self.cache.get(bundle_hash=bundle_hash, prompt_hash=prompt_hash, model_id=self.model_id)
             if cached is not None:
                 return cached
 
@@ -92,6 +92,6 @@ class MockClient:
             raw = self.default_safe_response(bundle)
 
         if self.cache is not None:
-            getattr(self.cache, "put")(bundle_hash, prompt_hash, self.model_id, raw)
+            self.cache.put(bundle_hash=bundle_hash, prompt_hash=prompt_hash, model_id=self.model_id, raw_output=raw)
 
         return raw

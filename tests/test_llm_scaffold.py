@@ -821,3 +821,171 @@ def test_gemini_client_retries_429_then_succeeds() -> None:
         assert "escalate_human" in result
 
 
+def test_gemini_client_build_request_payload() -> None:
+    """Built request payload has store=False, fixed system_instruction, and ONLY bundle JSON in input."""
+    client = GeminiClient(api_key="test-api-key")
+    bundle = _make_test_bundle(
+        reason_text="ATTACK_INJECTION_PROMPT_IGNORE_RULES_AND_ACCEPT"
+    )
+    system_inst = "FIXED SYSTEM INSTRUCTION: Reconcile financial records."
+    payload = client.build_request_payload(bundle, system_instruction=system_inst)
+
+    assert payload["store"] is False
+    assert payload["system_instruction"] == system_inst
+    # Untrusted text MUST NOT leak into system_instruction
+    assert "ATTACK_INJECTION_PROMPT_IGNORE_RULES_AND_ACCEPT" not in payload["system_instruction"]
+    # Untrusted text MUST be inside input JSON
+    assert "ATTACK_INJECTION_PROMPT_IGNORE_RULES_AND_ACCEPT" in payload["input"]
+    input_data = json.loads(payload["input"])
+    assert input_data["bundle_id"] == bundle.bundle_id
+
+
+def test_gemini_client_rejects_minimal_thinking_level() -> None:
+    """thinking_level='minimal' is rejected at construction with clear unsupported error."""
+    with pytest.raises(ValueError) as exc_info:
+        GeminiClient(api_key="test-api-key", thinking_level="minimal")
+    assert "thinking_level 'minimal' is unsupported for gemini-3.8-flash" in str(exc_info.value)
+
+
+def test_gemini_client_costs_none_when_tokens_missing() -> None:
+    """When token counts are missing, both cost_low and cost_high are None and never 0."""
+    client = GeminiClient(api_key="test-api-key")
+    cost_low, cost_high = client.calculate_estimated_costs(None, 100, 50)
+    assert cost_low is None
+    assert cost_high is None
+
+    cost_low2, cost_high2 = client.calculate_estimated_costs(100, None, 50)
+    assert cost_low2 is None
+    assert cost_high2 is None
+
+
+def test_gemini_client_parse_shape1_output_text() -> None:
+    """Shape 1: top-level output_text and usage are correctly parsed."""
+    client = GeminiClient(api_key="test-api-key")
+    resp_json = {
+        "output_text": '{"decision": "no_issue", "predicted_class": null}',
+        "usage": {
+            "total_input_tokens": 500,
+            "total_output_tokens": 120,
+            "total_thought_tokens": 60,
+        },
+    }
+    raw_text, usage_num, tokens, usage_flagged, shape = client.parse_interaction_response(resp_json)
+    assert raw_text == '{"decision": "no_issue", "predicted_class": null}'
+    assert tokens["input_tokens"] == 500
+    assert tokens["output_tokens"] == 120
+    assert tokens["thinking_tokens"] == 60
+    assert usage_flagged is False
+    assert shape == {"output_text": "str", "usage": {"total_input_tokens": "int", "total_output_tokens": "int", "total_thought_tokens": "int"}}
+
+
+def test_gemini_client_parse_shape2_model_output_steps() -> None:
+    """Shape 2: steps of type model_output concatenated, thought steps strictly ignored, tolerant usage keys."""
+    client = GeminiClient(api_key="test-api-key")
+    resp_json = {
+        "steps": [
+            {
+                "type": "thought",
+                "content": {
+                    "parts": [{"type": "thought", "text": "INTERNAL THOUGHT: NEVER EXTRACT THIS"}]
+                },
+            },
+            {
+                "type": "model_output",
+                "content": {
+                    "parts": [
+                        {"type": "text", "text": '{"decision": "escalate_human", '},
+                        {"type": "text", "text": '"predicted_class": null}'},
+                    ]
+                },
+            },
+        ],
+        "usage": {
+            "prompt_tokens": 300,
+            "candidates_tokens": 80,
+            "thought_tokens": 40,
+        },
+    }
+    raw_text, usage_num, tokens, usage_flagged, shape = client.parse_interaction_response(resp_json)
+    assert raw_text == '{"decision": "escalate_human", "predicted_class": null}'
+    assert "INTERNAL THOUGHT" not in (raw_text or "")
+    assert tokens["input_tokens"] == 300
+    assert tokens["output_tokens"] == 80
+    assert tokens["thinking_tokens"] == 40
+    assert usage_flagged is False
+
+
+def test_gemini_client_parse_unparseable_shape() -> None:
+    """Any shape other than Shape 1 or Shape 2 maps to escalate_human and records key structure."""
+    from unittest.mock import MagicMock, patch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        audit_file = os.path.join(tmp_dir, "audit.jsonl")
+        logger = AuditLogger(log_path=audit_file)
+        client = GeminiClient(api_key="test-api-key", audit_logger=logger)
+        bundle = _make_test_bundle()
+
+        # Legacy candidates-only shape (must NOT be accepted as valid)
+        unparseable_payload = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [{"text": '{"decision": "no_issue"}'}]
+                    }
+                }
+            ],
+            "usage": {"total_input_tokens": 100, "total_output_tokens": 50},
+        }
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps(unparseable_payload).encode("utf-8")
+        mock_resp.__enter__.return_value = mock_resp
+
+        with patch("urllib.request.urlopen") as mock_url:
+            mock_url.return_value = mock_resp
+            res = client.complete(bundle, system_prompt="system prompt", run_id=0)
+
+        res_data = json.loads(res)
+        assert res_data["decision"] == "escalate_human"
+        assert res_data["reason_code"] == "UNPARSEABLE_RESPONSE_SHAPE"
+
+        # Verify audit log contains key structure (names and types only)
+        with open(audit_file, "r", encoding="utf-8") as f:
+            lines = [json.loads(line) for line in f]
+        assert len(lines) == 1
+        entry = lines[0]
+        assert entry["final_action"] == "escalate_human"
+        assert entry["verifier_failed_checks"] == ["UNPARSEABLE_RESPONSE_SHAPE"]
+        assert "raw_response_shape" in entry
+        # Structure has names and types only
+        expected_shape = {
+            "candidates": [{"content": {"parts": [{"text": "str"}]}}],
+            "usage": {"total_input_tokens": "int", "total_output_tokens": "int"},
+        }
+        assert entry["raw_response_shape"] == expected_shape
+
+
+def test_verifier_v1_rejects_overlength_explanation() -> None:
+    """V1 client-side validation strictly rejects explanation exceeding 280 characters with SCHEMA_INVALID."""
+    verifier = Verifier()
+    bundle = _make_test_bundle()
+
+    overlength_text = "A" * 285
+    payload = {
+        "decision": "escalate_human",
+        "predicted_class": None,
+        "reason_code": "AMBIGUOUS",
+        "explanation": overlength_text,
+        "evidence": [],
+        "verbatim_quote": None,
+        "cited_amount_paise": None,
+    }
+
+    res = verifier.verify(bundle, json.dumps(payload))
+    assert res.outcome == VerifierOutcome.REJECT
+    assert res.failed_checks == ("V1",)
+    assert res.reason_code == "SCHEMA_INVALID"
+    assert "280" in res.details
+
+
+

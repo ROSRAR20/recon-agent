@@ -78,7 +78,6 @@ def get_llm_json_schema() -> dict[str, Any]:
             },
             "explanation": {
                 "type": "string",
-                "maxLength": 280,
                 "description": "Concise plain-English explanation (max 280 chars).",
             },
             "evidence": {
@@ -100,7 +99,6 @@ def get_llm_json_schema() -> dict[str, Any]:
             },
             "verbatim_quote": {
                 "type": "string",
-                "maxLength": 160,
                 "nullable": True,
                 "description": "Exact byte-for-byte substring from untrusted text, or null.",
             },

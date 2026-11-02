@@ -1,8 +1,9 @@
 {
   "_metadata": {
-    "source_url": "https://ai.google.dev/pricing",
+    "source_url": "https://ai.google.dev/gemini-api/docs/whats-new-gemini-3.8",
     "retrieved_date": "2026-11-02",
-    "verified": true,
+    "verified": false,
+    "verified_by": null,
     "cost_reporting_label": "estimated cost",
     "unit": "USD per 1,000,000 tokens"
   },
@@ -17,8 +18,9 @@
           "output_cost_per_million": 3.75,
           "thinking_cost_per_million": 3.75,
           "cache_read_cost_per_million": 0.075,
-          "source_url": "https://ai.google.dev/pricing",
-          "verified": true
+          "source_url": "https://ai.google.dev/gemini-api/docs/whats-new-gemini-3.8",
+          "verified": false,
+          "verified_by": null
         },
         {
           "tier": "standard",
@@ -28,8 +30,9 @@
           "output_cost_per_million": 7.50,
           "thinking_cost_per_million": 7.50,
           "cache_read_cost_per_million": 0.15,
-          "source_url": "https://ai.google.dev/pricing",
-          "verified": true
+          "source_url": "https://ai.google.dev/gemini-api/docs/whats-new-gemini-3.8",
+          "verified": false,
+          "verified_by": null
         }
       ]
     },
@@ -44,7 +47,8 @@
           "thinking_cost_per_million": 0.30,
           "cache_read_cost_per_million": 0.01875,
           "source_url": "https://ai.google.dev/pricing",
-          "verified": true
+          "verified": false,
+          "verified_by": null
         }
       ]
     },
@@ -59,10 +63,10 @@
           "thinking_cost_per_million": 5.00,
           "cache_read_cost_per_million": 0.3125,
           "source_url": "https://ai.google.dev/pricing",
-          "verified": true
+          "verified": false,
+          "verified_by": null
         }
       ]
     }
   }
 }
-

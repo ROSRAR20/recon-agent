@@ -9,6 +9,7 @@ Strictly refuses to run unless LLM_SMOKE=1 is set in environment.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -21,7 +22,7 @@ from src.recon_agent.guard import sanitize_error
 from src.recon_agent.llm.audit import AuditLogger
 from src.recon_agent.llm.bundle import CaseBundle, create_case_bundle
 from src.recon_agent.llm.cache import LLMCache
-from src.recon_agent.llm.gemini_client import GeminiClient
+from src.recon_agent.llm.gemini_client import GeminiClient, extract_key_structure
 from src.recon_agent.llm.schema import validate_llm_output
 from src.recon_agent.llm.verifier import Verifier
 
@@ -155,6 +156,14 @@ def main() -> None:
         print("[ERROR] Refusing to run smoke test. Env LLM_SMOKE=1 is required.", file=sys.stderr)
         sys.exit(1)
 
+    parser = argparse.ArgumentParser(description="LLM smoke test")
+    parser.add_argument(
+        "--shape",
+        action="store_true",
+        help="Print the key structure of the raw response (names and value types only, never values)",
+    )
+    args = parser.parse_args()
+
     system_prompt_path = os.path.join(REPO_ROOT, "src", "recon_agent", "llm", "prompts", "system.txt")
     with open(system_prompt_path, "r", encoding="utf-8") as f:
         system_prompt = f.read()
@@ -184,6 +193,14 @@ def main() -> None:
         sanitized_summary = sanitize_error(raw_output)
         print(f"  Sanitized Output: {sanitized_summary}")
         print(f"  Verifier Outcome: {outcome} (Failed: {failed_checks})")
+
+        if args.shape:
+            try:
+                parsed_json = json.loads(raw_output)
+                structure = extract_key_structure(parsed_json)
+                print(f"  Key Structure (Names & Types Only):\n{json.dumps(structure, indent=4)}")
+            except Exception:
+                print(f"  Key Structure: {type(raw_output).__name__}")
         print()
 
 

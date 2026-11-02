@@ -31,12 +31,17 @@ class AuditRecord:
     schema_valid: bool
     verifier_outcome: str
     verifier_failed_checks: list[str]
-    input_tokens: int
-    output_tokens: int
-    thinking_tokens: int
+    input_tokens: int | None
+    output_tokens: int | None
+    thinking_tokens: int | None
     latency_ms: int
-    cost_usd: float
+    cost_usd: float | None
     final_action: str
+    estimated_cost_low_usd: float | None = None
+    estimated_cost_high_usd: float | None = None
+    usage_raw: dict[str, int | float] | None = None
+    usage_flagged: bool = False
+    raw_response_shape: dict[str, Any] | list[Any] | str | None = None
 
 
 class AuditLogger:
@@ -58,17 +63,30 @@ class AuditLogger:
         verifier_failed_checks: list[str] | tuple[str, ...],
         final_action: str,
         thinking_level: str = "low",
-        input_tokens: int = 0,
-        output_tokens: int = 0,
-        thinking_tokens: int = 0,
+        input_tokens: int | None = 0,
+        output_tokens: int | None = 0,
+        thinking_tokens: int | None = 0,
         latency_ms: int = 0,
-        cost_usd: float = 0.0,
+        cost_usd: float | None = 0.0,
+        estimated_cost_low_usd: float | None = None,
+        estimated_cost_high_usd: float | None = None,
+        usage_raw: dict[str, int | float] | None = None,
+        usage_flagged: bool = False,
+        raw_response_shape: dict[str, Any] | list[Any] | str | None = None,
     ) -> AuditRecord:
         """Write an audit entry containing only cryptographic hashes and verification metrics."""
         # Sanitize raw output before hashing just in case
         sanitized_raw = sanitize_error(raw_output)
         raw_output_hash = hashlib.sha256(sanitized_raw.encode("utf-8")).hexdigest()
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+        # If estimated_cost_high_usd is provided, synchronize cost_usd
+        if cost_usd == 0.0 and estimated_cost_high_usd is not None:
+            effective_cost = estimated_cost_high_usd
+        elif input_tokens is None or output_tokens is None:
+            effective_cost = None
+        else:
+            effective_cost = cost_usd
 
         record = AuditRecord(
             timestamp=now_iso,
@@ -84,8 +102,13 @@ class AuditLogger:
             output_tokens=output_tokens,
             thinking_tokens=thinking_tokens,
             latency_ms=latency_ms,
-            cost_usd=cost_usd,
+            cost_usd=effective_cost,
             final_action=final_action,
+            estimated_cost_low_usd=estimated_cost_low_usd,
+            estimated_cost_high_usd=estimated_cost_high_usd,
+            usage_raw=usage_raw,
+            usage_flagged=usage_flagged,
+            raw_response_shape=raw_response_shape,
         )
 
         record_json = json.dumps(asdict(record))

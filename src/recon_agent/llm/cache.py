@@ -44,6 +44,11 @@ class LLMCache:
         run_id: int = 0,
     ) -> str | None:
         """Retrieve cached raw LLM response if present, else None."""
+        # Backward compatibility for legacy 3-arg positional call: get(bundle_hash, prompt_hash, model_id)
+        if model_id == "" and schema_hash != "" and len(schema_hash) != 64:
+            model_id = schema_hash
+            schema_hash = ""
+
         key = self._get_cache_key(
             bundle_hash=bundle_hash,
             prompt_hash=prompt_hash,
@@ -73,6 +78,11 @@ class LLMCache:
         raw_output: str = "",
     ) -> None:
         """Write raw LLM response to disk cache."""
+        # Backward compatibility for legacy 4-arg positional call: put(bundle_hash, prompt_hash, model_id, raw_output)
+        if raw_output == "" and model_id != "" and (model_id.startswith("{") or model_id.startswith("[")):
+            raw_output = model_id
+            model_id = schema_hash
+            schema_hash = ""
         key = self._get_cache_key(
             bundle_hash=bundle_hash,
             prompt_hash=prompt_hash,
