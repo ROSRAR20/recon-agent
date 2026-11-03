@@ -67,7 +67,7 @@ class CaseBundle:
         """Produce canonical JSON representation excluding bundle_hash."""
         data = self.to_dict()
         data.pop("bundle_hash", None)
-        return json.dumps(data, sort_keys=True, separators=(",", ":"))
+        return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 def compute_bundle_hash(bundle_canonical_json: str) -> str:

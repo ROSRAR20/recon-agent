@@ -17,8 +17,9 @@ import ast
 import json
 import os
 import tempfile
-import urllib.error
 import pytest
+import requests
+import requests.exceptions
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -741,19 +742,16 @@ def test_gemini_client_fatal_errors_offline() -> None:
     bundle = _make_test_bundle()
 
     for code in (401, 402, 403):
-        with patch("urllib.request.urlopen") as mock_url:
-            mock_err = urllib.error.HTTPError(
-                url="https://generativelanguage.googleapis.com/v1beta/interactions",
-                code=code,
-                msg="Forbidden",
-                hdrs=MagicMock(),
-                fp=None,
-            )
-            mock_url.side_effect = mock_err
+        with patch("requests.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = code
+            mock_resp.text = f"Error {code} Unauthorized/Forbidden"
+            mock_post.return_value = mock_resp
+
             with pytest.raises(FatalAPIError) as exc_info:
                 client.complete(bundle, system_prompt="System prompt", run_id=0)
             assert f"Fatal Gemini API HTTP error {code}" in str(exc_info.value)
-            assert mock_url.call_count == 1
+            assert mock_post.call_count == 1
 
 
 def test_gemini_client_non_retriable_400_offline() -> None:
@@ -763,18 +761,16 @@ def test_gemini_client_non_retriable_400_offline() -> None:
     client = GeminiClient(api_key="test-api-key")
     bundle = _make_test_bundle()
 
-    with patch("urllib.request.urlopen") as mock_url:
-        mock_err = urllib.error.HTTPError(
-            url="https://generativelanguage.googleapis.com/v1beta/interactions",
-            code=400,
-            msg="Bad Request",
-            hdrs=MagicMock(),
-            fp=None,
-        )
-        mock_url.side_effect = mock_err
-        with pytest.raises(NonRetriableAPIError):
+    with patch("requests.post") as mock_post:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_resp.text = "Bad Request: Schema violation"
+        mock_post.return_value = mock_resp
+
+        with pytest.raises(NonRetriableAPIError) as exc_info:
             client.complete(bundle, system_prompt="System prompt", run_id=0)
-        assert mock_url.call_count == 1
+        assert "Non-retriable Gemini API HTTP 400 Bad Request" in str(exc_info.value)
+        assert mock_post.call_count == 1
 
 
 def test_gemini_client_retries_429_then_succeeds() -> None:
@@ -801,22 +797,19 @@ def test_gemini_client_retries_429_then_succeeds() -> None:
         },
     }
 
-    mock_resp = MagicMock()
-    mock_resp.read.return_value = json.dumps(success_payload).encode("utf-8")
-    mock_resp.__enter__.return_value = mock_resp
+    resp_429 = MagicMock()
+    resp_429.status_code = 429
+    resp_429.headers = {"Retry-After": "0.01"}
+    resp_429.text = "Rate limit"
 
-    mock_err_429 = urllib.error.HTTPError(
-        url="https://generativelanguage.googleapis.com/v1beta/interactions",
-        code=429,
-        msg="Rate limit",
-        hdrs={"Retry-After": "0.01"},
-        fp=None,
-    )
+    resp_200 = MagicMock()
+    resp_200.status_code = 200
+    resp_200.json.return_value = success_payload
 
-    with patch("urllib.request.urlopen") as mock_url, patch("time.sleep") as mock_sleep:
-        mock_url.side_effect = [mock_err_429, mock_resp]
+    with patch("requests.post") as mock_post, patch("time.sleep") as mock_sleep:
+        mock_post.side_effect = [resp_429, resp_200]
         result = client.complete(bundle, system_prompt="System prompt", run_id=0)
-        assert mock_url.call_count == 2
+        assert mock_post.call_count == 2
         assert mock_sleep.call_count == 1
         assert "escalate_human" in result
 
@@ -938,11 +931,11 @@ def test_gemini_client_parse_unparseable_shape() -> None:
         }
 
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps(unparseable_payload).encode("utf-8")
-        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = unparseable_payload
 
-        with patch("urllib.request.urlopen") as mock_url:
-            mock_url.return_value = mock_resp
+        with patch("requests.post") as mock_post:
+            mock_post.return_value = mock_resp
             res = client.complete(bundle, system_prompt="system prompt", run_id=0)
 
         res_data = json.loads(res)
@@ -963,6 +956,110 @@ def test_gemini_client_parse_unparseable_shape() -> None:
             "usage": {"total_input_tokens": "int", "total_output_tokens": "int"},
         }
         assert entry["raw_response_shape"] == expected_shape
+
+
+def test_gemini_client_read_timeout_max_1_retry_and_audit() -> None:
+    """Read timeout allows at most 1 retry, then records duplicate billing in audit and returns escalate_human."""
+    from unittest.mock import patch
+    import requests.exceptions
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        audit_file = os.path.join(tmp_dir, "audit_timeout.jsonl")
+        logger = AuditLogger(log_path=audit_file)
+        client = GeminiClient(api_key="test-api-key", audit_logger=logger)
+        bundle = _make_test_bundle()
+
+        # Attempt 1: ReadTimeout, Attempt 2 (Retry 1): ReadTimeout -> terminates non-fatally
+        with patch("requests.post") as mock_post, patch("time.sleep"):
+            mock_post.side_effect = [
+                requests.exceptions.ReadTimeout("Server took too long to send data"),
+                requests.exceptions.ReadTimeout("Server took too long to send data"),
+            ]
+            res = client.complete(bundle, system_prompt="System prompt", run_id=0)
+
+        assert mock_post.call_count == 2
+        res_data = json.loads(res)
+        assert res_data["decision"] == "escalate_human"
+        assert res_data["reason_code"] == "READ_TIMEOUT_POSSIBLE_DUPLICATE_BILLING"
+
+        # Check audit entry
+        with open(audit_file, "r", encoding="utf-8") as f:
+            lines = [json.loads(line) for line in f]
+        assert len(lines) == 1
+        entry = lines[0]
+        assert entry["final_action"] == "escalate_human"
+        assert "possible duplicate billing" in entry["verifier_failed_checks"]
+        assert "attempt_count=2" in entry["verifier_failed_checks"]
+        assert entry["cost_usd"] is None
+
+
+def test_gemini_client_connect_error_retries_up_to_max() -> None:
+    """Connect errors retry up to max_retries (4) before failing."""
+    from unittest.mock import patch
+    import requests.exceptions
+
+    client = GeminiClient(api_key="test-api-key", max_retries=3)
+    bundle = _make_test_bundle()
+
+    with patch("requests.post") as mock_post, patch("time.sleep"):
+        mock_post.side_effect = requests.exceptions.ConnectTimeout("Connection timed out")
+        with pytest.raises(RuntimeError) as exc_info:
+            client.complete(bundle, system_prompt="System prompt", run_id=0)
+        assert mock_post.call_count == 3
+        assert "Exceeded max retries on connect error" in str(exc_info.value)
+
+
+def test_gemini_client_utf8_rupee_symbol_and_no_content_length() -> None:
+    """Request body preserves non-ASCII text like the rupee symbol ₹ and sets no manual Content-Length header."""
+    from unittest.mock import MagicMock, patch
+
+    client = GeminiClient(api_key="test-api-key", read_timeout=120.0, connect_timeout=10.0)
+    bundle = _make_test_bundle(
+        reason_text="Fee of ₹15.00 applied and waived."
+    )
+    system_inst = "System prompt ₹ testing."
+
+    payload = client.build_request_payload(bundle, system_instruction=system_inst)
+    body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+    # Indian Rupee symbol is U+20B9 -> UTF-8 bytes b'\xe2\x82\xb9'
+    assert b"\xe2\x82\xb9" in body_bytes
+    decoded = json.loads(body_bytes.decode("utf-8"))
+    assert "₹" in decoded["input"]
+    assert "₹" in decoded["system_instruction"]
+
+    success_payload = {
+        "output_text": json.dumps({
+            "decision": "no_issue",
+            "predicted_class": None,
+            "explanation": "Verified without issues.",
+            "evidence": [],
+            "verbatim_quote": None,
+            "cited_amount_paise": None,
+            "reason_code": "WITHIN_TOLERANCE",
+        }),
+        "usage": {"total_input_tokens": 100, "total_output_tokens": 20},
+    }
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = success_payload
+
+    with patch("requests.post") as mock_post:
+        mock_post.return_value = mock_resp
+        client.complete(bundle, system_prompt=system_inst, run_id=0)
+
+        assert mock_post.call_count == 1
+        _args, kwargs = mock_post.call_args
+        headers = kwargs["headers"]
+        # No manual Content-Length header!
+        assert "Content-Length" not in headers
+        assert "content-length" not in headers
+        assert headers["Content-Type"] == "application/json; charset=utf-8"
+        assert headers["x-goog-api-key"] == "test-api-key"
+        # Body passed as explicit UTF-8 bytes
+        assert kwargs["data"] == body_bytes
+        # Timeout configured as (connect_timeout, read_timeout)
+        assert kwargs["timeout"] == (10.0, 120.0)
 
 
 def test_verifier_v1_rejects_overlength_explanation() -> None:

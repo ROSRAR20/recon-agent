@@ -23,11 +23,11 @@ import json
 import os
 import random
 import time
-import urllib.error
-import urllib.request
 from typing import Any
 
 from dotenv import load_dotenv
+import requests
+import requests.exceptions
 
 from src.recon_agent.guard import sanitize_error
 from src.recon_agent.llm.audit import AuditLogger
@@ -117,7 +117,10 @@ class GeminiClient:
         audit_logger: AuditLogger | None = None,
         prices_path: str = "config/llm_prices.json",
         timeout: float = 60.0,
+        read_timeout: float = 180.0,
+        connect_timeout: float = 10.0,
         max_retries: int = 4,
+        debug_http: bool = False,
     ) -> None:
         load_dotenv()
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
@@ -133,7 +136,10 @@ class GeminiClient:
         self.audit_logger = audit_logger
         self.prices_path = prices_path
         self.timeout = timeout
+        self.read_timeout = read_timeout
+        self.connect_timeout = connect_timeout
         self.max_retries = max_retries
+        self.debug_http = debug_http
         self.verifier = Verifier()
 
         # Load rates
@@ -319,6 +325,67 @@ class GeminiClient:
 
         return raw_output_text, usage_numbers, tokens_dict, usage_flagged, key_structure
 
+    def _handle_read_timeout_failure(
+        self,
+        bundle: CaseBundle,
+        bundle_hash: str,
+        prompt_hash: str,
+        schema_hash: str,
+        run_id: int,
+        attempt_count: int,
+        latency_ms: int,
+    ) -> str:
+        """Handle exhausted read timeout retries non-fatally with duplicate billing audit warning."""
+        fallback_response = json.dumps({
+            "decision": "escalate_human",
+            "predicted_class": None,
+            "reason_code": "READ_TIMEOUT_POSSIBLE_DUPLICATE_BILLING",
+            "explanation": (
+                f"Gemini API read timeout after {attempt_count} attempts (max 1 retry); "
+                "possible duplicate billing; escalating for human review."
+            ),
+            "evidence": [],
+            "cited_amount_paise": None,
+            "verbatim_quote": None,
+        })
+        if self.audit_logger is not None:
+            self.audit_logger.log(
+                bundle_hash=bundle_hash,
+                prompt_hash=prompt_hash,
+                model_id=self.model_id,
+                raw_output=fallback_response,
+                schema_valid=False,
+                verifier_outcome="REJECT",
+                verifier_failed_checks=[
+                    "READ_TIMEOUT",
+                    "possible duplicate billing",
+                    f"attempt_count={attempt_count}",
+                ],
+                final_action="escalate_human",
+                thinking_level=self.thinking_level,
+                input_tokens=None,
+                output_tokens=None,
+                thinking_tokens=None,
+                latency_ms=latency_ms,
+                cost_usd=None,
+                estimated_cost_low_usd=None,
+                estimated_cost_high_usd=None,
+                usage_raw=None,
+                usage_flagged=True,
+                raw_response_shape={"error": "ReadTimeout", "attempts": attempt_count},
+            )
+        if self.cache is not None:
+            self.cache.put(
+                bundle_hash=bundle_hash,
+                prompt_hash=prompt_hash,
+                schema_hash=schema_hash,
+                model_id=self.model_id,
+                thinking_level=self.thinking_level,
+                run_id=run_id,
+                raw_output=fallback_response,
+            )
+        return fallback_response
+
     def complete(
         self,
         bundle: CaseBundle,
@@ -354,59 +421,54 @@ class GeminiClient:
             )
 
         payload = self.build_request_payload(bundle, system_prompt)
-        body_bytes = json.dumps(payload).encode("utf-8")
+        body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers = {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
             "x-goog-api-key": self.api_key,
         }
 
-        req = urllib.request.Request(
-            url=INTERACTIONS_ENDPOINT,
-            data=body_bytes,
-            headers=headers,
-            method="POST",
-        )
-
-        # 2. Invoke API with retry logic
+        # 2. Invoke API with retry logic via requests
         latency_ms = 0
         resp_json: dict[str, Any] = {}
 
         start_time = time.time()
         attempt = 0
+        read_timeout_retries = 0
 
         while True:
             attempt += 1
-            call_start = time.time()
+            attempt_start = time.time()
+            status_or_exc = "UNKNOWN"
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                    call_latency = round((time.time() - call_start) * 1000)
-                    latency_ms = round((time.time() - start_time) * 1000)
-                    resp_bytes = response.read()
-                    resp_json = json.loads(resp_bytes.decode("utf-8"))
-                    break
-
-            except urllib.error.HTTPError as exc:
-                sanitized_reason = sanitize_error(str(exc.reason), gemini_key=self.api_key)
-                code = exc.code
+                resp = requests.post(
+                    INTERACTIONS_ENDPOINT,
+                    data=body_bytes,
+                    headers=headers,
+                    timeout=(self.connect_timeout, self.read_timeout),
+                )
+                status_or_exc = f"HTTP {resp.status_code}"
 
                 # Fatal HTTP codes: 401, 402, 403
-                if code in (401, 402, 403):
-                    err_msg = f"Fatal Gemini API HTTP error {code}: {sanitized_reason}"
-                    raise FatalAPIError(err_msg) from exc
+                if resp.status_code in (401, 402, 403):
+                    sanitized_text = sanitize_error(resp.text, gemini_key=self.api_key)
+                    err_msg = f"Fatal Gemini API HTTP error {resp.status_code}: {sanitized_text}"
+                    raise FatalAPIError(err_msg) from None
 
                 # Non-retriable: 400
-                if code == 400:
-                    err_msg = f"Non-retriable Gemini API HTTP 400 Bad Request: {sanitized_reason}"
-                    raise NonRetriableAPIError(err_msg) from exc
+                if resp.status_code == 400:
+                    sanitized_text = sanitize_error(resp.text, gemini_key=self.api_key)
+                    err_msg = f"Non-retriable Gemini API HTTP 400 Bad Request: {sanitized_text}"
+                    raise NonRetriableAPIError(err_msg) from None
 
                 # Retriable: 429 (Too Many Requests) and 5xx
-                if code == 429 or 500 <= code <= 599:
-                    if attempt > self.max_retries or (time.time() - start_time) > self.timeout:
-                        err_msg = f"Exceeded max retries ({self.max_retries}) on HTTP {code}: {sanitized_reason}"
-                        raise RuntimeError(err_msg) from exc
+                if resp.status_code == 429 or 500 <= resp.status_code <= 599:
+                    sanitized_text = sanitize_error(resp.text, gemini_key=self.api_key)
+                    if attempt >= self.max_retries:
+                        err_msg = f"Exceeded max retries ({self.max_retries}) on HTTP {resp.status_code}: {sanitized_text}"
+                        raise RuntimeError(err_msg) from None
 
                     # Honor Retry-After header if present
-                    retry_after_hdr = exc.headers.get("Retry-After") if hasattr(exc, "headers") else None
+                    retry_after_hdr = resp.headers.get("Retry-After")
                     if retry_after_hdr:
                         try:
                             sleep_sec = float(retry_after_hdr)
@@ -418,17 +480,61 @@ class GeminiClient:
                     time.sleep(sleep_sec)
                     continue
 
-                # Any other HTTP error
-                raise RuntimeError(f"Unhandled HTTP error {code}: {sanitized_reason}") from exc
+                # Any other HTTP status check
+                resp.raise_for_status()
+                latency_ms = round((time.time() - start_time) * 1000)
+                resp_json = resp.json()
+                break
 
-            except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            except requests.exceptions.ReadTimeout as exc:
+                status_or_exc = exc.__class__.__name__
+                read_timeout_retries += 1
+                if read_timeout_retries > 1 or attempt >= self.max_retries:
+                    # At most 1 retry for read timeouts; record possible duplicate billing in audit
+                    # and return non-fatal escalate_human response (do not crash the run)
+                    latency_ms = round((time.time() - start_time) * 1000)
+                    return self._handle_read_timeout_failure(
+                        bundle=bundle,
+                        bundle_hash=bundle_hash,
+                        prompt_hash=prompt_hash,
+                        schema_hash=schema_hash,
+                        run_id=run_id,
+                        attempt_count=attempt,
+                        latency_ms=latency_ms,
+                    )
+                sleep_sec = min(60.0, (2 ** attempt) + random.uniform(0.1, 0.5))
+                time.sleep(sleep_sec)
+                continue
+
+            except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as exc:
+                status_or_exc = exc.__class__.__name__
                 sanitized_exc = sanitize_error(str(exc), gemini_key=self.api_key)
-                if attempt > self.max_retries or (time.time() - start_time) > self.timeout:
-                    raise RuntimeError(f"Exceeded max retries on transport error: {sanitized_exc}") from exc
+                if attempt >= self.max_retries:
+                    raise RuntimeError(f"Exceeded max retries on connect error: {sanitized_exc}") from None
 
                 sleep_sec = min(60.0, (2 ** attempt) + random.uniform(0.1, 0.5))
                 time.sleep(sleep_sec)
                 continue
+
+            except requests.exceptions.RequestException as exc:
+                status_or_exc = exc.__class__.__name__
+                sanitized_exc = sanitize_error(str(exc), gemini_key=self.api_key)
+                if attempt >= self.max_retries:
+                    raise RuntimeError(f"Exceeded max retries on request error: {sanitized_exc}") from None
+
+                sleep_sec = min(60.0, (2 ** attempt) + random.uniform(0.1, 0.5))
+                time.sleep(sleep_sec)
+                continue
+
+            finally:
+                if self.debug_http:
+                    attempt_elapsed = time.time() - attempt_start
+                    print(
+                        f"[HTTP] Attempt {attempt}: {attempt_elapsed:.2f}s | "
+                        f"Body: {len(body_bytes)} bytes | "
+                        f"Headers: {sorted(list(headers.keys()))} | "
+                        f"Result: {status_or_exc}"
+                    )
 
         # 3. Parse response and usage
         raw_output_text, usage_numbers, tokens, usage_flagged, key_structure = self.parse_interaction_response(resp_json)

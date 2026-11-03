@@ -13,6 +13,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if REPO_ROOT not in sys.path:
@@ -162,6 +163,11 @@ def main() -> None:
         action="store_true",
         help="Print the key structure of the raw response (names and value types only, never values)",
     )
+    parser.add_argument(
+        "--debug-http",
+        action="store_true",
+        help="Print per-attempt HTTP diagnostic information (header names only, body byte length, status)",
+    )
     args = parser.parse_args()
 
     system_prompt_path = os.path.join(REPO_ROOT, "src", "recon_agent", "llm", "prompts", "system.txt")
@@ -170,15 +176,22 @@ def main() -> None:
 
     cache = LLMCache()
     audit_logger = AuditLogger()
-    client = GeminiClient(cache=cache, audit_logger=audit_logger, thinking_level="low")
+    client = GeminiClient(
+        cache=cache,
+        audit_logger=audit_logger,
+        thinking_level="low",
+        debug_http=args.debug_http,
+    )
     verifier = Verifier()
 
     bundles = build_smoke_synthetic_bundles()
     print(f"[*] Starting LLM smoke test on {len(bundles)} synthetic bundles...\n")
 
     for idx, bundle in enumerate(bundles, 1):
-        print(f"--- Case {idx}/5: {bundle.bundle_id} (Family: {bundle.rule_id}) ---")
+        print(f"[START] Case {idx}/5: {bundle.bundle_id} (Family: {bundle.rule_id})")
+        case_start = time.time()
         raw_output = client.complete(bundle, system_prompt=system_prompt, run_id=0)
+        case_elapsed = time.time() - case_start
 
         # Parse and verify
         is_valid, parsed, errors = validate_llm_output(raw_output)
@@ -201,6 +214,8 @@ def main() -> None:
                 print(f"  Key Structure (Names & Types Only):\n{json.dumps(structure, indent=4)}")
             except Exception:
                 print(f"  Key Structure: {type(raw_output).__name__}")
+
+        print(f"[FINISH] Case {idx}/5 in {case_elapsed:.2f}s (Outcome: {outcome})")
         print()
 
 
