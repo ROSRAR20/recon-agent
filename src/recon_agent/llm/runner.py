@@ -276,13 +276,28 @@ class Runner:
                 is_valid, parsed, errors = validate_llm_output(raw_output)
                 if is_valid and parsed is not None:
                     ver_res = self.verifier.verify(case, parsed)
-                    final_action = parsed.decision if ver_res.outcome == VerifierOutcome.ACCEPT else "escalate_human"
+                    if ver_res.outcome == VerifierOutcome.ACCEPT:
+                        final_action = parsed.decision
+                        final_raw = raw_output
+                        status = "ok"
+                        err_msg = None
+                    else:
+                        final_action = "escalate_human"
+                        out_dict = asdict(parsed)
+                        out_dict["decision"] = "escalate_human"
+                        out_dict["predicted_class"] = None
+                        out_dict["explanation"] = f"Reconciliation discrepancy escalated for human review ({ver_res.reason_code})."
+                        final_raw = json.dumps(out_dict)
+                        status = "model_invalid"
+                        err_msg = ver_res.reason_code
+
                     results[bid] = CaseResult(
                         bundle_id=bid,
-                        status="ok",
+                        status=status,
                         decision=final_action,
-                        predicted_class=parsed.predicted_class,
-                        raw_output=raw_output,
+                        predicted_class=parsed.predicted_class if ver_res.outcome == VerifierOutcome.ACCEPT else None,
+                        raw_output=final_raw,
+                        error_message=err_msg,
                         cost_usd=eff_cost,
                         estimated_cost_low_usd=cost_low,
                         estimated_cost_high_usd=cost_high,

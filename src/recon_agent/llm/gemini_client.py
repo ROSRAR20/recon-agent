@@ -752,7 +752,17 @@ class GeminiClient:
         # 6. Verify outcome
         if is_schema_valid and parsed is not None:
             ver_res = self.verifier.verify(bundle, parsed)
-            final_action = parsed.decision if ver_res.outcome == VerifierOutcome.ACCEPT else "escalate_human"
+            if ver_res.outcome == VerifierOutcome.ACCEPT:
+                final_action = parsed.decision
+            else:
+                final_action = "escalate_human"
+                # On REJECT/ABSTAIN, replace explanation with deterministic template (no fabricated text shown)
+                from dataclasses import asdict
+                out_dict = asdict(parsed)
+                out_dict["decision"] = "escalate_human"
+                out_dict["predicted_class"] = None
+                out_dict["explanation"] = f"Reconciliation discrepancy escalated for human review ({ver_res.reason_code})."
+                sanitized_raw_output = json.dumps(out_dict)
         else:
             ver_res = None
             final_action = "escalate_human"

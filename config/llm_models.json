@@ -1,5 +1,5 @@
 {
-  "_comment": "Configuration for LLM models, rate limits, and quota. Note: the daily request counter in results/quota_state.json tracks requests made through this runner only; it cannot observe external requests made outside the runner.",
+  "_comment": "Configuration for LLM models, rate limits, and quota. AI Studio limits for gemini-3.5-flash-lite: 15 RPM, 250K TPM, 500 RPD; configured with conservative headroom (12 RPM, 450 RPD). Note: daily request counter in results/quota_state.json tracks requests made through this runner only; it cannot observe external requests.",
   "primary": "gemini-3.5-flash-lite",
   "allowed": [
     "gemini-3.5-flash-lite",
@@ -7,7 +7,7 @@
     "gemini-3.8-flash"
   ],
   "tier": "free",
-  "default_rpm": 4,
+  "default_rpm": 12,
   "max_requests_per_day": 450
 }
 

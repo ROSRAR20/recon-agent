@@ -4,11 +4,14 @@ Extracts structured facts and untrusted text for ambiguous cases, escalations,
 and negative controls into a deterministic, frozen dataclass with canonical JSON
 serialization and stable SHA-256 bundle hashing.
 
-Strict boundaries:
+Strict neutrality & boundaries:
 - Contains ZERO evaluation or ground-truth fields (no labels, truth links, injection manifests).
 - Negative control status is recorded ONLY in results/controls_<seed>.json, never in bundles.
 - All monetary values strictly in integer paise.
 - All untrusted text fields tagged explicitly as UNTRUSTED.
+- Neutral check_family ('fee_tax' | 'refund' | 'bank') across all bundles.
+- Canonical JSON (LLM-visible) excludes rule_id and case_type to ensure residual and control
+  bundles are indistinguishable by key set, key order, and neutral-field value domain.
 """
 
 from __future__ import annotations
@@ -50,24 +53,48 @@ class CaseBundle:
     bundle_id: str
     entity_id: str
     merchant_id: str
-    case_type: str
-    rule_id: str | None
+    check_family: str  # "fee_tax" | "refund" | "bank"
     facts: dict[str, Any]
     untrusted_text: dict[str, str | None]
+    rule_id: str | None = None  # Kept ONLY in audit/eval metadata; NOT in LLM-visible canonical JSON
     allowed_decisions: tuple[str, ...] = ALLOWED_DECISIONS
     allowed_classes: tuple[str, ...] = ALLOWED_CLASSES
     bundle_hash: str = ""
 
-    def to_dict(self) -> dict[str, Any]:
+    @property
+    def case_type(self) -> str:
+        """Backward compatible accessor for case_type."""
+        if self.check_family == "fee_tax":
+            return "payment"
+        elif self.check_family == "bank":
+            return "bank_statement"
+        return "refund"
+
+    def to_dict(self, include_eval_metadata: bool = False) -> dict[str, Any]:
         """Convert bundle to dictionary representation."""
         data = asdict(self)
+        if not include_eval_metadata:
+            data.pop("rule_id", None)
+            data.pop("bundle_hash", None)
         return data
 
     def to_canonical_json(self) -> str:
-        """Produce canonical JSON representation excluding bundle_hash."""
-        data = self.to_dict()
-        data.pop("bundle_hash", None)
-        return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        """Produce neutral canonical JSON representation for LLM and bundle hashing.
+
+        Excludes bundle_hash, rule_id, and case_type to ensure bundle neutrality.
+        Keys are sorted lexicographically.
+        """
+        payload = {
+            "allowed_classes": list(self.allowed_classes),
+            "allowed_decisions": list(self.allowed_decisions),
+            "bundle_id": self.bundle_id,
+            "check_family": self.check_family,
+            "entity_id": self.entity_id,
+            "facts": self.facts,
+            "merchant_id": self.merchant_id,
+            "untrusted_text": self.untrusted_text,
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 def compute_bundle_hash(bundle_canonical_json: str) -> str:
@@ -79,20 +106,30 @@ def create_case_bundle(
     bundle_id: str,
     entity_id: str,
     merchant_id: str,
-    case_type: str,
-    rule_id: str | None,
-    facts: dict[str, Any],
-    untrusted_text: dict[str, str | None],
+    case_type: str | None = None,
+    rule_id: str | None = None,
+    facts: dict[str, Any] | None = None,
+    untrusted_text: dict[str, str | None] | None = None,
+    check_family: str | None = None,
 ) -> CaseBundle:
     """Create a CaseBundle instance with automatically computed bundle_hash."""
+    # Determine neutral check_family
+    if check_family is None:
+        if case_type in ("payment", "fee_tax"):
+            check_family = "fee_tax"
+        elif case_type in ("bank_statement", "bank"):
+            check_family = "bank"
+        else:
+            check_family = "refund"
+
     temp_bundle = CaseBundle(
         bundle_id=bundle_id,
         entity_id=entity_id,
         merchant_id=merchant_id,
-        case_type=case_type,
+        check_family=check_family,
         rule_id=rule_id,
-        facts=facts,
-        untrusted_text=untrusted_text,
+        facts=facts or {},
+        untrusted_text=untrusted_text or {},
         allowed_decisions=ALLOWED_DECISIONS,
         allowed_classes=ALLOWED_CLASSES,
         bundle_hash="",
@@ -102,10 +139,10 @@ def create_case_bundle(
         bundle_id=bundle_id,
         entity_id=entity_id,
         merchant_id=merchant_id,
-        case_type=case_type,
+        check_family=check_family,
         rule_id=rule_id,
-        facts=facts,
-        untrusted_text=untrusted_text,
+        facts=facts or {},
+        untrusted_text=untrusted_text or {},
         allowed_decisions=ALLOWED_DECISIONS,
         allowed_classes=ALLOWED_CLASSES,
         bundle_hash=b_hash,
@@ -171,11 +208,13 @@ def _build_recon_item_bundle(
         "bank_narration": None,
     }
 
+    check_family = "fee_tax" if item.type == "payment" else "refund"
+
     return create_case_bundle(
         bundle_id=f"bundle_{eid}",
         entity_id=eid,
         merchant_id=mer_id,
-        case_type=item.type,
+        check_family=check_family,
         rule_id=rule_id,
         facts=facts,
         untrusted_text=untrusted_text,
@@ -207,7 +246,7 @@ def _build_bank_statement_bundle(
         bundle_id=f"bundle_{eid}",
         entity_id=eid,
         merchant_id=mer_id,
-        case_type="bank_statement",
+        check_family="bank",
         rule_id=rule_id,
         facts=facts,
         untrusted_text=untrusted_text,
@@ -248,12 +287,13 @@ def build_case_bundles(dataset: ReconDataset) -> list[CaseBundle]:
             if r.entity_id not in candidate_entities:
                 candidate_entities[r.entity_id] = "REFUND_REASON_TEXT"
 
-    for eid, rule_id in sorted(candidate_entities.items()):
+    # Stable deterministic sort of entity IDs
+    for eid in sorted(candidate_entities.keys()):
         if eid in processed_entities:
             continue
-        processed_entities.add(eid)
 
-        # Case A: entity is a recon_item
+        rule_id = candidate_entities[eid]
+
         if eid in recon_by_entity:
             item = recon_by_entity[eid]
             bundle = _build_recon_item_bundle(
@@ -264,8 +304,8 @@ def build_case_bundles(dataset: ReconDataset) -> list[CaseBundle]:
                 orders_by_id=orders_by_id,
             )
             bundles.append(bundle)
+            processed_entities.add(eid)
 
-        # Case B: entity is a bank_statement row
         elif eid in bank_by_id:
             bank_row = bank_by_id[eid]
             bundle = _build_bank_statement_bundle(
@@ -273,6 +313,7 @@ def build_case_bundles(dataset: ReconDataset) -> list[CaseBundle]:
                 rule_id=rule_id,
             )
             bundles.append(bundle)
+            processed_entities.add(eid)
 
     return bundles
 
@@ -280,43 +321,36 @@ def build_case_bundles(dataset: ReconDataset) -> list[CaseBundle]:
 def build_control_bundles(
     dataset: ReconDataset,
     system_output: SystemOutput,
-    n_per_seed: int = 60,
+    n_per_seed: int = 15,
     rng_seed: int = 42,
     results_dir: str = "results",
 ) -> list[CaseBundle]:
-    """Sample observable items that B1r neither flagged nor escalated, from the same families as residual bundles.
+    """Sample clean, un-flagged entities symmetric to the ambiguous families as negative controls.
 
-    Families:
-    1. fee_tax: payment recon items within rounding tolerance or matching rate card.
-    2. refunds: consistent partial refunds without notes/reason_text.
-    3. bank_matches: bank statement credits cleanly matched to settlements.
-
-    Control status is recorded strictly in results/controls_<seed>.json (eval-only file),
-    NEVER inside the CaseBundle.
-    Asserts identical key sets and field ordering between control and residual bundles.
+    Identifies:
+    - fee_tax: payments where fee and tax match expected values within tolerance
+    - refunds: refunds where debit == amount (refund_difference == 0)
+    - bank_matches: bank statement items with exact 1:1 match to settlement
     """
-    flagged_or_escalated: set[str] = set()
+    flagged_or_escalated = set()
     for pred in system_output.predictions:
         if pred.action in ("flag", "escalate_human"):
             flagged_or_escalated.update(pred.entity_ids)
 
-    # Index dataset tables for fast lookup
     payments_by_id = {p.payment_id: p for p in dataset.payments}
     settlements_by_id = {s.settlement_id: s for s in dataset.settlements}
     orders_by_id = {o.order_id: o for o in dataset.orders_ledger}
 
-    # 1. Family: fee_tax (clean payment recon items)
+    # 1. Family: fee_tax (clean payments)
     fee_tax_candidates: list[ReconItemRow] = [
         r for r in dataset.recon_items
         if r.type == "payment" and r.entity_id not in flagged_or_escalated
     ]
 
-    # 2. Family: refunds (clean refund recon items without free text)
+    # 2. Family: refunds (clean refunds, debit == amount)
     refund_candidates: list[ReconItemRow] = [
         r for r in dataset.recon_items
-        if r.type == "refund"
-        and r.entity_id not in flagged_or_escalated
-        and (not r.notes or not r.notes.get("reason_text"))
+        if r.type == "refund" and r.entity_id not in flagged_or_escalated and r.debit == r.amount
     ]
 
     # 3. Family: bank_matches (clean bank rows matched to settlements)

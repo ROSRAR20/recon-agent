@@ -1099,7 +1099,7 @@ def test_model_config_loading_and_alias_rejection() -> None:
     client = GeminiClient(api_key="test-api-key")
     assert client.model_id == "gemini-3.5-flash-lite"
     assert client.tier == "free"
-    assert client.rpm == 4.0
+    assert client.rpm == 12.0
 
     # Reject -latest alias
     with pytest.raises(ValueError) as exc:
