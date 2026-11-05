@@ -1,0 +1,13 @@
+{
+  "_comment": "Configuration for LLM models, rate limits, and quota. Note: the daily request counter in results/quota_state.json tracks requests made through this runner only; it cannot observe external requests made outside the runner.",
+  "primary": "gemini-3.5-flash-lite",
+  "allowed": [
+    "gemini-3.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-3.8-flash"
+  ],
+  "tier": "free",
+  "default_rpm": 4,
+  "max_requests_per_day": 450
+}
+

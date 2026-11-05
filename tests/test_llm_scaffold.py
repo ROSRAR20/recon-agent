@@ -14,6 +14,8 @@ Covers all required specifications and amendments:
 from __future__ import annotations
 
 import ast
+import datetime
+import hashlib
 import json
 import os
 import tempfile
@@ -738,7 +740,7 @@ def test_gemini_client_fatal_errors_offline() -> None:
     """HTTP 401, 402, 403 raise FatalAPIError immediately without retrying."""
     from unittest.mock import MagicMock, patch
 
-    client = GeminiClient(api_key="test-api-key")
+    client = GeminiClient(api_key="test-api-key", sleep_fn=lambda _: None)
     bundle = _make_test_bundle()
 
     for code in (401, 402, 403):
@@ -781,6 +783,7 @@ def test_gemini_client_retries_429_then_succeeds() -> None:
     bundle = _make_test_bundle()
 
     success_payload = {
+        "model": "gemini-3.5-flash-lite",
         "output_text": json.dumps({
             "decision": "escalate_human",
             "predicted_class": "BENIGN_AMBIGUITY",
@@ -837,7 +840,7 @@ def test_gemini_client_rejects_minimal_thinking_level() -> None:
     """thinking_level='minimal' is rejected at construction with clear unsupported error."""
     with pytest.raises(ValueError) as exc_info:
         GeminiClient(api_key="test-api-key", thinking_level="minimal")
-    assert "thinking_level 'minimal' is unsupported for gemini-3.8-flash" in str(exc_info.value)
+    assert "thinking_level 'minimal' is unsupported for" in str(exc_info.value)
 
 
 def test_gemini_client_costs_none_when_tokens_missing() -> None:
@@ -920,6 +923,7 @@ def test_gemini_client_parse_unparseable_shape() -> None:
 
         # Legacy candidates-only shape (must NOT be accepted as valid)
         unparseable_payload = {
+            "model": "gemini-3.5-flash-lite",
             "candidates": [
                 {
                     "content": {
@@ -952,6 +956,7 @@ def test_gemini_client_parse_unparseable_shape() -> None:
         assert "raw_response_shape" in entry
         # Structure has names and types only
         expected_shape = {
+            "model": "str",
             "candidates": [{"content": {"parts": [{"text": "str"}]}}],
             "usage": {"total_input_tokens": "int", "total_output_tokens": "int"},
         }
@@ -959,9 +964,10 @@ def test_gemini_client_parse_unparseable_shape() -> None:
 
 
 def test_gemini_client_read_timeout_max_1_retry_and_audit() -> None:
-    """Read timeout allows at most 1 retry, then records duplicate billing in audit and returns escalate_human."""
+    """Read timeout allows at most 1 retry, then records duplicate billing in audit and raises InfraError."""
     from unittest.mock import patch
     import requests.exceptions
+    from src.recon_agent.llm.gemini_client import InfraError
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         audit_file = os.path.join(tmp_dir, "audit_timeout.jsonl")
@@ -969,25 +975,23 @@ def test_gemini_client_read_timeout_max_1_retry_and_audit() -> None:
         client = GeminiClient(api_key="test-api-key", audit_logger=logger)
         bundle = _make_test_bundle()
 
-        # Attempt 1: ReadTimeout, Attempt 2 (Retry 1): ReadTimeout -> terminates non-fatally
+        # Attempt 1: ReadTimeout, Attempt 2 (Retry 1): ReadTimeout -> raises InfraError (produces NO model output)
         with patch("requests.post") as mock_post, patch("time.sleep"):
             mock_post.side_effect = [
                 requests.exceptions.ReadTimeout("Server took too long to send data"),
                 requests.exceptions.ReadTimeout("Server took too long to send data"),
             ]
-            res = client.complete(bundle, system_prompt="System prompt", run_id=0)
+            with pytest.raises(InfraError) as exc_info:
+                client.complete(bundle, system_prompt="System prompt", run_id=0)
+            assert "possible duplicate billing" in str(exc_info.value)
 
         assert mock_post.call_count == 2
-        res_data = json.loads(res)
-        assert res_data["decision"] == "escalate_human"
-        assert res_data["reason_code"] == "READ_TIMEOUT_POSSIBLE_DUPLICATE_BILLING"
 
         # Check audit entry
         with open(audit_file, "r", encoding="utf-8") as f:
             lines = [json.loads(line) for line in f]
         assert len(lines) == 1
         entry = lines[0]
-        assert entry["final_action"] == "escalate_human"
         assert "possible duplicate billing" in entry["verifier_failed_checks"]
         assert "attempt_count=2" in entry["verifier_failed_checks"]
         assert entry["cost_usd"] is None
@@ -1029,6 +1033,7 @@ def test_gemini_client_utf8_rupee_symbol_and_no_content_length() -> None:
     assert "₹" in decoded["system_instruction"]
 
     success_payload = {
+        "model": "gemini-3.5-flash-lite",
         "output_text": json.dumps({
             "decision": "no_issue",
             "predicted_class": None,
@@ -1083,6 +1088,418 @@ def test_verifier_v1_rejects_overlength_explanation() -> None:
     assert res.failed_checks == ("V1",)
     assert res.reason_code == "SCHEMA_INVALID"
     assert "280" in res.details
+
+
+# ---------------------------------------------------------------------------
+# 8. Day 7a-3 & Day 7a-4 Tests: Model Config, Served-Model Check & Runner
+# ---------------------------------------------------------------------------
+
+def test_model_config_loading_and_alias_rejection() -> None:
+    """Primary model defaults to gemini-3.5-flash-lite, alias-style -latest models are rejected."""
+    client = GeminiClient(api_key="test-api-key")
+    assert client.model_id == "gemini-3.5-flash-lite"
+    assert client.tier == "free"
+    assert client.rpm == 4.0
+
+    # Reject -latest alias
+    with pytest.raises(ValueError) as exc:
+        GeminiClient(api_key="test-api-key", model_id="gemini-3.5-flash-latest")
+    assert "Alias-style model id" in str(exc.value)
+
+    # Reject unallowed model
+    with pytest.raises(ValueError) as exc2:
+        GeminiClient(api_key="test-api-key", model_id="gpt-4o")
+    assert "not in allowed models list" in str(exc2.value)
+
+
+def test_optional_thinking_level_omits_generation_config() -> None:
+    """When thinking_level is None, payload omits generation_config; includes it when provided."""
+    bundle = _make_test_bundle()
+
+    # None thinking level
+    client_none = GeminiClient(api_key="test-api-key", thinking_level=None)
+    payload_none = client_none.build_request_payload(bundle, system_instruction="system prompt")
+    assert "generation_config" not in payload_none
+
+    # Low thinking level
+    client_low = GeminiClient(api_key="test-api-key", thinking_level="low")
+    payload_low = client_low.build_request_payload(bundle, system_instruction="system prompt")
+    assert "generation_config" in payload_low
+    assert payload_low["generation_config"]["thinking_level"] == "low"
+
+
+def test_served_model_check_matching_and_mismatch() -> None:
+    """Served model matching succeeds; mismatch raises fatal ModelMismatch (never cached)."""
+    from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import ModelMismatch
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cache = LLMCache(cache_dir=tmp_dir)
+        client = GeminiClient(api_key="test-api-key", model_id="gemini-3.5-flash-lite", cache=cache, mode="eval", sleep_fn=lambda _: None)
+        bundle = _make_test_bundle()
+
+        # Case 1: Matching served model succeeds
+        matching_resp = MagicMock()
+        matching_resp.status_code = 200
+        matching_resp.json.return_value = {
+            "model": "gemini-3.5-flash-lite",
+            "output_text": json.dumps({"decision": "no_issue", "predicted_class": None}),
+            "usage": {"total_input_tokens": 100, "total_output_tokens": 20},
+        }
+        with patch("requests.post") as mock_post:
+            mock_post.return_value = matching_resp
+            res = client.complete(bundle, system_prompt="test", run_id=0)
+            assert "no_issue" in res
+
+        # Case 2: Mismatched served model raises fatal ModelMismatch
+        mismatched_resp = MagicMock()
+        mismatched_resp.status_code = 200
+        mismatched_resp.json.return_value = {
+            "model": "gemini-3.8-flash",  # different from requested gemini-3.5-flash-lite!
+            "output_text": json.dumps({"decision": "no_issue", "predicted_class": None}),
+            "usage": {"total_input_tokens": 100, "total_output_tokens": 20},
+        }
+        # Clear cache for next test by using a new run_id
+        with patch("requests.post") as mock_post:
+            mock_post.return_value = mismatched_resp
+            with pytest.raises(ModelMismatch) as exc:
+                client.complete(bundle, system_prompt="test", run_id=1)
+            assert "does not match requested model" in str(exc.value)
+
+        # Never cached under requested model ID
+        assert cache.get(bundle.bundle_hash, hashlib.sha256(b"test").hexdigest(), model_id="gemini-3.5-flash-lite", run_id=1) is None
+
+
+def test_served_model_missing_mode_check() -> None:
+    """Missing 'model' field raises ModelMismatch in eval mode; emits warning in smoke mode."""
+    from unittest.mock import MagicMock, patch
+    import warnings
+    from src.recon_agent.llm.gemini_client import ModelMismatch
+
+    bundle = _make_test_bundle()
+    resp_no_model = MagicMock()
+    resp_no_model.status_code = 200
+    resp_no_model.json.return_value = {
+        "output_text": json.dumps({"decision": "no_issue", "predicted_class": None}),
+        "usage": {"total_input_tokens": 100, "total_output_tokens": 20},
+    }
+
+    # Eval mode -> fatal ModelMismatch
+    client_eval = GeminiClient(api_key="test-api-key", mode="eval")
+    with patch("requests.post") as mock_post:
+        mock_post.return_value = resp_no_model
+        with pytest.raises(ModelMismatch) as exc:
+            client_eval.complete(bundle, system_prompt="test", run_id=10)
+        assert "missing 'model' field" in str(exc.value)
+
+    # Smoke mode -> emits warning, does not crash
+    client_smoke = GeminiClient(api_key="test-api-key", mode="smoke")
+    with patch("requests.post") as mock_post, warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mock_post.return_value = resp_no_model
+        res = client_smoke.complete(bundle, system_prompt="test", run_id=11)
+        assert "no_issue" in res
+        assert any("Response missing 'model' field" in str(item.message) for item in w)
+
+
+def test_observed_interactions_response_parsing_with_and_without_id() -> None:
+    """Wire shape observed from Interactions API without output_text parses correctly with or without id."""
+    client = GeminiClient(api_key="test-api-key")
+
+    # Wire shape WITH id
+    wire_with_id = {
+        "id": "interactions_12345",
+        "status": "completed",
+        "model": "gemini-3.5-flash-lite",
+        "service_tier": "default",
+        "steps": [
+            {
+                "type": "model_output",
+                "content": {
+                    "parts": [
+                        {"type": "text", "text": json.dumps({"decision": "benign_explained", "predicted_class": "ROUNDING_TOLERANCE"})}
+                    ]
+                },
+            }
+        ],
+        "usage": {
+            "prompt_token_count": 420,
+            "candidates_token_count": 85,
+            "thinking_token_count": 0,
+        },
+    }
+    raw_text, usage_numbers, tokens, flagged, shape = client.parse_interaction_response(wire_with_id)
+    assert raw_text is not None
+    assert "benign_explained" in raw_text
+    assert tokens["input_tokens"] == 420
+    assert tokens["output_tokens"] == 85
+    assert tokens["thinking_tokens"] == 0
+    assert flagged is False
+
+    # Wire shape WITHOUT id (store: false)
+    wire_no_id = dict(wire_with_id)
+    del wire_no_id["id"]
+    raw_text2, _, tokens2, _, _ = client.parse_interaction_response(wire_no_id)
+    assert raw_text2 == raw_text
+    assert tokens2["input_tokens"] == 420
+
+
+def test_client_side_rate_limiter_injectable() -> None:
+    """Rate limiter enforces min_interval between calls using injectable clock and sleep without delay."""
+    current_time = [1000.0]
+    sleep_calls = []
+
+    def mock_now() -> float:
+        return current_time[0]
+
+    def mock_sleep(sec: float) -> None:
+        sleep_calls.append(sec)
+        current_time[0] += sec
+
+    from unittest.mock import MagicMock, patch
+
+    client = GeminiClient(
+        api_key="test-api-key",
+        rpm=6.0,  # 6 RPM -> min_interval = 10.0 seconds
+        time_fn=mock_now,
+        sleep_fn=mock_sleep,
+    )
+    bundle = _make_test_bundle()
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "model": "gemini-3.5-flash-lite",
+        "output_text": json.dumps({"decision": "no_issue", "predicted_class": None}),
+        "usage": {"total_input_tokens": 100, "total_output_tokens": 20},
+    }
+
+    with patch("requests.post") as mock_post:
+        mock_post.return_value = mock_resp
+        # Call 1: immediate
+        client.complete(bundle, system_prompt="test", run_id=1)
+        assert len(sleep_calls) == 0
+
+        # Advance clock by only 3 seconds
+        current_time[0] += 3.0
+        # Call 2: should sleep 7.0 seconds to meet 10.0 second interval
+        client.complete(bundle, system_prompt="test", run_id=2)
+        assert len(sleep_calls) == 1
+        assert abs(sleep_calls[0] - 7.0) < 0.01
+
+
+def test_http_503_backoff_schedule() -> None:
+    """HTTP 503 triggers backoff (~5s, 15s, 45s) using injectable sleep."""
+    from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
+
+    sleeps = []
+    client = GeminiClient(
+        api_key="test-api-key",
+        max_retries=3,
+        sleep_fn=lambda s: sleeps.append(s),
+    )
+    bundle = _make_test_bundle()
+
+    resp_503 = MagicMock()
+    resp_503.status_code = 503
+    resp_503.text = "Service Unavailable"
+
+    with patch("requests.post") as mock_post:
+        mock_post.return_value = resp_503
+        with pytest.raises(InfraError) as exc:
+            client.complete(bundle, system_prompt="test", run_id=0)
+        assert "Exceeded max retries (3) on HTTP 503" in str(exc.value)
+
+    assert len(sleeps) == 2  # attempt 1 sleep, attempt 2 sleep, attempt 3 fails
+    # Check backoff ranges: attempt 1 >= 5s, attempt 2 >= 15s
+    assert 5.0 <= sleeps[0] <= 6.0
+    assert 15.0 <= sleeps[1] <= 16.0
+
+
+def test_quota_tracker_dst_and_midnight_rollover() -> None:
+    """QuotaTracker resets request count at midnight Pacific time across DST boundaries."""
+    from zoneinfo import ZoneInfo
+    from src.recon_agent.llm.runner import QuotaTracker
+    from src.recon_agent.llm.gemini_client import DailyQuotaExhaustedError
+
+    la_tz = ZoneInfo("America/Los_Angeles")
+    # Test across autumn DST transition date: 2026-11-01
+    simulated_now = [datetime.datetime(2026, 11, 1, 23, 59, 50, tzinfo=la_tz)]
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        state_file = os.path.join(tmp_dir, "quota_state.json")
+        tracker = QuotaTracker(
+            quota_state_path=state_file,
+            max_requests_per_day=3,
+            now_fn=lambda: simulated_now[0],
+        )
+
+        assert tracker.get_pacific_date() == "2026-11-01"
+        assert tracker.can_request() is True
+
+        tracker.record_request()
+        tracker.record_request()
+        tracker.record_request()
+        assert tracker.can_request() is False
+
+        # Budget exhausted raises
+        with pytest.raises(DailyQuotaExhaustedError):
+            tracker.record_request()
+
+        # Advance past midnight to next Pacific date (2026-11-02 00:00:10)
+        simulated_now[0] = datetime.datetime(2026, 11, 2, 0, 0, 10, tzinfo=la_tz)
+        assert tracker.get_pacific_date() == "2026-11-02"
+        # Midnight rollover reset!
+        assert tracker.can_request() is True
+        assert tracker.requests_remaining() == 3
+        new_cnt = tracker.record_request()
+        assert new_cnt == 1
+
+
+def test_stratified_case_ordering() -> None:
+    """order_cases_stratified interleaves (seed, family) strata so any prefix is balanced."""
+    from src.recon_agent.llm.runner import order_cases_stratified
+
+    cases = []
+    # Create 3 seeds * 3 families = 9 strata, each with 4 cases = 36 cases
+    for s in (1, 2, 3):
+        for f in ("fee_tax", "refund", "bank"):
+            for i in range(4):
+                bundle = create_case_bundle(
+                    bundle_id=f"bundle_s{s}_{f}_{i}",
+                    entity_id=f"ent_{s}_{f}_{i}",
+                    merchant_id="mer_01",
+                    case_type="payment",
+                    rule_id=f,
+                    facts={"seed": s, "type": "payment"},
+                    untrusted_text={"recon_item_description": None},
+                )
+                cases.append(bundle)
+
+    ordered = order_cases_stratified(cases, rng_seed=123)
+    assert len(ordered) == 36
+
+    # Any prefix of length 9 should contain multiple distinct families and seeds
+    prefix9 = ordered[:9]
+    families = {b.rule_id for b in prefix9}
+    seeds = {b.facts["seed"] for b in prefix9}
+    assert len(families) == 3
+    assert len(seeds) == 3
+
+
+def test_resumable_runner_flow() -> None:
+    """Runner manages ok, infra_failed, model_invalid, and pending states with --resume."""
+    from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.runner import Runner, QuotaTracker, score_llm_run
+    from src.recon_agent.llm.gemini_client import InfraError
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        state_file = os.path.join(tmp_dir, "run_state.json")
+        quota_file = os.path.join(tmp_dir, "quota.json")
+
+        tracker = QuotaTracker(quota_state_path=quota_file, max_requests_per_day=10)
+        client = GeminiClient(api_key="test-api-key", sleep_fn=lambda _: None)
+
+        # 3 test cases
+        b1 = create_case_bundle(
+            bundle_id="case_1_ok",
+            entity_id="pay_1",
+            merchant_id="mer_1",
+            case_type="payment",
+            rule_id="B1_MATCH_EXACT",
+            facts={"entity_id": "pay_1", "type": "payment", "amount_paise": 10000, "fee_paise": 200, "tax_paise": 36},
+            untrusted_text={"recon_item_description": None},
+        )
+        b2 = create_case_bundle(
+            bundle_id="case_2_infra",
+            entity_id="pay_2",
+            merchant_id="mer_1",
+            case_type="payment",
+            rule_id="B1_MATCH_EXACT",
+            facts={"entity_id": "pay_2", "type": "payment", "amount_paise": 20000, "fee_paise": 400, "tax_paise": 72},
+            untrusted_text={"recon_item_description": None},
+        )
+        b3 = create_case_bundle(
+            bundle_id="case_3_invalid",
+            entity_id="pay_3",
+            merchant_id="mer_1",
+            case_type="payment",
+            rule_id="B1_MATCH_EXACT",
+            facts={"entity_id": "pay_3", "type": "payment", "amount_paise": 30000, "fee_paise": 600, "tax_paise": 108},
+            untrusted_text={"recon_item_description": None},
+        )
+
+        cases = [b1, b2, b3]
+
+        runner = Runner(
+            client=client,
+            quota_tracker=tracker,
+            system_prompt="prompt",
+            run_state_path=state_file,
+        )
+
+        # Mock responses: case 1 ok, case 2 infra fail, case 3 model invalid
+        resp_ok = MagicMock()
+        resp_ok.status_code = 200
+        resp_ok.json.return_value = {
+            "model": "gemini-3.5-flash-lite",
+            "output_text": json.dumps({
+                "decision": "no_issue",
+                "predicted_class": None,
+                "explanation": "Valid",
+                "evidence": [],
+                "reason_code": "MATCH",
+            }),
+            "usage": {"total_input_tokens": 100, "total_output_tokens": 20},
+        }
+
+        resp_invalid = MagicMock()
+        resp_invalid.status_code = 200
+        resp_invalid.json.return_value = {
+            "model": "gemini-3.5-flash-lite",
+            "output_text": "NOT_JSON_AT_ALL",
+            "usage": {"total_input_tokens": 100, "total_output_tokens": 5},
+        }
+
+        with patch("requests.post") as mock_post:
+            mock_post.side_effect = [
+                resp_ok,
+                requests.exceptions.ConnectTimeout("Connect failed"),
+                requests.exceptions.ConnectTimeout("Connect failed"),
+                requests.exceptions.ConnectTimeout("Connect failed"),
+                requests.exceptions.ConnectTimeout("Connect failed"),
+                resp_invalid,
+            ]
+            results = runner.run_cases(cases, resume=False)
+
+        assert results["case_1_ok"].status == "ok"
+        assert results["case_2_infra"].status == "infra_failed"
+        assert results["case_2_infra"].raw_output is None  # NO model output on infra fail!
+        assert results["case_3_invalid"].status == "model_invalid"
+
+        # Scoring without --allow-infra-failures MUST refuse
+        with pytest.raises(RuntimeError) as exc:
+            score_llm_run(results, allow_infra_failures=False)
+        assert "Refusing to score" in str(exc.value)
+
+        # Scoring WITH --allow-infra-failures maps infra_failed to escalate_human and warns in header
+        score_res = score_llm_run(results, allow_infra_failures=True, tier="free")
+        assert score_res["header_warning"] is not None
+        assert "WARNING: Scored with --allow-infra-failures" in score_res["header_warning"]
+        assert score_res["actual_cost_usd"] == 0.0
+        assert score_res["report_cost_str"] == "$0.00 (free tier)"
+        assert score_res["estimated_paid_equivalent_cost_usd"] is not None
+
+        # Test --resume: re-running with resume retries only case_2_infra
+        with patch("requests.post") as mock_post:
+            mock_post.return_value = resp_ok
+            resumed_results = runner.run_cases(cases, resume=True)
+
+        assert resumed_results["case_1_ok"].status == "ok"
+        assert resumed_results["case_2_infra"].status == "ok"  # Recovered!
+        assert resumed_results["case_3_invalid"].status == "model_invalid"  # Not re-run!
+
 
 
 

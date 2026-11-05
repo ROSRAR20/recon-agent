@@ -168,6 +168,19 @@ def main() -> None:
         action="store_true",
         help="Print per-attempt HTTP diagnostic information (header names only, body byte length, status)",
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Model ID to evaluate (must be defined in config/llm_models.json; defaults to primary)",
+    )
+    parser.add_argument(
+        "--thinking-level",
+        type=str,
+        default=None,
+        choices=["low", "medium", "high"],
+        help="Thinking level for model (low, medium, high). If omitted, defaults to model default.",
+    )
     args = parser.parse_args()
 
     system_prompt_path = os.path.join(REPO_ROOT, "src", "recon_agent", "llm", "prompts", "system.txt")
@@ -177,10 +190,12 @@ def main() -> None:
     cache = LLMCache()
     audit_logger = AuditLogger()
     client = GeminiClient(
+        model_id=args.model,
+        thinking_level=args.thinking_level,
         cache=cache,
         audit_logger=audit_logger,
-        thinking_level="low",
         debug_http=args.debug_http,
+        mode="smoke",
     )
     verifier = Verifier()
 

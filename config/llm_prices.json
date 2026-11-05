@@ -8,6 +8,38 @@
     "unit": "USD per 1,000,000 tokens"
   },
   "models": {
+    "gemini-3.5-flash-lite": {
+      "rates": [
+        {
+          "tier": "standard",
+          "effective_from": "2026-01-01",
+          "effective_to": null,
+          "input_cost_per_million": 0.075,
+          "output_cost_per_million": 0.30,
+          "thinking_cost_per_million": 0.30,
+          "cache_read_cost_per_million": 0.01875,
+          "source_url": null,
+          "verified": false,
+          "verified_by": null
+        }
+      ]
+    },
+    "gemini-3.6-flash": {
+      "rates": [
+        {
+          "tier": "standard",
+          "effective_from": "2026-01-01",
+          "effective_to": null,
+          "input_cost_per_million": 0.50,
+          "output_cost_per_million": 2.50,
+          "thinking_cost_per_million": 2.50,
+          "cache_read_cost_per_million": 0.05,
+          "source_url": null,
+          "verified": false,
+          "verified_by": null
+        }
+      ]
+    },
     "gemini-3.8-flash": {
       "rates": [
         {

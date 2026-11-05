@@ -25,7 +25,7 @@ class LLMCache:
         prompt_hash: str,
         schema_hash: str = "",
         model_id: str = "",
-        thinking_level: str = "low",
+        thinking_level: str | None = "low",
         run_id: int = 0,
     ) -> str:
         """Derive deterministic cache filename key."""
@@ -40,7 +40,7 @@ class LLMCache:
         prompt_hash: str,
         schema_hash: str = "",
         model_id: str = "",
-        thinking_level: str = "low",
+        thinking_level: str | None = "low",
         run_id: int = 0,
     ) -> str | None:
         """Retrieve cached raw LLM response if present, else None."""
@@ -73,9 +73,10 @@ class LLMCache:
         prompt_hash: str,
         schema_hash: str = "",
         model_id: str = "",
-        thinking_level: str = "low",
+        thinking_level: str | None = "low",
         run_id: int = 0,
         raw_output: str = "",
+        served_model: str | None = None,
     ) -> None:
         """Write raw LLM response to disk cache."""
         # Backward compatibility for legacy 4-arg positional call: put(bundle_hash, prompt_hash, model_id, raw_output)
@@ -100,6 +101,7 @@ class LLMCache:
             "thinking_level": thinking_level,
             "run_id": run_id,
             "raw_output": raw_output,
+            "served_model": served_model,
         }
         temp_filepath = f"{filepath}.tmp"
         with open(temp_filepath, "w", encoding="utf-8") as f:

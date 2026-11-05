@@ -26,7 +26,7 @@ class AuditRecord:
     bundle_hash: str
     prompt_hash: str
     model_id: str
-    thinking_level: str
+    thinking_level: str | None
     raw_output_hash: str
     schema_valid: bool
     verifier_outcome: str
@@ -42,6 +42,10 @@ class AuditRecord:
     usage_raw: dict[str, int | float] | None = None
     usage_flagged: bool = False
     raw_response_shape: dict[str, Any] | list[Any] | str | None = None
+    served_model: str | None = None
+    service_tier: str | None = None
+    tier: str = "free"
+    estimated_paid_equivalent_cost_usd: float | None = None
 
 
 class AuditLogger:
@@ -62,7 +66,7 @@ class AuditLogger:
         verifier_outcome: str,
         verifier_failed_checks: list[str] | tuple[str, ...],
         final_action: str,
-        thinking_level: str = "low",
+        thinking_level: str | None = None,
         input_tokens: int | None = 0,
         output_tokens: int | None = 0,
         thinking_tokens: int | None = 0,
@@ -73,6 +77,10 @@ class AuditLogger:
         usage_raw: dict[str, int | float] | None = None,
         usage_flagged: bool = False,
         raw_response_shape: dict[str, Any] | list[Any] | str | None = None,
+        served_model: str | None = None,
+        service_tier: str | None = None,
+        tier: str = "free",
+        estimated_paid_equivalent_cost_usd: float | None = None,
     ) -> AuditRecord:
         """Write an audit entry containing only cryptographic hashes and verification metrics."""
         # Sanitize raw output before hashing just in case
@@ -88,12 +96,19 @@ class AuditLogger:
         else:
             effective_cost = cost_usd
 
+        # If free tier, actual cost is 0.0 (if tokens present)
+        if tier == "free" and effective_cost is not None:
+            paid_equiv = effective_cost
+            effective_cost = 0.0
+            if estimated_paid_equivalent_cost_usd is None:
+                estimated_paid_equivalent_cost_usd = paid_equiv
+
         record = AuditRecord(
             timestamp=now_iso,
             bundle_hash=sanitize_error(bundle_hash),
             prompt_hash=sanitize_error(prompt_hash),
             model_id=sanitize_error(model_id),
-            thinking_level=sanitize_error(thinking_level),
+            thinking_level=sanitize_error(thinking_level) if thinking_level is not None else None,
             raw_output_hash=raw_output_hash,
             schema_valid=schema_valid,
             verifier_outcome=verifier_outcome,
@@ -109,6 +124,10 @@ class AuditLogger:
             usage_raw=usage_raw,
             usage_flagged=usage_flagged,
             raw_response_shape=raw_response_shape,
+            served_model=sanitize_error(served_model) if served_model is not None else None,
+            service_tier=sanitize_error(service_tier) if service_tier is not None else None,
+            tier=tier,
+            estimated_paid_equivalent_cost_usd=estimated_paid_equivalent_cost_usd,
         )
 
         record_json = json.dumps(asdict(record))
