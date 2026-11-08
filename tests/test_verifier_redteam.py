@@ -383,7 +383,8 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
 
     # Define mutators - seeded expansion to >= 200 deterministic corruptions
     rng = random.Random(42)
-    mutations: list[tuple[str, Any, Any]] = []
+    mutations: list[tuple[str, str, Any, Any, bool, str | None]] = []
+    # tuple: (mut_type, decision_family, bundle, mutated_out, is_neutral, neutral_reason)
 
     # 1. corrupt_number (>= 40 corruptions)
     for i in range(40):
@@ -393,14 +394,14 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
             c["cited_amount_paise"] = 1500 + offset
         else:
             c["cited_amount_paise"] = max(1, 1500 - offset)
-        mutations.append(("corrupt_number", b_refund, c))
+        mutations.append(("corrupt_number", "benign_explained", b_refund, c, False, None))
 
     for i in range(10):
         # Explanations with fabricated ungrounded numbers
         c = dict(out_flag)
         bogus_num = 77000 + i * 111
         c["explanation"] = f"Debit of 10000 paise does not match refund amount {bogus_num} paise."
-        mutations.append(("corrupt_number", b_flag, c))
+        mutations.append(("corrupt_number", "flag", b_flag, c, False, None))
 
     # 2. swap_field (>= 35 corruptions)
     invalid_field_names = [
@@ -421,23 +422,24 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
         "escalation_reason",
     ]
     for i in range(35):
+        fam = "benign_explained" if i % 2 == 0 else "no_issue"
         c = dict(out_benign if i % 2 == 0 else out_clean)
         fname = invalid_field_names[i % len(invalid_field_names)] + f"_{i}"
         target_bundle = b_refund if i % 2 == 0 else b_clean
         c["evidence"] = [{"field": fname, "value": 1000 + i}]
-        mutations.append(("swap_field", target_bundle, c))
+        mutations.append(("swap_field", fam, target_bundle, c, False, None))
 
     # 3. alter_quote (>= 40 corruptions)
     short_quotes = ["Rs 1", "fee", "INR 5", "₹2", "1500", "paisa", "cut"]
     for i in range(15):
         c = dict(out_benign)
         c["verbatim_quote"] = short_quotes[i % len(short_quotes)]
-        mutations.append(("alter_quote", b_refund, c))
+        mutations.append(("alter_quote", "benign_explained", b_refund, c, False, None))
 
     for i in range(15):
         c = dict(out_benign)
         c["verbatim_quote"] = f"Fabricated quote not present in note {i}."
-        mutations.append(("alter_quote", b_refund, c))
+        mutations.append(("alter_quote", "benign_explained", b_refund, c, False, None))
 
     for i in range(10):
         # Bare number without currency unit -> ABSTAIN (not ACCEPT)
@@ -451,7 +453,7 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
         )
         c = dict(out_benign)
         c["verbatim_quote"] = "ticket 1500"
-        mutations.append(("alter_quote", bundle_bare, c))
+        mutations.append(("alter_quote", "benign_explained", bundle_bare, c, False, None))
 
     # 4. flip_decision (>= 35 corruptions)
     for i in range(15):
@@ -459,7 +461,7 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
         c = dict(out_flag)
         c["decision"] = "no_issue"
         c["predicted_class"] = None
-        mutations.append(("flip_decision", b_flag, c))
+        mutations.append(("flip_decision", "flag", b_flag, c, False, None))
 
     for i in range(10):
         # Flip flag to benign_explained without quote
@@ -467,7 +469,7 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
         c["decision"] = "benign_explained"
         c["predicted_class"] = None
         c["verbatim_quote"] = None
-        mutations.append(("flip_decision", b_flag, c))
+        mutations.append(("flip_decision", "flag", b_flag, c, False, None))
 
     for i in range(10):
         # Flip near tolerance payment to no_issue
@@ -480,7 +482,7 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
         )
         c = dict(out_clean)
         c["decision"] = "no_issue"
-        mutations.append(("flip_decision", b_near, c))
+        mutations.append(("flip_decision", "no_issue", b_near, c, False, None))
 
     # 5. change_class (>= 40 corruptions)
     unsupported_classes = [
@@ -495,7 +497,7 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
     for i in range(40):
         c = dict(out_flag)
         c["predicted_class"] = unsupported_classes[i % len(unsupported_classes)]
-        mutations.append(("change_class", b_flag, c))
+        mutations.append(("change_class", "flag", b_flag, c, False, None))
 
     # 6. evidence_value_mismatch (>= 35 corruptions)
     for i in range(35):
@@ -503,21 +505,73 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
         # Sourced fact amount_paise is 10000, corrupt value to something else
         corrupt_val = 10000 + (i + 1) * 7
         c["evidence"] = [{"field": "facts.amount_paise", "value": corrupt_val}]
-        mutations.append(("evidence_value_mismatch", b_refund, c))
+        mutations.append(("evidence_value_mismatch", "benign_explained", b_refund, c, False, None))
 
-    # Execute mutations and verify none is ACCEPTED
-    counts: dict[str, int] = {}
-    for mut_type, bundle, mutated_out in mutations:
-        counts[mut_type] = counts.get(mut_type, 0) + 1
+    # 7. Declared Neutral Corruptions (6 controls)
+    # Neutral 1: Whitespace spacing in benign_explained explanation
+    c_neu1 = dict(out_benign)
+    c_neu1["explanation"] = "Refund difference of 1500 paise  is verified by note stating Rs 15.00 fee deduction."
+    mutations.append(("neutral_formatting", "benign_explained", b_refund, c_neu1, True, "Whitespace padding in explanation without introducing numbers is semantically inert."))
+
+    # Neutral 2: Capitalization preservation in benign quote
+    c_neu2 = dict(out_benign)
+    c_neu2["explanation"] = "Refund difference of 1500 paise is verified by note stating Rs 15.00 fee deduction!"
+    mutations.append(("neutral_formatting", "benign_explained", b_refund, c_neu2, True, "Punctuation change in explanation does not alter ground truth or numbers."))
+
+    # Neutral 3: Alternative authorized phrasing in flag
+    c_neu3 = dict(out_flag)
+    c_neu3["explanation"] = "Debit of 10000 paise mismatches refund amount 20000 paise."
+    mutations.append(("neutral_paraphrase", "flag", b_flag, c_neu3, True, "Paraphrased flag explanation using authorized grounded numbers (10000, 20000) preserves grounding."))
+
+    # Neutral 4: Harmless punctuation in no_issue explanation
+    c_neu4 = dict(out_clean)
+    c_neu4["explanation"] = "Payment fee and tax are verified correct within policy tolerance -- verified."
+    mutations.append(("neutral_paraphrase", "no_issue", b_clean, c_neu4, True, "Non-numeric prose extension in no_issue preserves tolerance verification."))
+
+    # Neutral 5: Whitespace in escalate_human explanation
+    c_neu5 = dict(out_esc)
+    c_neu5["explanation"] = "Discrepancy cannot be resolved from observable facts. Escalating."
+    mutations.append(("neutral_paraphrase", "escalate_human", b_escalate, c_neu5, True, "Sentence expansion in escalate_human without fabricated numbers is valid."))
+
+    # Neutral 6: Trailing period in benign quote
+    c_neu6 = dict(out_benign)
+    c_neu6["verbatim_quote"] = "Fee deduction Rs 15.00 applied"
+    c_neu6["cited_amount_paise"] = 1500
+    mutations.append(("neutral_quote_extension", "benign_explained", b_refund, c_neu6, True, "Quote extension matching byte-exact untrusted text with exact amount token is valid."))
+
+    # Execute mutations and verify
+    counts_by_type: dict[str, int] = {}
+    counts_by_family: dict[str, int] = {}
+    neutral_reasons: list[tuple[str, str, str]] = []
+
+    for mut_type, fam, bundle, mutated_out, is_neutral, neutral_reason in mutations:
+        counts_by_type[mut_type] = counts_by_type.get(mut_type, 0) + 1
+        counts_by_family[fam] = counts_by_family.get(fam, 0) + 1
         res = verifier.verify(bundle, mutated_out)
-        assert res.outcome != VerifierOutcome.ACCEPT, (
-            f"Corrupted output for mutation type '{mut_type}' was unexpectedly ACCEPTED: {res}"
-        )
 
-    print("\n[MUTATION TEST SUMMARY]")
-    for m_type, count in sorted(counts.items()):
-        print(f"  Mutation Type '{m_type}': {count} tests (100% rejected)")
-    print(f"Total mutations tested: {sum(counts.values())}")
+        if is_neutral:
+            assert res.outcome == VerifierOutcome.ACCEPT, (
+                f"Neutral mutation '{mut_type}' unexpectedly failed verification: {res}"
+            )
+            neutral_reasons.append((mut_type, fam, neutral_reason or ""))
+        else:
+            assert res.outcome != VerifierOutcome.ACCEPT, (
+                f"Non-neutral corruption '{mut_type}' unexpectedly ACCEPTED: {res}"
+            )
+
+    print("\n[MUTATION TEST BREAKDOWN BY DECISION FAMILY]")
+    for fam, cnt in sorted(counts_by_family.items()):
+        print(f"  Family '{fam}': {cnt} mutations tested")
+
+    print("\n[MUTATION TEST BREAKDOWN BY TYPE]")
+    for m_type, cnt in sorted(counts_by_type.items()):
+        print(f"  Mutation Type '{m_type}': {cnt} tests")
+
+    print(f"\n[NEUTRAL CORRUPTIONS REPORT: {len(neutral_reasons)} DECLARED NEUTRAL]")
+    for m_type, fam, reason in neutral_reasons:
+        print(f"  - [{fam}] {m_type}: {reason}")
+
+    print(f"\nTotal mutations tested: {sum(counts_by_type.values())} (Non-neutral: {sum(counts_by_type.values()) - len(neutral_reasons)}, Neutral: {len(neutral_reasons)})")
 
 
 def test_12_no_issue_supporting_facts_guard() -> None:

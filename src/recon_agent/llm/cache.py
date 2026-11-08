@@ -12,6 +12,14 @@ import os
 from typing import Any
 
 
+class CacheCorruptionError(Exception):
+    """Raised when on-disk cache content fails SHA-256 hash integrity check."""
+
+
+class CacheKeyExistsError(FileExistsError):
+    """Raised when an attempt is made to overwrite an immutable cache entry."""
+
+
 class LLMCache:
     """Disk cache for LLM completions."""
 
@@ -61,9 +69,22 @@ class LLMCache:
             return None
         try:
             with open(filepath, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+        except json.JSONDecodeError as exc:
+            raise CacheCorruptionError(f"Cache entry '{key}' is invalid JSON: {exc}") from exc
         except Exception:
             return None
+
+        raw_output = data.get("raw_output")
+        if raw_output is not None:
+            expected_hash = data.get("content_hash") or data.get("raw_output_hash")
+            if expected_hash is not None:
+                actual_hash = hashlib.sha256(raw_output.encode("utf-8")).hexdigest()
+                if actual_hash != expected_hash:
+                    raise CacheCorruptionError(
+                        f"Cache entry '{key}' is corrupted: expected {expected_hash}, got {actual_hash}"
+                    )
+        return data
 
     def get(
         self,
@@ -120,6 +141,11 @@ class LLMCache:
             run_id=run_id,
         )
         filepath = os.path.join(self.cache_dir, f"{key}.json")
+        if os.path.isfile(filepath):
+            raise CacheKeyExistsError(
+                f"Cache entry for key '{key}' already exists and is immutable."
+            )
+        content_hash = hashlib.sha256(raw_output.encode("utf-8")).hexdigest()
         payload = {
             "bundle_hash": bundle_hash,
             "prompt_hash": prompt_hash,
@@ -128,6 +154,8 @@ class LLMCache:
             "thinking_level": thinking_level,
             "run_id": run_id,
             "raw_output": raw_output,
+            "content_hash": content_hash,
+            "raw_output_hash": content_hash,
             "served_model": served_model,
             "tokens": tokens,
             "cost_low": cost_low,

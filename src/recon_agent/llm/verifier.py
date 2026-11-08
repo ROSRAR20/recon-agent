@@ -40,9 +40,9 @@ class VerifierResult:
     def __init__(
         self,
         outcome: VerifierOutcome,
-        failed_checks: tuple[str, ...],
-        reason_code: str,
-        details: str,
+        failed_checks: tuple[str, ...] = (),
+        reason_code: str = "",
+        details: str = "",
     ) -> None:
         self.outcome = outcome
         self.failed_checks = failed_checks
@@ -53,6 +53,16 @@ class VerifierResult:
         return (
             f"VerifierResult(outcome={self.outcome.value}, "
             f"failed_checks={self.failed_checks}, reason_code='{self.reason_code}')"
+        )
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, VerifierResult):
+            return False
+        return (
+            self.outcome == other.outcome
+            and self.failed_checks == other.failed_checks
+            and self.reason_code == other.reason_code
+            and self.details == other.details
         )
 
 

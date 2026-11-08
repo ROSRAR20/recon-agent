@@ -4,21 +4,34 @@ This document specifies the design, operational rules, mathematical guarantees, 
 
 ---
 
-## 1. Architectural Role
+## 1. Architectural Role & Execution Flow
 
-The verifier sits between the unconstrained natural language output of the LLM and the reconciliation engine's state transitions. Its goal is to provide deterministic guardrails against hallucination, arithmetic error, and adversarial prompt injection.
+The system strictly decouples raw LLM inference from rule-based verification:
 
 ```mermaid
 flowchart LR
-    A[CaseBundle] --> B[LLM Reasoning]
+    A[CaseBundle] --> B[GeminiClient]
     B --> C[Raw LLM Output]
-    C --> D[Strict Schema Validator V1]
-    D --> E[Rule-based Verifier V2-V7]
-    E -->|ACCEPT| F[LLM Final Action]
-    E -->|REJECT| G[Deterministic Escalate Human Template]
-    E -->|ABSTAIN| G
-    D -->|FAIL| G
+    C --> D[(Disk Cache\nImmutable)]
+    D --> E[Finalize\nverifier_version]
+    E -->|B2 Pipeline| F[B2 Unverified Action]
+    E -->|B3 Pipeline| G[Rule-based Verifier V1-V7]
+    G -->|ACCEPT| H[B3 LLM Action]
+    G -->|REJECT / ABSTAIN| I[B3 Escalate Human Template]
+    F --> J[Scoring & Evaluation]
+    H --> J
+    I --> J
 ```
+
+### Decoupled Verification Flow
+1. **Client (`GeminiClient`)**: Invocations collect raw model output text and execution metadata (`served_model`, `tokens`, `latency_ms`, `attempts`). The client never executes the verifier and never mutates model responses.
+2. **Raw Cache (`LLMCache`)**: Caches exact raw model strings keyed by `(bundle_hash, prompt_hash, schema_hash, model_id, thinking_level, run_id)`. Cache entries are strictly immutable (refusing overwrite) and cryptographically integrity-checked with SHA-256 (`content_hash`).
+3. **Finalize (`llm/finalize.py`)**: A pure, deterministic function mapping `(bundle, raw_text, verifier_version)` to `FinalDecision`:
+   - Parses raw status (`ok`, `non_json`, `schema_invalid`, `empty_output`).
+   - Resolves **B2 action**: raw decision if schema is valid, else `escalate_human`.
+   - Resolves **B3 action**: runs rule-based verification (V1–V7). If `ACCEPT`, accepts raw decision; otherwise maps to `escalate_human` with deterministic fallback explanation.
+   - Writes finalized results atomically to `results/finalized/<verifier_version>/` (keyed by `(bundle_id, run_id)`).
+4. **Scoring**: Evaluates B2 and B3 performance independently against ground truth.
 
 > [!IMPORTANT]
 > **Universal Execution (Checks V1–V7 on All Decisions):**

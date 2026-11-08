@@ -28,15 +28,15 @@ class AuditRecord:
     model_id: str
     thinking_level: str | None
     raw_output_hash: str
-    schema_valid: bool
-    verifier_outcome: str
-    verifier_failed_checks: list[str]
-    input_tokens: int | None
-    output_tokens: int | None
-    thinking_tokens: int | None
-    latency_ms: int
-    cost_usd: float | None
-    final_action: str
+    schema_valid: bool | None = None
+    verifier_outcome: str | None = None
+    verifier_failed_checks: list[str] | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    thinking_tokens: int | None = None
+    latency_ms: int = 0
+    cost_usd: float | None = None
+    final_action: str | None = None
     estimated_cost_low_usd: float | None = None
     estimated_cost_high_usd: float | None = None
     usage_raw: dict[str, int | float] | None = None
@@ -62,10 +62,10 @@ class AuditLogger:
         prompt_hash: str,
         model_id: str,
         raw_output: str,
-        schema_valid: bool,
-        verifier_outcome: str,
-        verifier_failed_checks: list[str] | tuple[str, ...],
-        final_action: str,
+        schema_valid: bool | None = None,
+        verifier_outcome: str | None = None,
+        verifier_failed_checks: list[str] | tuple[str, ...] | None = None,
+        final_action: str | None = None,
         thinking_level: str | None = None,
         input_tokens: int | None = 0,
         output_tokens: int | None = 0,
@@ -112,7 +112,7 @@ class AuditLogger:
             raw_output_hash=raw_output_hash,
             schema_valid=schema_valid,
             verifier_outcome=verifier_outcome,
-            verifier_failed_checks=list(verifier_failed_checks),
+            verifier_failed_checks=list(verifier_failed_checks) if verifier_failed_checks is not None else None,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             thinking_tokens=thinking_tokens,

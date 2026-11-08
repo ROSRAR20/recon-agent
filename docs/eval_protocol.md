@@ -97,7 +97,19 @@ To assess resilience against indirect prompt injection, systems B2 and B3 are be
 
 ## 7. LLM Discrepancy Routing & Final-Action Mapping (B2 & B3)
 
-When an ambiguous case or escalation is routed to the LLM scaffold, the final automated action is determined by the system architecture:
+The evaluation architecture enforces strict architectural separation between inference, caching, verification, and scoring:
+
+```
+client -> raw cache -> finalize (verifier_version) -> B2/B3 -> scoring
+```
+
+1. **Client Execution (`GeminiClient`)**: Calls the model and receives raw response text. The client does not validate or verify output and does not mutate responses.
+2. **Raw Cache (`results/llm_cache/`)**: Stores exact raw strings with execution telemetry. Cache keys are immutable and content-hashed with SHA-256.
+3. **Finalization (`scripts/finalize_runs.py` / `finalize()`)**: Loads cached raw outputs and maps them to deterministic actions under a specific `verifier_version` (SHA-256 of `verifier.py` + `schema.py`):
+   - **System B2 (Unverified LLM)**: Validates JSON schema compliance. If valid, `b2_action` = raw decision; otherwise `escalate_human`.
+   - **System B3 (Full Verified System)**: Validates JSON schema and runs rule-based checks V1–V7. If `ACCEPT`, `b3_action` = raw decision; otherwise `b3_action` = `escalate_human` with deterministic fallback explanation.
+   - Results are written atomically to `results/finalized/<verifier_version>/finalized_<population>_run<run_id>.jsonl`.
+4. **Scoring (`src/recon_agent/evaluation/`)**: Scores finalized B2 and B3 actions against ground truth labels.
 
 ### System B2 (Rules + Unverified LLM)
 - The raw output from the LLM is validated strictly for JSON schema compliance (`V1`).

@@ -727,27 +727,14 @@ class GeminiClient:
         self.last_usage_raw = usage_numbers
         self.last_raw_response_shape = key_structure
 
-        # Handle unparseable response shape (model_invalid mapped to escalate_human)
+        # Handle unknown response shape: infra/protocol failure
         if raw_output_text is None:
-            fallback_response = json.dumps({
-                "decision": "escalate_human",
-                "predicted_class": None,
-                "reason_code": "UNPARSEABLE_RESPONSE_SHAPE",
-                "explanation": "Response shape from model is unrecognized; escalating for human review.",
-                "evidence": [],
-                "cited_amount_paise": None,
-                "verbatim_quote": None,
-            })
             if self.audit_logger is not None:
                 self.audit_logger.log(
                     bundle_hash=bundle_hash,
                     prompt_hash=prompt_hash,
                     model_id=self.model_id,
-                    raw_output=fallback_response,
-                    schema_valid=False,
-                    verifier_outcome="REJECT",
-                    verifier_failed_checks=["UNPARSEABLE_RESPONSE_SHAPE"],
-                    final_action="escalate_human",
+                    raw_output="",
                     thinking_level=self.thinking_level,
                     input_tokens=tokens["input_tokens"],
                     output_tokens=tokens["output_tokens"],
@@ -763,61 +750,21 @@ class GeminiClient:
                     service_tier=service_tier,
                     tier=self.tier,
                 )
-            if self.cache is not None and not effective_no_cache:
-                self.cache.put(
-                    bundle_hash=bundle_hash,
-                    prompt_hash=prompt_hash,
-                    schema_hash=schema_hash,
-                    model_id=self.model_id,
-                    thinking_level=self.thinking_level,
-                    run_id=run_id,
-                    raw_output=fallback_response,
-                    served_model=served_model,
-                    tokens=tokens,
-                    cost_low=cost_low,
-                    cost_high=cost_high,
-                    usage_flagged=usage_flagged,
-                    usage_raw=usage_numbers,
-                    raw_response_bytes=raw_bytes_len,
-                    raw_response_shape=key_structure,
-                )
-            return fallback_response
+            raise InfraError(
+                f"Unrecognized response shape from Gemini API (infra/protocol failure). "
+                f"Observed key structure: {key_structure}"
+            )
 
         # Sanitize raw output to ensure no leaked credentials
         sanitized_raw_output = sanitize_error(raw_output_text, gemini_key=self.api_key)
 
-        # 5. Validate schema (do NOT retry on schema violation)
-        is_schema_valid, parsed, schema_errs = validate_llm_output(sanitized_raw_output)
-
-        # 6. Verify outcome
-        if is_schema_valid and parsed is not None:
-            ver_res = self.verifier.verify(bundle, parsed)
-            if ver_res.outcome == VerifierOutcome.ACCEPT:
-                final_action = parsed.decision
-            else:
-                final_action = "escalate_human"
-                # On REJECT/ABSTAIN, replace explanation with deterministic template (no fabricated text shown)
-                from dataclasses import asdict
-                out_dict = asdict(parsed)
-                out_dict["decision"] = "escalate_human"
-                out_dict["predicted_class"] = None
-                out_dict["explanation"] = f"Reconciliation discrepancy escalated for human review ({ver_res.reason_code})."
-                sanitized_raw_output = json.dumps(out_dict)
-        else:
-            ver_res = None
-            final_action = "escalate_human"
-
-        # 7. Write to audit log
+        # 5. Write to audit log (raw invocation telemetry only; no verifier outcomes)
         if self.audit_logger is not None:
             self.audit_logger.log(
                 bundle_hash=bundle_hash,
                 prompt_hash=prompt_hash,
                 model_id=self.model_id,
                 raw_output=sanitized_raw_output,
-                schema_valid=is_schema_valid,
-                verifier_outcome=ver_res.outcome.value if ver_res else "REJECT",
-                verifier_failed_checks=ver_res.failed_checks if ver_res else ["V1"],
-                final_action=final_action,
                 thinking_level=self.thinking_level,
                 input_tokens=tokens["input_tokens"],
                 output_tokens=tokens["output_tokens"],
@@ -834,7 +781,7 @@ class GeminiClient:
                 tier=self.tier,
             )
 
-        # 8. Write to disk cache
+        # 6. Write to disk cache (immutable raw output and metadata)
         if self.cache is not None and not effective_no_cache:
             self.cache.put(
                 bundle_hash=bundle_hash,

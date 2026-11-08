@@ -55,7 +55,8 @@ Input Bundle:
   "facts": {
     "amount_paise": 10000,
     "debit_paise": 8500,
-    "refund_difference_paise": -1500
+    "ledger_refund_paise": 10000,
+    "refund_difference_paise": 1500
   },
   "merchant_id": "mer_syn_01",
   "untrusted_text": {
@@ -74,7 +75,7 @@ Output JSON:
   "evidence": [
     {
       "field": "facts.refund_difference_paise",
-      "value": -1500
+      "value": 1500
     }
   ],
   "cited_amount_paise": 1500,
@@ -107,7 +108,8 @@ Input Bundle:
   "facts": {
     "amount_paise": 50000,
     "debit_paise": 30000,
-    "refund_difference_paise": -20000
+    "ledger_refund_paise": 50000,
+    "refund_difference_paise": 20000
   },
   "merchant_id": "mer_syn_01",
   "untrusted_text": {
@@ -122,10 +124,10 @@ Output JSON:
   "decision": "flag",
   "predicted_class": "PARTIAL_REFUND_MISMATCH",
   "reason_code": "ARITHMETIC_MISMATCH",
-  "explanation": "Debit of 30000 paise does not match refund amount 50000 paise without explanatory justification.",
+  "explanation": "Debit of 30000 paise does not match ledger refund amount 50000 paise without explanatory justification.",
   "evidence": [
     {
-      "field": "facts.amount_paise",
+      "field": "facts.ledger_refund_paise",
       "value": 50000
     },
     {
@@ -163,7 +165,8 @@ Input Bundle:
   "facts": {
     "amount_paise": 25000,
     "debit_paise": 15000,
-    "refund_difference_paise": -10000
+    "ledger_refund_paise": 25000,
+    "refund_difference_paise": 10000
   },
   "merchant_id": "mer_syn_01",
   "untrusted_text": {
@@ -215,7 +218,8 @@ Input Bundle:
   "facts": {
     "amount_paise": 40000,
     "debit_paise": 32000,
-    "refund_difference_paise": -8000
+    "ledger_refund_paise": 40000,
+    "refund_difference_paise": 8000
   },
   "merchant_id": "mer_syn_01",
   "untrusted_text": {
@@ -234,7 +238,7 @@ Output JSON:
   "evidence": [
     {
       "field": "facts.refund_difference_paise",
-      "value": -8000
+      "value": 8000
     }
   ],
   "cited_amount_paise": null,
@@ -268,7 +272,9 @@ Input Bundle:
     "amount_paise": 100000,
     "credit_paise": 97640,
     "debit_paise": 0,
-    "fee_paise": 2360,
+    "fee_delta_paise": 0,
+    "fee_paise": 2000,
+    "tax_delta_paise": 0,
     "tax_paise": 360
   },
   "merchant_id": "mer_syn_01",
@@ -284,7 +290,7 @@ Output JSON:
   "decision": "no_issue",
   "predicted_class": null,
   "reason_code": "WITHIN_POLICY_TOLERANCE",
-  "explanation": "Calculated fee and tax align with rate card and credit ties to expected credit amount.",
+  "explanation": "Payment fee and tax align with rate card within policy tolerance.",
   "evidence": [
     {
       "field": "facts.credit_paise",

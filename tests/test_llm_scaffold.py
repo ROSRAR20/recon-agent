@@ -754,6 +754,7 @@ def test_control_bundles_symmetry_and_persistence() -> None:
 def test_gemini_client_fatal_errors_offline() -> None:
     """HTTP 401, 402, 403 raise FatalAPIError immediately without retrying."""
     from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
 
     client = GeminiClient(api_key="test-api-key", sleep_fn=lambda _: None)
     bundle = _make_test_bundle()
@@ -774,6 +775,7 @@ def test_gemini_client_fatal_errors_offline() -> None:
 def test_gemini_client_non_retriable_400_offline() -> None:
     """HTTP 400 raises NonRetriableAPIError immediately without retrying."""
     from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
 
     client = GeminiClient(api_key="test-api-key")
     bundle = _make_test_bundle()
@@ -793,6 +795,7 @@ def test_gemini_client_non_retriable_400_offline() -> None:
 def test_gemini_client_retries_429_then_succeeds() -> None:
     """HTTP 429 triggers retry with backoff and succeeds on subsequent attempt."""
     from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
 
     client = GeminiClient(api_key="test-api-key", max_retries=2)
     bundle = _make_test_bundle()
@@ -927,16 +930,19 @@ def test_gemini_client_parse_shape2_model_output_steps() -> None:
 
 
 def test_gemini_client_parse_unparseable_shape() -> None:
-    """Any shape other than Shape 1 or Shape 2 maps to escalate_human and records key structure."""
+    """Unknown response shape (neither Shape 1 nor Shape 2) raises InfraError and audits key structure."""
     from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         audit_file = os.path.join(tmp_dir, "audit.jsonl")
+        cache_dir = os.path.join(tmp_dir, "cache")
+        cache = LLMCache(cache_dir=cache_dir)
         logger = AuditLogger(log_path=audit_file)
-        client = GeminiClient(api_key="test-api-key", audit_logger=logger)
+        client = GeminiClient(api_key="test-api-key", audit_logger=logger, cache=cache)
         bundle = _make_test_bundle()
 
-        # Legacy candidates-only shape (must NOT be accepted as valid)
+        # Legacy candidates-only shape (must NOT be accepted as valid; raises InfraError)
         unparseable_payload = {
             "model": "gemini-3.5-flash-lite",
             "candidates": [
@@ -955,19 +961,15 @@ def test_gemini_client_parse_unparseable_shape() -> None:
 
         with patch("requests.post") as mock_post:
             mock_post.return_value = mock_resp
-            res = client.complete(bundle, system_prompt="system prompt", run_id=0)
-
-        res_data = json.loads(res)
-        assert res_data["decision"] == "escalate_human"
-        assert res_data["reason_code"] == "UNPARSEABLE_RESPONSE_SHAPE"
+            with pytest.raises(InfraError) as exc_info:
+                client.complete(bundle, system_prompt="system prompt", run_id=0)
+            assert "Unrecognized response shape" in str(exc_info.value)
 
         # Verify audit log contains key structure (names and types only)
         with open(audit_file, "r", encoding="utf-8") as f:
             lines = [json.loads(line) for line in f]
         assert len(lines) == 1
         entry = lines[0]
-        assert entry["final_action"] == "escalate_human"
-        assert entry["verifier_failed_checks"] == ["UNPARSEABLE_RESPONSE_SHAPE"]
         assert "raw_response_shape" in entry
         # Structure has names and types only
         expected_shape = {
@@ -976,6 +978,9 @@ def test_gemini_client_parse_unparseable_shape() -> None:
             "usage": {"total_input_tokens": "int", "total_output_tokens": "int"},
         }
         assert entry["raw_response_shape"] == expected_shape
+
+        # Protocol failure produces NO cache entry
+        assert len(os.listdir(cache_dir)) == 0
 
 
 def test_gemini_client_read_timeout_max_1_retry_and_audit() -> None:
@@ -1031,6 +1036,7 @@ def test_gemini_client_connect_error_retries_up_to_max() -> None:
 def test_gemini_client_utf8_rupee_symbol_and_no_content_length() -> None:
     """Request body preserves non-ASCII text like the rupee symbol ₹ and sets no manual Content-Length header."""
     from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
 
     client = GeminiClient(api_key="test-api-key", read_timeout=120.0, connect_timeout=10.0)
     bundle = _make_test_bundle(
@@ -1146,6 +1152,7 @@ def test_optional_thinking_level_omits_generation_config() -> None:
 def test_served_model_check_matching_and_mismatch() -> None:
     """Served model matching succeeds; mismatch raises fatal ModelMismatch (never cached)."""
     from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
     from src.recon_agent.llm.gemini_client import ModelMismatch
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1188,6 +1195,7 @@ def test_served_model_check_matching_and_mismatch() -> None:
 def test_served_model_missing_mode_check() -> None:
     """Missing 'model' field raises ModelMismatch in eval mode; emits warning in smoke mode."""
     from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
     import warnings
     from src.recon_agent.llm.gemini_client import ModelMismatch
 
@@ -1272,6 +1280,7 @@ def test_client_side_rate_limiter_injectable() -> None:
         current_time[0] += sec
 
     from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
 
     client = GeminiClient(
         api_key="test-api-key",
@@ -1306,6 +1315,7 @@ def test_client_side_rate_limiter_injectable() -> None:
 def test_http_503_backoff_schedule() -> None:
     """HTTP 503 triggers backoff (~5s, 15s, 45s) using injectable sleep."""
     from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
     from src.recon_agent.llm.gemini_client import InfraError
 
     sleeps = []
@@ -1406,6 +1416,7 @@ def test_stratified_case_ordering() -> None:
 def test_resumable_runner_flow() -> None:
     """Runner manages ok, infra_failed, model_invalid, and pending states with --resume."""
     from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
     from src.recon_agent.llm.runner import Runner, QuotaTracker, score_llm_run
     from src.recon_agent.llm.gemini_client import InfraError
 
@@ -1491,7 +1502,14 @@ def test_resumable_runner_flow() -> None:
         assert results["case_1_ok"].status == "ok"
         assert results["case_2_infra"].status == "infra_failed"
         assert results["case_2_infra"].raw_output is None  # NO model output on infra fail!
-        assert results["case_3_invalid"].status == "model_invalid"
+        assert results["case_3_invalid"].status == "ok"  # Runner collects RAW output only!
+
+        # Finalize determines parse status
+        from src.recon_agent.llm.finalize import finalize
+        final_3 = finalize(cases[2], results["case_3_invalid"].raw_output)
+        assert final_3.raw_parse_status == "non_json"
+        assert final_3.b2_action == "escalate_human"
+        assert final_3.b3_action == "escalate_human"
 
         # Scoring without --allow-infra-failures MUST refuse
         with pytest.raises(RuntimeError) as exc:
@@ -1513,7 +1531,366 @@ def test_resumable_runner_flow() -> None:
 
         assert resumed_results["case_1_ok"].status == "ok"
         assert resumed_results["case_2_infra"].status == "ok"  # Recovered!
-        assert resumed_results["case_3_invalid"].status == "model_invalid"  # Not re-run!
+        assert resumed_results["case_3_invalid"].status == "ok"  # Not re-run because raw was collected!
+
+
+# ---------------------------------------------------------------------------
+# 13. Day 7a-7 Separation, Immutability & Invariant Tests
+# ---------------------------------------------------------------------------
+
+def test_cache_immutability_and_corruption() -> None:
+    """Cache refuses to overwrite existing keys and detects bit-level corruption."""
+    from src.recon_agent.llm.cache import CacheCorruptionError, CacheKeyExistsError
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cache = LLMCache(cache_dir=tmp_dir)
+        b_hash = "bundle_123"
+        p_hash = "prompt_456"
+        m_id = "gemini-3.5-flash-lite"
+        raw_text = '{"decision": "no_issue", "predicted_class": null}'
+
+        # 1. First write succeeds
+        cache.put(bundle_hash=b_hash, prompt_hash=p_hash, model_id=m_id, raw_output=raw_text)
+        assert cache.get(bundle_hash=b_hash, prompt_hash=p_hash, model_id=m_id) == raw_text
+
+        # 2. Overwriting existing key raises CacheKeyExistsError
+        with pytest.raises(CacheKeyExistsError):
+            cache.put(bundle_hash=b_hash, prompt_hash=p_hash, model_id=m_id, raw_output='{"decision": "flag"}')
+
+        # 3. Corrupt one byte of the cache file on disk
+        key = cache._get_cache_key(bundle_hash=b_hash, prompt_hash=p_hash, model_id=m_id)
+        cache_file = os.path.join(tmp_dir, f"{key}.json")
+        with open(cache_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Alter raw_output without updating content_hash
+        data["raw_output"] = '{"decision": "no_issue", "predicted_class": "CORRUPTED"}'
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        # Reading corrupted entry raises CacheCorruptionError
+        with pytest.raises(CacheCorruptionError) as exc_info:
+            cache.get(bundle_hash=b_hash, prompt_hash=p_hash, model_id=m_id)
+        assert "corrupted" in str(exc_info.value).lower()
+
+
+def test_raw_verified_separation_and_re_finalization() -> None:
+    """Cache holds raw output byte-for-byte on reject; refinalizing changes B3 without LLM call."""
+    from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError, get_schema_hash
+    from src.recon_agent.llm.finalize import finalize, compute_verifier_version
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cache = LLMCache(cache_dir=tmp_dir)
+        client = GeminiClient(api_key="test-api-key", cache=cache)
+        bundle = _make_test_bundle(
+            entity_id="rfnd_reject_test",
+            reason_text="Fee deduction Rs 15.00 applied.",
+        )
+
+        # Model generates output with fabricated quote that verifier rejects
+        model_raw_json = json.dumps({
+            "decision": "benign_explained",
+            "predicted_class": None,
+            "reason_code": "EXPLAINED_BY_NOTE",
+            "explanation": "Fabricated explanation Rs 15.00.",
+            "evidence": [{"field": "facts.refund_difference_paise", "value": -1500}],
+            "cited_amount_paise": 1500,
+            "verbatim_quote": "FABRICATED QUOTE NOT IN NOTE",
+        })
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "model": "gemini-3.5-flash-lite",
+            "output_text": model_raw_json,
+            "usage": {"total_input_tokens": 100, "total_output_tokens": 50},
+        }
+
+        with patch("requests.post") as mock_post:
+            mock_post.return_value = mock_resp
+            raw_result = client.complete(bundle, system_prompt="system prompt", run_id=0)
+
+        # 1. Complete returns and caches the model's exact text byte-for-byte
+        assert raw_result == model_raw_json
+        cached_text = cache.get(
+            bundle_hash=bundle.bundle_hash,
+            prompt_hash=hashlib.sha256(b"system prompt").hexdigest(),
+            schema_hash=get_schema_hash(),
+            model_id=client.model_id,
+            thinking_level=client.thinking_level,
+            run_id=0,
+        )
+        assert cached_text == model_raw_json
+
+        # 2. Finalize with standard verifier: rejected -> b2 = benign_explained, b3 = escalate_human
+        dec1 = finalize(bundle, cached_text)
+        assert dec1.raw_decision == "benign_explained"
+        assert dec1.b2_action == "benign_explained"
+        assert dec1.b3_action == "escalate_human"
+        assert "FABRICATED_QUOTE" in dec1.b3_explanation
+
+        # 3. Refinalize with permissive mock verifier WITHOUT any LLM call or touching cache
+        class PermissiveVerifier(Verifier):
+            def verify(self, b, o):
+                return VerifierResult(outcome=VerifierOutcome.ACCEPT, reason_code="PERMISSIVE_ACCEPT")
+
+        dec2 = finalize(bundle, cached_text, verifier=PermissiveVerifier())
+        assert dec2.b2_action == "benign_explained"
+        assert dec2.b3_action == "benign_explained"  # Changed B3 without LLM call!
+        assert dec2.b3_explanation == "Fabricated explanation Rs 15.00."
+
+        # Cache remains identical byte-for-byte
+        cached_after = cache.get(
+            bundle_hash=bundle.bundle_hash,
+            prompt_hash=hashlib.sha256(b"system prompt").hexdigest(),
+            schema_hash=get_schema_hash(),
+            model_id=client.model_id,
+            thinking_level=client.thinking_level,
+            run_id=0,
+        )
+        assert cached_after == model_raw_json
+
+
+def test_finalized_results_atomic_file_and_duplicate_keys() -> None:
+    """Finalized results written atomically; loader raises on duplicate (bundle_id, run_id)."""
+    from src.recon_agent.llm.finalize import (
+        FinalDecision,
+        write_finalized_results,
+        load_finalized_results,
+    )
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        dec1 = FinalDecision(
+            bundle_id="b1",
+            raw_decision="no_issue",
+            raw_parse_status="ok",
+            verifier_result=None,
+            b2_action="no_issue",
+            b3_action="no_issue",
+            b3_explanation="Clean",
+            run_id=0,
+        )
+        dec2 = FinalDecision(
+            bundle_id="b2",
+            raw_decision="flag",
+            raw_parse_status="ok",
+            verifier_result=None,
+            b2_action="flag",
+            b3_action="flag",
+            b3_explanation="Flagged",
+            run_id=0,
+        )
+
+        out_path = write_finalized_results(
+            decisions=[dec1, dec2],
+            verifier_version="v_test_01",
+            run_id=0,
+            population="dev",
+            base_dir=tmp_dir,
+        )
+        assert os.path.isfile(out_path)
+
+        # Load back
+        loaded = load_finalized_results(
+            verifier_version="v_test_01",
+            run_id=0,
+            population="dev",
+            base_dir=tmp_dir,
+        )
+        assert len(loaded) == 2
+        assert loaded[("b1", 0)]["b2_action"] == "no_issue"
+        assert loaded[("b2", 0)]["b3_action"] == "flag"
+
+        # Duplicate keys in write_finalized_results raises ValueError
+        dec_dup = FinalDecision(
+            bundle_id="b1",
+            raw_decision="flag",
+            raw_parse_status="ok",
+            verifier_result=None,
+            b2_action="flag",
+            b3_action="flag",
+            b3_explanation="Dup",
+            run_id=0,
+        )
+        with pytest.raises(ValueError) as exc_info:
+            write_finalized_results(
+                decisions=[dec1, dec_dup],
+                verifier_version="v_test_01",
+                run_id=0,
+                population="dev",
+                base_dir=tmp_dir,
+            )
+        assert "Duplicate key" in str(exc_info.value)
+
+
+def test_system_prompt_few_shots_match_real_bundle_key_structure() -> None:
+    """Every few-shot input bundle in system.txt has the same key structure as real bundles."""
+    prompt_path = os.path.join(REPO_ROOT, "src", "recon_agent", "llm", "prompts", "system.txt")
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Extract all JSON blocks under "Input Bundle:"
+    blocks = []
+    lines = content.splitlines()
+    in_block = False
+    current_json = []
+
+    for line in lines:
+        if line.strip() == "Input Bundle:":
+            in_block = True
+            current_json = []
+            continue
+        if in_block:
+            if line.strip().startswith("Output JSON:"):
+                in_block = False
+                blocks.append("\n".join(current_json))
+                current_json = []
+            else:
+                current_json.append(line)
+
+    assert len(blocks) == 5, f"Expected 5 few-shot examples, found {len(blocks)}"
+
+    expected_top_keys = {
+        "allowed_classes",
+        "allowed_decisions",
+        "bundle_id",
+        "check_family",
+        "entity_id",
+        "facts",
+        "merchant_id",
+        "untrusted_text",
+    }
+    expected_untrusted_keys = {
+        "bank_narration",
+        "recon_item_description",
+        "recon_item_notes_comment",
+        "recon_item_notes_reason_text",
+    }
+
+    for idx, b_str in enumerate(blocks, 1):
+        b_dict = json.loads(b_str)
+        assert set(b_dict.keys()) == expected_top_keys, (
+            f"Few-shot {idx} top keys mismatch: {set(b_dict.keys()) ^ expected_top_keys}"
+        )
+        assert set(b_dict["untrusted_text"].keys()) == expected_untrusted_keys, (
+            f"Few-shot {idx} untrusted_text keys mismatch"
+        )
+        facts = b_dict["facts"]
+        if b_dict["check_family"] == "refund":
+            assert "ledger_refund_paise" in facts, f"Few-shot {idx} missing ledger_refund_paise"
+            assert "refund_difference_paise" in facts, f"Few-shot {idx} missing refund_difference_paise"
+            # Positive sign convention: ledger_refund_paise - debit_paise
+            assert facts["refund_difference_paise"] == facts["ledger_refund_paise"] - facts["debit_paise"]
+        elif b_dict["check_family"] == "fee_tax":
+            assert "fee_delta_paise" in facts, f"Few-shot {idx} missing fee_delta_paise"
+            assert "tax_delta_paise" in facts, f"Few-shot {idx} missing tax_delta_paise"
+
+
+def test_invariants_over_200_stored_raw_outputs() -> None:
+    """Invariant suite over >= 200 stored raw outputs across mixed families:
+
+    (a) B2 is identical when the verifier is replaced by always-REJECT or always-ACCEPT;
+    (b) under always-ACCEPT, b3 == b2 for every parseable output;
+    (c) finalize is pure: identical inputs give identical outputs;
+    (d) infra errors never create cache entries.
+    """
+    from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
+    from src.recon_agent.llm.finalize import finalize
+
+    class AlwaysAcceptVerifier(Verifier):
+        def verify(self, bundle, parsed):
+            return VerifierResult(outcome=VerifierOutcome.ACCEPT, reason_code="ALWAYS_ACCEPT")
+
+    class AlwaysRejectVerifier(Verifier):
+        def verify(self, bundle, parsed):
+            return VerifierResult(outcome=VerifierOutcome.REJECT, reason_code="ALWAYS_REJECT", failed_checks=["V_MOCK"])
+
+    accept_verifier = AlwaysAcceptVerifier()
+    reject_verifier = AlwaysRejectVerifier()
+
+    test_bundle = _make_test_bundle()
+
+    # Generate >= 200 diverse raw outputs (clean, malformed, non-json, schema-invalid, empty)
+    raw_outputs: list[str | None] = []
+
+    # 1. Clean valid outputs (40)
+    decisions = ["no_issue", "benign_explained", "flag", "escalate_human"]
+    for i in range(40):
+        dec = decisions[i % len(decisions)]
+        p_class = "PARTIAL_REFUND_MISMATCH" if dec == "flag" else None
+        raw_outputs.append(json.dumps({
+            "decision": dec,
+            "predicted_class": p_class,
+            "reason_code": "CODE_OK",
+            "explanation": f"Explanation {i}",
+            "evidence": [],
+            "cited_amount_paise": None,
+            "verbatim_quote": None,
+        }))
+
+    # 2. Non-JSON outputs (50)
+    for i in range(50):
+        raw_outputs.append(f"Not a json text response {i} [arbitrary string]")
+
+    # 3. Schema invalid outputs (50)
+    for i in range(50):
+        raw_outputs.append(json.dumps({
+            "invalid_key": f"value_{i}",
+            "decision": "INVALID_DECISION_ENUM",
+        }))
+
+    # 4. Empty and blocked outputs (20)
+    for i in range(20):
+        raw_outputs.append("" if i % 2 == 0 else "   ")
+    raw_outputs.append(None)
+
+    # 5. Boundary JSON (50)
+    for i in range(50):
+        raw_outputs.append(json.dumps({
+            "decision": "flag",
+            "predicted_class": None,  # Flag requires predicted_class -> schema invalid
+            "reason_code": "MISSING_CLASS",
+            "explanation": f"Missing class test {i}",
+            "evidence": [],
+        }))
+
+    assert len(raw_outputs) >= 200
+
+    # Invariants verification
+    for idx, raw in enumerate(raw_outputs):
+        # (c) Purity: identical inputs give identical outputs
+        res_pure1 = finalize(test_bundle, raw)
+        res_pure2 = finalize(test_bundle, raw)
+        assert res_pure1 == res_pure2, f"Purity failed for case {idx}"
+
+        # (a) B2 is identical regardless of verifier (Always-ACCEPT vs Always-REJECT)
+        res_acc = finalize(test_bundle, raw, verifier=accept_verifier)
+        res_rej = finalize(test_bundle, raw, verifier=reject_verifier)
+        assert res_acc.b2_action == res_rej.b2_action, f"B2 independence failed for case {idx}"
+
+        # (b) Under always-ACCEPT, b3 == b2 for every parseable output (raw_parse_status == 'ok')
+        if res_acc.raw_parse_status == "ok":
+            assert res_acc.b3_action == res_acc.b2_action, (
+                f"Under always-ACCEPT, b3 ({res_acc.b3_action}) != b2 ({res_acc.b2_action}) for case {idx}"
+            )
+
+    # (d) Infra errors never create cache entries
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cache = LLMCache(cache_dir=tmp_dir)
+        client = GeminiClient(api_key="test-api-key", cache=cache, max_retries=1)
+
+        mock_post = MagicMock()
+        import requests.exceptions
+        mock_post.side_effect = requests.exceptions.ConnectTimeout("Connect failed")
+
+        with patch("requests.post", mock_post), patch("time.sleep"):
+            with pytest.raises(Exception):
+                client.complete(test_bundle, system_prompt="prompt", run_id=0)
+
+        # Cache remains completely empty
+        assert len(os.listdir(tmp_dir)) == 0
 
 
 

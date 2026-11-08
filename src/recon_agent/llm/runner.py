@@ -153,7 +153,7 @@ class CaseResult:
     """Per-case evaluation outcome."""
 
     bundle_id: str
-    status: str  # 'ok' | 'infra_failed' | 'model_invalid' | 'pending'
+    status: str  # 'ok' (raw obtained) | 'infra_failed' | 'pending' (or 'model_invalid' for legacy)
     decision: str | None = None
     predicted_class: str | None = None
     raw_output: str | None = None
@@ -169,7 +169,7 @@ class CaseResult:
 
 
 class Runner:
-    """Manages resumable, quota-aware execution of CaseBundles."""
+    """Manages resumable, quota-aware execution of CaseBundles collecting raw outputs only."""
 
     def __init__(
         self,
@@ -183,6 +183,7 @@ class Runner:
         self.quota_tracker = quota_tracker
         self.system_prompt = system_prompt
         self.run_state_path = os.path.abspath(run_state_path)
+        # Note: verifier is never called by Runner; kept for interface compatibility
         self.verifier = verifier or Verifier()
         os.makedirs(os.path.dirname(self.run_state_path), exist_ok=True)
 
@@ -273,58 +274,21 @@ class Runner:
                 svc_tier = getattr(self.client, "last_service_tier", self.client.tier)
                 eff_cost = 0.0 if svc_tier == "free" and cost_high is not None else cost_high
 
-                is_valid, parsed, errors = validate_llm_output(raw_output)
-                if is_valid and parsed is not None:
-                    ver_res = self.verifier.verify(case, parsed)
-                    if ver_res.outcome == VerifierOutcome.ACCEPT:
-                        final_action = parsed.decision
-                        final_raw = raw_output
-                        status = "ok"
-                        err_msg = None
-                    else:
-                        final_action = "escalate_human"
-                        out_dict = asdict(parsed)
-                        out_dict["decision"] = "escalate_human"
-                        out_dict["predicted_class"] = None
-                        out_dict["explanation"] = f"Reconciliation discrepancy escalated for human review ({ver_res.reason_code})."
-                        final_raw = json.dumps(out_dict)
-                        status = "model_invalid"
-                        err_msg = ver_res.reason_code
-
-                    results[bid] = CaseResult(
-                        bundle_id=bid,
-                        status=status,
-                        decision=final_action,
-                        predicted_class=parsed.predicted_class if ver_res.outcome == VerifierOutcome.ACCEPT else None,
-                        raw_output=final_raw,
-                        error_message=err_msg,
-                        cost_usd=eff_cost,
-                        estimated_cost_low_usd=cost_low,
-                        estimated_cost_high_usd=cost_high,
-                        input_tokens=toks.get("input_tokens"),
-                        output_tokens=toks.get("output_tokens"),
-                        thinking_tokens=toks.get("thinking_tokens"),
-                        served_model=served_m,
-                        service_tier=svc_tier,
-                    )
-                else:
-                    # Model returned unparseable or schema-violating output
-                    results[bid] = CaseResult(
-                        bundle_id=bid,
-                        status="model_invalid",
-                        decision="escalate_human",
-                        predicted_class=None,
-                        raw_output=raw_output,
-                        error_message="; ".join(errors) if errors else "SCHEMA_INVALID",
-                        cost_usd=eff_cost,
-                        estimated_cost_low_usd=cost_low,
-                        estimated_cost_high_usd=cost_high,
-                        input_tokens=toks.get("input_tokens"),
-                        output_tokens=toks.get("output_tokens"),
-                        thinking_tokens=toks.get("thinking_tokens"),
-                        served_model=served_m,
-                        service_tier=svc_tier,
-                    )
+                # Runner collects RAW outputs only: status is ok once raw_output is obtained.
+                # Parse status and verification are handled strictly by finalize.
+                results[bid] = CaseResult(
+                    bundle_id=bid,
+                    status="ok",
+                    raw_output=raw_output,
+                    cost_usd=eff_cost,
+                    estimated_cost_low_usd=cost_low,
+                    estimated_cost_high_usd=cost_high,
+                    input_tokens=toks.get("input_tokens"),
+                    output_tokens=toks.get("output_tokens"),
+                    thinking_tokens=toks.get("thinking_tokens"),
+                    served_model=served_m,
+                    service_tier=svc_tier,
+                )
 
             except DailyQuotaExhaustedError as exc:
                 stopped_reason = f"Gemini API 429 daily quota exhausted. Paused run cleanly. Resume tomorrow with --resume."

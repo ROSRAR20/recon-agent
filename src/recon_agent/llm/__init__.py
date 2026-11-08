@@ -11,8 +11,16 @@ This package provides:
 
 from src.recon_agent.llm.audit import AuditLogger, AuditRecord
 from src.recon_agent.llm.bundle import CaseBundle, build_case_bundles
-from src.recon_agent.llm.cache import LLMCache
+from src.recon_agent.llm.cache import CacheCorruptionError, CacheKeyExistsError, LLMCache
 from src.recon_agent.llm.client import LLMClient, MockClient
+from src.recon_agent.llm.finalize import (
+    FinalDecision,
+    compute_verifier_version,
+    finalize,
+    get_finalized_filepath,
+    load_finalized_results,
+    write_finalized_results,
+)
 from src.recon_agent.llm.schema import (
     ALLOWED_CLASSES,
     ALLOWED_DECISIONS,
@@ -28,7 +36,10 @@ __all__ = [
     "REASON_CODES",
     "AuditLogger",
     "AuditRecord",
+    "CacheCorruptionError",
+    "CacheKeyExistsError",
     "CaseBundle",
+    "FinalDecision",
     "LLMCache",
     "LLMClient",
     "LLMOutput",
@@ -37,6 +48,11 @@ __all__ = [
     "VerifierOutcome",
     "VerifierResult",
     "build_case_bundles",
+    "compute_verifier_version",
+    "finalize",
+    "get_finalized_filepath",
+    "load_finalized_results",
     "validate_llm_output",
+    "write_finalized_results",
 ]
 

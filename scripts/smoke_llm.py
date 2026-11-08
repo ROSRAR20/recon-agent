@@ -23,6 +23,7 @@ from src.recon_agent.guard import sanitize_error
 from src.recon_agent.llm.audit import AuditLogger
 from src.recon_agent.llm.bundle import CaseBundle, create_case_bundle
 from src.recon_agent.llm.cache import LLMCache
+from src.recon_agent.llm.finalize import finalize
 from src.recon_agent.llm.gemini_client import GeminiClient, extract_key_structure
 from src.recon_agent.llm.schema import validate_llm_output
 from src.recon_agent.llm.verifier import Verifier
@@ -227,15 +228,13 @@ def main() -> None:
         raw_output = client.complete(bundle, system_prompt=system_prompt, run_id=0, no_cache=args.no_cache)
         case_elapsed = time.time() - case_start
 
-        # Parse and verify
-        is_valid, parsed, errors = validate_llm_output(raw_output)
-        if is_valid and parsed:
-            ver_res = verifier.verify(bundle, parsed)
-            outcome = ver_res.outcome.value
-            failed_checks = ver_res.failed_checks
-        else:
-            outcome = "REJECT"
-            failed_checks = ("V1",)
+        # Finalize for display only
+        final_dec = finalize(bundle, raw_output, verifier=verifier, run_id=0)
+        ver_str = (
+            f"{final_dec.verifier_result.outcome.value} ({final_dec.verifier_result.reason_code})"
+            if final_dec.verifier_result
+            else f"SKIPPED ({final_dec.raw_parse_status})"
+        )
 
         sanitized_summary = sanitize_error(raw_output)
         cache_status = "HIT" if client.last_cache_hit else "MISS"
@@ -260,8 +259,11 @@ def main() -> None:
         cost_high_str = f"${client.last_cost_high:.6f}" if client.last_cost_high is not None else "None"
         print(f"  Estimated Cost: low={cost_low_str}, high={cost_high_str}")
 
-        print(f"  Sanitized Output: {sanitized_summary}")
-        print(f"  Verifier Outcome: {outcome} (Failed: {failed_checks})")
+        print(f"  Raw Output: {sanitized_summary}")
+        print(f"  Raw Decision: {final_dec.raw_decision}")
+        print(f"  Verifier Outcome: {ver_str}")
+        print(f"  B2 Action: {final_dec.b2_action}")
+        print(f"  B3 Action: {final_dec.b3_action}")
 
         if args.shape:
             try:
@@ -278,7 +280,7 @@ def main() -> None:
             else:
                 print("  Raw API Response Key Structure: None (Cached or unavailable)")
 
-        print(f"[FINISH] Case {idx}/5 in {case_elapsed:.2f}s (Outcome: {outcome})")
+        print(f"[FINISH] Case {idx}/5 in {case_elapsed:.2f}s (B3 Action: {final_dec.b3_action})")
         print()
 
 
