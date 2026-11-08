@@ -155,6 +155,7 @@ def _build_recon_item_bundle(
     payments_by_id: dict[str, PaymentRow],
     settlements_by_id: dict[str, Any],
     orders_by_id: dict[str, Any],
+    rate_card: Any | None = None,
 ) -> CaseBundle:
     """Helper to build a CaseBundle from a ReconItemRow with exact field ordering."""
     eid = item.entity_id
@@ -183,11 +184,13 @@ def _build_recon_item_bundle(
         facts["payment_captured_at"] = pay.captured_at
         facts["order_id"] = pay.order_id
 
-        # Link order facts
-        ord_row = orders_by_id.get(pay.order_id) if pay.order_id else None
-        if ord_row:
-            facts["order_booked_date"] = ord_row.booked_date
-            facts["order_amount_paise"] = ord_row.expected_amount
+    # Link order facts
+    order_id = item.order_id or (pay.order_id if pay else None)
+    ord_row = orders_by_id.get(order_id) if order_id else None
+    if ord_row:
+        facts["order_id"] = order_id
+        facts["order_booked_date"] = ord_row.booked_date
+        facts["order_amount_paise"] = ord_row.expected_amount
 
     # Link settlement facts
     setl = settlements_by_id.get(item.settlement_id) if item.settlement_id else None
@@ -196,9 +199,33 @@ def _build_recon_item_bundle(
         facts["settlement_utr"] = setl.utr
         facts["settlement_settled_at"] = setl.settled_at
 
-    # For refund items, compute refund_difference_paise
+    # For refund items, link ledger refund and compute refund_difference_paise
     if item.type == "refund":
-        facts["refund_difference_paise"] = item.debit - item.amount
+        ledger_refund_paise = ord_row.refund_amount if (ord_row and ord_row.refund_amount is not None) else None
+        facts["ledger_refund_paise"] = ledger_refund_paise
+        # Sign convention:
+        # refund_difference_paise = ledger_refund_paise - debit_paise
+        # Positive (> 0): order ledger expected a higher refund than was debited in recon (e.g. fee deduction applied, debit is smaller).
+        # Negative (< 0): recon debited more than order ledger recorded.
+        if ledger_refund_paise is not None:
+            facts["refund_difference_paise"] = ledger_refund_paise - item.debit
+        else:
+            facts["refund_difference_paise"] = 0
+
+    # For payment items, compute fee and tax deltas if rate_card is provided
+    if rate_card and item.type == "payment":
+        method = item.method or (pay.method if pay else "card")
+        if method == "netbanking":
+            rate_bps = rate_card.netbanking_bps
+        elif method == "upi":
+            rate_bps = rate_card.upi_bps
+        else:
+            rate_bps = rate_card.card_bps
+        base_fee = (item.amount * rate_bps + 5000) // 10000
+        expected_tax = (base_fee * rate_card.gst_bps + 5000) // 10000
+        expected_fee = base_fee + expected_tax if rate_card.fee_includes_tax else base_fee
+        facts["fee_delta_paise"] = abs(item.fee - expected_fee)
+        facts["tax_delta_paise"] = abs(item.tax - expected_tax)
 
     # Untrusted text
     untrusted_text = {
@@ -224,6 +251,8 @@ def _build_recon_item_bundle(
 def _build_bank_statement_bundle(
     bank_row: BankStatementRow,
     rule_id: str | None,
+    ambiguous: bool = False,
+    candidates_count: int = 1,
 ) -> CaseBundle:
     """Helper to build a CaseBundle from a BankStatementRow with exact field ordering."""
     eid = bank_row.statement_id
@@ -233,6 +262,9 @@ def _build_bank_statement_bundle(
         "statement_id": bank_row.statement_id,
         "bank_credit_paise": bank_row.credit,
         "bank_date": bank_row.date,
+        "ambiguous_candidates": ambiguous,
+        "candidates_count": candidates_count,
+        "unambiguous_match": (not ambiguous) and (candidates_count == 1),
     }
 
     untrusted_text = {
@@ -302,15 +334,20 @@ def build_case_bundles(dataset: ReconDataset) -> list[CaseBundle]:
                 payments_by_id=payments_by_id,
                 settlements_by_id=settlements_by_id,
                 orders_by_id=orders_by_id,
+                rate_card=dataset.rate_card,
             )
             bundles.append(bundle)
             processed_entities.add(eid)
 
         elif eid in bank_by_id:
             bank_row = bank_by_id[eid]
+            ambiguous = (rule_id == "B1_BANK_AMBIGUOUS_CANDIDATES")
+            candidates_count = 2 if ambiguous else 1
             bundle = _build_bank_statement_bundle(
                 bank_row=bank_row,
                 rule_id=rule_id,
+                ambiguous=ambiguous,
+                candidates_count=candidates_count,
             )
             bundles.append(bundle)
             processed_entities.add(eid)
@@ -385,6 +422,7 @@ def build_control_bundles(
             payments_by_id=payments_by_id,
             settlements_by_id=settlements_by_id,
             orders_by_id=orders_by_id,
+            rate_card=dataset.rate_card,
         )
         bundles.append(b)
         control_records[b.entity_id] = {
@@ -400,6 +438,7 @@ def build_control_bundles(
             payments_by_id=payments_by_id,
             settlements_by_id=settlements_by_id,
             orders_by_id=orders_by_id,
+            rate_card=dataset.rate_card,
         )
         bundles.append(b)
         control_records[b.entity_id] = {
@@ -412,6 +451,8 @@ def build_control_bundles(
         b = _build_bank_statement_bundle(
             bank_row=bank_row,
             rule_id="B1_BANK_T1_EXACT",
+            ambiguous=False,
+            candidates_count=1,
         )
         bundles.append(b)
         control_records[b.entity_id] = {

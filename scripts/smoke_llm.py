@@ -47,6 +47,8 @@ def build_smoke_synthetic_bundles() -> list[CaseBundle]:
             "tax_paise": 37,
             "debit_paise": 0,
             "credit_paise": 9757,
+            "fee_delta_paise": 6,
+            "tax_delta_paise": 1,
         },
         untrusted_text={
             "recon_item_description": "Card payment with fee near tolerance",
@@ -69,7 +71,8 @@ def build_smoke_synthetic_bundles() -> list[CaseBundle]:
             "type": "refund",
             "amount_paise": 20000,
             "debit_paise": 18500,
-            "refund_difference_paise": -1500,
+            "ledger_refund_paise": 20000,
+            "refund_difference_paise": 1500,
         },
         untrusted_text={
             "recon_item_description": "Refund item",
@@ -92,7 +95,8 @@ def build_smoke_synthetic_bundles() -> list[CaseBundle]:
             "type": "refund",
             "amount_paise": 30000,
             "debit_paise": 25000,
-            "refund_difference_paise": -5000,
+            "ledger_refund_paise": 30000,
+            "refund_difference_paise": 5000,
         },
         untrusted_text={
             "recon_item_description": "Partial refund",
@@ -114,6 +118,8 @@ def build_smoke_synthetic_bundles() -> list[CaseBundle]:
             "statement_id": "stmt_smoke_04",
             "bank_credit_paise": 500000,
             "bank_date": "2026-05-15",
+            "ambiguous_candidates": True,
+            "candidates_count": 2,
         },
         untrusted_text={
             "recon_item_description": None,
@@ -139,6 +145,8 @@ def build_smoke_synthetic_bundles() -> list[CaseBundle]:
             "tax_paise": 180,
             "debit_paise": 0,
             "credit_paise": 48820,
+            "fee_delta_paise": 0,
+            "tax_delta_paise": 0,
         },
         untrusted_text={
             "recon_item_description": "Standard card transaction",
@@ -153,15 +161,21 @@ def build_smoke_synthetic_bundles() -> list[CaseBundle]:
 
 
 def main() -> None:
-    if os.getenv("LLM_SMOKE") != "1":
-        print("[ERROR] Refusing to run smoke test. Env LLM_SMOKE=1 is required.", file=sys.stderr)
-        sys.exit(1)
-
     parser = argparse.ArgumentParser(description="LLM smoke test")
     parser.add_argument(
         "--shape",
         action="store_true",
-        help="Print the key structure of the raw response (names and value types only, never values)",
+        help="Print the key structure of the parsed response (names and value types only, never values)",
+    )
+    parser.add_argument(
+        "--raw-shape",
+        action="store_true",
+        help="Print the key structure of the raw API response (names and value types only, never values)",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Bypass and do not write to response cache during smoke test",
     )
     parser.add_argument(
         "--debug-http",
@@ -183,6 +197,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if os.getenv("LLM_SMOKE") != "1":
+        print("[ERROR] Refusing to run smoke test. Env LLM_SMOKE=1 is required.", file=sys.stderr)
+        sys.exit(1)
+
     system_prompt_path = os.path.join(REPO_ROOT, "src", "recon_agent", "llm", "prompts", "system.txt")
     with open(system_prompt_path, "r", encoding="utf-8") as f:
         system_prompt = f.read()
@@ -196,6 +214,7 @@ def main() -> None:
         audit_logger=audit_logger,
         debug_http=args.debug_http,
         mode="smoke",
+        no_cache=args.no_cache,
     )
     verifier = Verifier()
 
@@ -205,7 +224,7 @@ def main() -> None:
     for idx, bundle in enumerate(bundles, 1):
         print(f"[START] Case {idx}/5: {bundle.bundle_id} (Family: {bundle.rule_id})")
         case_start = time.time()
-        raw_output = client.complete(bundle, system_prompt=system_prompt, run_id=0)
+        raw_output = client.complete(bundle, system_prompt=system_prompt, run_id=0, no_cache=args.no_cache)
         case_elapsed = time.time() - case_start
 
         # Parse and verify
@@ -219,6 +238,28 @@ def main() -> None:
             failed_checks = ("V1",)
 
         sanitized_summary = sanitize_error(raw_output)
+        cache_status = "HIT" if client.last_cache_hit else "MISS"
+        print(f"  Cache: {cache_status}")
+        print(f"  Served Model: {client.last_served_model}")
+        print(f"  Attempts: {client.last_attempts}")
+        print(f"  Raw Response Bytes: {client.last_raw_response_bytes}")
+
+        # Token telemetry and costs
+        if client.last_tokens:
+            in_tok = client.last_tokens.get("input_tokens")
+            out_tok = client.last_tokens.get("output_tokens")
+            th_tok = client.last_tokens.get("thinking_tokens")
+            print(f"  Tokens: input={in_tok}, output={out_tok}, thinking={th_tok}")
+            if in_tok is None and out_tok is None and client.last_usage_raw:
+                print(f"  Raw Usage: {json.dumps(client.last_usage_raw)}")
+        elif client.last_usage_raw:
+            print(f"  Raw Usage: {json.dumps(client.last_usage_raw)}")
+
+        print(f"  Usage Flagged: {client.last_usage_flagged}")
+        cost_low_str = f"${client.last_cost_low:.6f}" if client.last_cost_low is not None else "None"
+        cost_high_str = f"${client.last_cost_high:.6f}" if client.last_cost_high is not None else "None"
+        print(f"  Estimated Cost: low={cost_low_str}, high={cost_high_str}")
+
         print(f"  Sanitized Output: {sanitized_summary}")
         print(f"  Verifier Outcome: {outcome} (Failed: {failed_checks})")
 
@@ -229,6 +270,13 @@ def main() -> None:
                 print(f"  Key Structure (Names & Types Only):\n{json.dumps(structure, indent=4)}")
             except Exception:
                 print(f"  Key Structure: {type(raw_output).__name__}")
+
+        if args.raw_shape:
+            raw_structure = client.last_raw_response_shape
+            if raw_structure is not None:
+                print(f"  Raw API Response Key Structure:\n{json.dumps(raw_structure, indent=4)}")
+            else:
+                print("  Raw API Response Key Structure: None (Cached or unavailable)")
 
         print(f"[FINISH] Case {idx}/5 in {case_elapsed:.2f}s (Outcome: {outcome})")
         print()

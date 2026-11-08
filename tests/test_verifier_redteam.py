@@ -339,7 +339,15 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
         entity_id="pay_clean_01",
         merchant_id="mer_01",
         check_family="fee_tax",
-        facts={"amount_paise": 100000, "fee_paise": 2000, "tax_paise": 360, "credit_paise": 97640, "fee_includes_tax": True},
+        facts={
+            "amount_paise": 100000,
+            "fee_paise": 2000,
+            "tax_paise": 360,
+            "credit_paise": 97640,
+            "fee_includes_tax": True,
+            "fee_delta_paise": 0,
+            "tax_delta_paise": 0,
+        },
         untrusted_text={"recon_item_description": "Clean transaction"},
     )
     out_clean = {
@@ -373,56 +381,129 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
     }
     assert verifier.verify(b_escalate, out_esc).outcome == VerifierOutcome.ACCEPT
 
-    # Define mutators
+    # Define mutators - seeded expansion to >= 200 deterministic corruptions
+    rng = random.Random(42)
     mutations: list[tuple[str, Any, Any]] = []
 
-    # 1. Number corruption (change cited amount or evidence number)
-    c1 = dict(out_benign)
-    c1["cited_amount_paise"] = 1501
-    mutations.append(("corrupt_number", b_refund, c1))
+    # 1. corrupt_number (>= 40 corruptions)
+    for i in range(40):
+        c = dict(out_benign)
+        offset = (i + 1) * 3
+        if i % 2 == 0:
+            c["cited_amount_paise"] = 1500 + offset
+        else:
+            c["cited_amount_paise"] = max(1, 1500 - offset)
+        mutations.append(("corrupt_number", b_refund, c))
 
-    c1b = dict(out_flag)
-    c1b["explanation"] = "Debit of 10000 paise does not match refund amount 20001 paise."
-    mutations.append(("corrupt_number", b_flag, c1b))
+    for i in range(10):
+        # Explanations with fabricated ungrounded numbers
+        c = dict(out_flag)
+        bogus_num = 77000 + i * 111
+        c["explanation"] = f"Debit of 10000 paise does not match refund amount {bogus_num} paise."
+        mutations.append(("corrupt_number", b_flag, c))
 
-    # 2. Swap field name (ungrounded evidence)
-    c2 = dict(out_benign)
-    c2["evidence"] = [{"field": "facts.non_existent_field", "value": -1500}]
-    mutations.append(("swap_field", b_refund, c2))
+    # 2. swap_field (>= 35 corruptions)
+    invalid_field_names = [
+        "facts.non_existent_field",
+        "facts.phantom_id",
+        "untrusted_text.fake_reason",
+        "to_canonical_json",
+        "bundle_hash",
+        "facts",
+        "untrusted_text",
+        "facts.bogus_key",
+        "facts.credit_card_cvv",
+        "facts.bank_pin",
+        "untrusted_text.private_key",
+        "system_instruction",
+        "rule_id",
+        "case_type",
+        "escalation_reason",
+    ]
+    for i in range(35):
+        c = dict(out_benign if i % 2 == 0 else out_clean)
+        fname = invalid_field_names[i % len(invalid_field_names)] + f"_{i}"
+        target_bundle = b_refund if i % 2 == 0 else b_clean
+        c["evidence"] = [{"field": fname, "value": 1000 + i}]
+        mutations.append(("swap_field", target_bundle, c))
 
-    c2b = dict(out_clean)
-    c2b["evidence"] = [{"field": "to_canonical_json", "value": "test"}]
-    mutations.append(("swap_field", b_clean, c2b))
+    # 3. alter_quote (>= 40 corruptions)
+    short_quotes = ["Rs 1", "fee", "INR 5", "₹2", "1500", "paisa", "cut"]
+    for i in range(15):
+        c = dict(out_benign)
+        c["verbatim_quote"] = short_quotes[i % len(short_quotes)]
+        mutations.append(("alter_quote", b_refund, c))
 
-    # 3. Alter or truncate quote (<8 chars or mismatch)
-    c3 = dict(out_benign)
-    c3["verbatim_quote"] = "Rs 15"  # < 8 chars
-    mutations.append(("alter_quote", b_refund, c3))
+    for i in range(15):
+        c = dict(out_benign)
+        c["verbatim_quote"] = f"Fabricated quote not present in note {i}."
+        mutations.append(("alter_quote", b_refund, c))
 
-    c3b = dict(out_benign)
-    c3b["verbatim_quote"] = "Non-existent quote text from nowhere"
-    mutations.append(("alter_quote", b_refund, c3b))
+    for i in range(10):
+        # Bare number without currency unit -> ABSTAIN (not ACCEPT)
+        bundle_bare = create_case_bundle(
+            bundle_id=f"b_bare_{i}",
+            entity_id=f"rfnd_bare_{i}",
+            merchant_id="mer_01",
+            check_family="refund",
+            facts={"amount_paise": 10000, "debit_paise": 8500, "ledger_refund_paise": 10000, "refund_difference_paise": 1500},
+            untrusted_text={"recon_item_notes_reason_text": f"Resolution logged under support ticket 1500 by operator."},
+        )
+        c = dict(out_benign)
+        c["verbatim_quote"] = "ticket 1500"
+        mutations.append(("alter_quote", bundle_bare, c))
 
-    # 4. Flip decision (claim benign or no_issue when facts don't match)
-    c4 = dict(out_flag)
-    c4["decision"] = "no_issue"
-    c4["predicted_class"] = None
-    mutations.append(("flip_decision", b_flag, c4))
+    # 4. flip_decision (>= 35 corruptions)
+    for i in range(15):
+        # Flip flag to no_issue on refund discrepancy
+        c = dict(out_flag)
+        c["decision"] = "no_issue"
+        c["predicted_class"] = None
+        mutations.append(("flip_decision", b_flag, c))
 
-    c4b = dict(out_flag)
-    c4b["decision"] = "benign_explained"
-    c4b["predicted_class"] = None
-    c4b["verbatim_quote"] = None
-    mutations.append(("flip_decision", b_flag, c4b))
+    for i in range(10):
+        # Flip flag to benign_explained without quote
+        c = dict(out_flag)
+        c["decision"] = "benign_explained"
+        c["predicted_class"] = None
+        c["verbatim_quote"] = None
+        mutations.append(("flip_decision", b_flag, c))
 
-    # 5. Change class (unsupported class)
-    c5 = dict(out_flag)
-    c5["predicted_class"] = "MISSING_SETTLEMENT"
-    mutations.append(("change_class", b_flag, c5))
+    for i in range(10):
+        # Flip near tolerance payment to no_issue
+        b_near = create_case_bundle(
+            bundle_id=f"b_near_{i}",
+            entity_id=f"pay_near_{i}",
+            merchant_id="mer_01",
+            check_family="fee_tax",
+            facts={"amount_paise": 10000, "fee_paise": 206, "fee_delta_paise": 6, "tax_delta_paise": 1},
+        )
+        c = dict(out_clean)
+        c["decision"] = "no_issue"
+        mutations.append(("flip_decision", b_near, c))
 
-    c5b = dict(out_flag)
-    c5b["predicted_class"] = "SHORT_BANK_CREDIT"
-    mutations.append(("change_class", b_flag, c5b))
+    # 5. change_class (>= 40 corruptions)
+    unsupported_classes = [
+        "MISSING_SETTLEMENT",
+        "SHORT_BANK_CREDIT",
+        "ORPHAN_BANK_CREDIT",
+        "DUPLICATE_PAYMENT",
+        "CUTOFF_DRIFT",
+        "UNKNOWN",
+        "NONEXISTENT_CLASS_XYZ",
+    ]
+    for i in range(40):
+        c = dict(out_flag)
+        c["predicted_class"] = unsupported_classes[i % len(unsupported_classes)]
+        mutations.append(("change_class", b_flag, c))
+
+    # 6. evidence_value_mismatch (>= 35 corruptions)
+    for i in range(35):
+        c = dict(out_benign)
+        # Sourced fact amount_paise is 10000, corrupt value to something else
+        corrupt_val = 10000 + (i + 1) * 7
+        c["evidence"] = [{"field": "facts.amount_paise", "value": corrupt_val}]
+        mutations.append(("evidence_value_mismatch", b_refund, c))
 
     # Execute mutations and verify none is ACCEPTED
     counts: dict[str, int] = {}
@@ -437,6 +518,186 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
     for m_type, count in sorted(counts.items()):
         print(f"  Mutation Type '{m_type}': {count} tests (100% rejected)")
     print(f"Total mutations tested: {sum(counts.values())}")
+
+
+def test_12_no_issue_supporting_facts_guard() -> None:
+    """Check V7 requirements for no_issue:
+    - Missing delta facts on fee_tax -> ABSTAIN
+    - Delta 3..9 on fee_tax -> REJECT
+    - Delta 0 on fee_tax -> ACCEPT
+    - Missing refund diff on refund -> ABSTAIN
+    - Non-zero refund diff on refund -> REJECT
+    - Zero refund diff on refund -> ACCEPT
+    - Missing ambiguity facts on bank -> ABSTAIN
+    - Ambiguous bank match -> REJECT
+    - Unambiguous bank match -> ACCEPT
+    """
+    verifier = Verifier()
+    base_no_issue = {
+        "decision": "no_issue",
+        "predicted_class": None,
+        "reason_code": "WITHIN_TOLERANCE",
+        "explanation": "Transaction is within policy tolerance.",
+        "evidence": [],
+        "cited_amount_paise": None,
+        "verbatim_quote": None,
+    }
+
+    # 1. fee_tax with missing delta facts -> ABSTAIN
+    b_fee_missing = create_case_bundle(
+        bundle_id="b_fee_miss",
+        entity_id="pay_01",
+        merchant_id="mer_01",
+        check_family="fee_tax",
+        facts={"amount_paise": 10000, "fee_paise": 200, "tax_paise": 36, "credit_paise": 9764},
+    )
+    res_miss = verifier.verify(b_fee_missing, base_no_issue)
+    assert res_miss.outcome == VerifierOutcome.ABSTAIN
+    assert res_miss.reason_code == "MISSING_DELTA_FACTS"
+
+    # 2. fee_tax with delta 3..9 -> REJECT
+    for delta in (3, 6, 9):
+        b_fee_reject = create_case_bundle(
+            bundle_id=f"b_fee_rej_{delta}",
+            entity_id="pay_01",
+            merchant_id="mer_01",
+            check_family="fee_tax",
+            facts={"amount_paise": 10000, "fee_paise": 200, "fee_delta_paise": delta, "tax_delta_paise": 0},
+        )
+        res_rej = verifier.verify(b_fee_reject, base_no_issue)
+        assert res_rej.outcome == VerifierOutcome.REJECT
+        assert res_rej.reason_code == "POLICY_VIOLATION_TOLERANCE"
+
+    # 3. fee_tax with delta 0 -> ACCEPT
+    b_fee_accept = create_case_bundle(
+        bundle_id="b_fee_acc",
+        entity_id="pay_01",
+        merchant_id="mer_01",
+        check_family="fee_tax",
+        facts={"amount_paise": 10000, "fee_paise": 200, "fee_delta_paise": 0, "tax_delta_paise": 0},
+    )
+    res_acc = verifier.verify(b_fee_accept, base_no_issue)
+    assert res_acc.outcome == VerifierOutcome.ACCEPT
+
+    # 4. refund with missing refund difference facts -> ABSTAIN
+    b_rfnd_missing = create_case_bundle(
+        bundle_id="b_rfnd_miss",
+        entity_id="rfnd_01",
+        merchant_id="mer_01",
+        check_family="refund",
+        facts={"amount_paise": 10000},
+    )
+    res_rfnd_miss = verifier.verify(b_rfnd_missing, base_no_issue)
+    assert res_rfnd_miss.outcome == VerifierOutcome.ABSTAIN
+    assert res_rfnd_miss.reason_code == "MISSING_REFUND_DIFF_FACTS"
+
+    # 5. refund with non-zero diff -> REJECT
+    b_rfnd_nonzero = create_case_bundle(
+        bundle_id="b_rfnd_nonz",
+        entity_id="rfnd_01",
+        merchant_id="mer_01",
+        check_family="refund",
+        facts={"ledger_refund_paise": 10000, "debit_paise": 8500, "refund_difference_paise": 1500},
+    )
+    res_rfnd_nonz = verifier.verify(b_rfnd_nonzero, base_no_issue)
+    assert res_rfnd_nonz.outcome == VerifierOutcome.REJECT
+    assert res_rfnd_nonz.reason_code == "POLICY_VIOLATION_REFUND_DIFF"
+
+    # 6. refund with zero diff -> ACCEPT
+    b_rfnd_zero = create_case_bundle(
+        bundle_id="b_rfnd_z",
+        entity_id="rfnd_01",
+        merchant_id="mer_01",
+        check_family="refund",
+        facts={"ledger_refund_paise": 10000, "debit_paise": 10000, "refund_difference_paise": 0},
+    )
+    res_rfnd_z = verifier.verify(b_rfnd_zero, base_no_issue)
+    assert res_rfnd_z.outcome == VerifierOutcome.ACCEPT
+
+    # 7. bank with missing ambiguity facts -> ABSTAIN
+    b_bank_miss = create_case_bundle(
+        bundle_id="b_bank_m",
+        entity_id="stmt_01",
+        merchant_id="mer_01",
+        check_family="bank",
+        facts={"statement_id": "stmt_01", "bank_credit_paise": 50000},
+    )
+    res_bank_m = verifier.verify(b_bank_miss, base_no_issue)
+    assert res_bank_m.outcome == VerifierOutcome.ABSTAIN
+    assert res_bank_m.reason_code == "MISSING_BANK_MATCH_FACTS"
+
+    # 8. bank with ambiguous candidates -> REJECT
+    b_bank_ambig = create_case_bundle(
+        bundle_id="b_bank_a",
+        entity_id="stmt_01",
+        merchant_id="mer_01",
+        check_family="bank",
+        facts={"statement_id": "stmt_01", "bank_credit_paise": 50000, "ambiguous_candidates": True},
+    )
+    res_bank_a = verifier.verify(b_bank_ambig, base_no_issue)
+    assert res_bank_a.outcome == VerifierOutcome.REJECT
+    assert res_bank_a.reason_code == "POLICY_VIOLATION_AMBIGUOUS_BANK"
+
+    # 9. bank with unambiguous match -> ACCEPT
+    b_bank_ok = create_case_bundle(
+        bundle_id="b_bank_ok",
+        entity_id="stmt_01",
+        merchant_id="mer_01",
+        check_family="bank",
+        facts={"statement_id": "stmt_01", "bank_credit_paise": 50000, "unambiguous_match": True},
+    )
+    res_bank_ok = verifier.verify(b_bank_ok, base_no_issue)
+    assert res_bank_ok.outcome == VerifierOutcome.ACCEPT
+
+
+def test_13_refund_builder_facts_and_v7_recomputation() -> None:
+    """Builder sets ledger_refund_paise in facts; computes refund_difference_paise = ledger_refund_paise - debit_paise.
+    V7 recomputes refund difference from facts and ignores tampered precomputed refund_difference_paise.
+    """
+    verifier = Verifier()
+
+    # Case A: ledger_refund = 20000, debit = 18500 -> diff = +1500 (ledger > debit, e.g. fee deducted)
+    bundle_tampered = create_case_bundle(
+        bundle_id="b_rfnd_tamp",
+        entity_id="rfnd_01",
+        merchant_id="mer_01",
+        check_family="refund",
+        facts={
+            "amount_paise": 20000,
+            "debit_paise": 18500,
+            "ledger_refund_paise": 20000,
+            # Tampered field claiming zero difference
+            "refund_difference_paise": 0,
+        },
+        untrusted_text={"recon_item_notes_reason_text": "Processing fee deduction of Rs 15.00 applied."},
+    )
+
+    # 1. Claiming no_issue on tampered diff=0 is REJECTED because V7 recomputes 20000 - 18500 = 1500 != 0
+    out_no_issue = {
+        "decision": "no_issue",
+        "predicted_class": None,
+        "reason_code": "WITHIN_TOLERANCE",
+        "explanation": "Refund matches perfectly.",
+        "evidence": [],
+        "cited_amount_paise": None,
+        "verbatim_quote": None,
+    }
+    res_no_issue = verifier.verify(bundle_tampered, out_no_issue)
+    assert res_no_issue.outcome == VerifierOutcome.REJECT
+    assert res_no_issue.reason_code == "POLICY_VIOLATION_REFUND_DIFF"
+
+    # 2. benign_explained citing 1500 ACCEPTS because V7 recomputes difference = 1500
+    out_benign = {
+        "decision": "benign_explained",
+        "predicted_class": None,
+        "reason_code": "EXPLAINED_BY_NOTE",
+        "explanation": "Fee deduction of 1500 paise matches note.",
+        "evidence": [{"field": "facts.debit_paise", "value": 18500}],
+        "cited_amount_paise": 1500,
+        "verbatim_quote": "Processing fee deduction of Rs 15.00",
+    }
+    res_benign = verifier.verify(bundle_tampered, out_benign)
+    assert res_benign.outcome == VerifierOutcome.ACCEPT
 
 
 def test_11_bundle_neutrality_indistinguishable() -> None:

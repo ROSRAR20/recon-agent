@@ -195,6 +195,7 @@ class GeminiClient:
         sleep_fn: Callable[[float], None] | None = None,
         debug_http: bool = False,
         mode: str = "eval",
+        no_cache: bool = False,
     ) -> None:
         load_dotenv()
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
@@ -223,6 +224,7 @@ class GeminiClient:
         self.thinking_level = thinking_level
 
         self.cache = cache
+        self.no_cache = no_cache
         self.audit_logger = audit_logger
         self.timeout = timeout
         self.read_timeout = read_timeout
@@ -248,6 +250,12 @@ class GeminiClient:
         self.last_cost_high: float | None = None
         self.last_served_model: str | None = None
         self.last_service_tier: str | None = None
+        self.last_cache_hit: bool = False
+        self.last_attempts: int = 0
+        self.last_raw_response_bytes: int = 0
+        self.last_usage_flagged: bool = False
+        self.last_usage_raw: dict[str, int] | None = None
+        self.last_raw_response_shape: Any = None
 
         # Load rates
         self.rates = load_price_rates(self.prices_path, self.model_id)
@@ -460,6 +468,7 @@ class GeminiClient:
         bundle: CaseBundle,
         system_prompt: str,
         run_id: int = 0,
+        no_cache: bool | None = None,
     ) -> str:
         """Complete reconciliation decision for a CaseBundle.
 
@@ -470,9 +479,11 @@ class GeminiClient:
         prompt_hash = hashlib.sha256(system_prompt.encode("utf-8")).hexdigest()
         schema_hash = get_schema_hash()
 
+        effective_no_cache = self.no_cache if no_cache is None else no_cache
+
         # 1. Check disk cache
-        if self.cache is not None:
-            cached = self.cache.get(
+        if self.cache is not None and not effective_no_cache:
+            cache_entry = self.cache.get_entry(
                 bundle_hash=bundle_hash,
                 prompt_hash=prompt_hash,
                 schema_hash=schema_hash,
@@ -480,13 +491,29 @@ class GeminiClient:
                 thinking_level=self.thinking_level,
                 run_id=run_id,
             )
-            if cached is not None:
-                self.last_tokens = {"input_tokens": 0, "output_tokens": 0, "thinking_tokens": 0}
-                self.last_cost_low = 0.0
-                self.last_cost_high = 0.0
-                self.last_served_model = self.model_id
-                self.last_service_tier = self.tier
-                return cached
+            if cache_entry is not None:
+                cached = cache_entry.get("raw_output")
+                if cached is not None:
+                    self.last_cache_hit = True
+                    self.last_attempts = 0
+                    self.last_served_model = cache_entry.get("served_model", self.model_id)
+                    self.last_service_tier = self.tier
+                    self.last_tokens = cache_entry.get("tokens") or {
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "thinking_tokens": 0,
+                    }
+                    self.last_cost_low = cache_entry.get("cost_low", 0.0)
+                    self.last_cost_high = cache_entry.get("cost_high", 0.0)
+                    self.last_usage_flagged = cache_entry.get("usage_flagged", False)
+                    self.last_usage_raw = cache_entry.get("usage_raw")
+                    self.last_raw_response_bytes = cache_entry.get(
+                        "raw_response_bytes", len(cached.encode("utf-8"))
+                    )
+                    self.last_raw_response_shape = cache_entry.get("raw_response_shape")
+                    return cached
+
+        self.last_cache_hit = False
 
         # Ensure API key is present before network call
         if not self.api_key:
@@ -585,6 +612,9 @@ class GeminiClient:
                 # Any other HTTP status check
                 resp.raise_for_status()
                 latency_ms = round((self._now() - start_time) * 1000)
+                raw_bytes_len = len(resp.content)
+                self.last_raw_response_bytes = raw_bytes_len
+                self.last_attempts = attempt
                 resp_json = resp.json()
                 break
 
@@ -693,6 +723,9 @@ class GeminiClient:
         self.last_cost_high = cost_high
         self.last_served_model = served_model
         self.last_service_tier = service_tier
+        self.last_usage_flagged = usage_flagged
+        self.last_usage_raw = usage_numbers
+        self.last_raw_response_shape = key_structure
 
         # Handle unparseable response shape (model_invalid mapped to escalate_human)
         if raw_output_text is None:
@@ -730,7 +763,7 @@ class GeminiClient:
                     service_tier=service_tier,
                     tier=self.tier,
                 )
-            if self.cache is not None:
+            if self.cache is not None and not effective_no_cache:
                 self.cache.put(
                     bundle_hash=bundle_hash,
                     prompt_hash=prompt_hash,
@@ -740,6 +773,13 @@ class GeminiClient:
                     run_id=run_id,
                     raw_output=fallback_response,
                     served_model=served_model,
+                    tokens=tokens,
+                    cost_low=cost_low,
+                    cost_high=cost_high,
+                    usage_flagged=usage_flagged,
+                    usage_raw=usage_numbers,
+                    raw_response_bytes=raw_bytes_len,
+                    raw_response_shape=key_structure,
                 )
             return fallback_response
 
@@ -795,7 +835,7 @@ class GeminiClient:
             )
 
         # 8. Write to disk cache
-        if self.cache is not None:
+        if self.cache is not None and not effective_no_cache:
             self.cache.put(
                 bundle_hash=bundle_hash,
                 prompt_hash=prompt_hash,
@@ -805,6 +845,13 @@ class GeminiClient:
                 run_id=run_id,
                 raw_output=sanitized_raw_output,
                 served_model=served_model,
+                tokens=tokens,
+                cost_low=cost_low,
+                cost_high=cost_high,
+                usage_flagged=usage_flagged,
+                usage_raw=usage_numbers,
+                raw_response_bytes=raw_bytes_len,
+                raw_response_shape=key_structure,
             )
 
         return sanitized_raw_output

@@ -34,7 +34,7 @@ class LLMCache:
         )
         return hashlib.sha256(composite).hexdigest()
 
-    def get(
+    def get_entry(
         self,
         bundle_hash: str,
         prompt_hash: str,
@@ -42,9 +42,8 @@ class LLMCache:
         model_id: str = "",
         thinking_level: str | None = "low",
         run_id: int = 0,
-    ) -> str | None:
-        """Retrieve cached raw LLM response if present, else None."""
-        # Backward compatibility for legacy 3-arg positional call: get(bundle_hash, prompt_hash, model_id)
+    ) -> dict[str, Any] | None:
+        """Retrieve full cached entry dictionary if present, else None."""
         if model_id == "" and schema_hash != "" and len(schema_hash) != 64:
             model_id = schema_hash
             schema_hash = ""
@@ -62,10 +61,31 @@ class LLMCache:
             return None
         try:
             with open(filepath, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data.get("raw_output")
+                return json.load(f)
         except Exception:
             return None
+
+    def get(
+        self,
+        bundle_hash: str,
+        prompt_hash: str,
+        schema_hash: str = "",
+        model_id: str = "",
+        thinking_level: str | None = "low",
+        run_id: int = 0,
+    ) -> str | None:
+        """Retrieve cached raw LLM response if present, else None."""
+        entry = self.get_entry(
+            bundle_hash=bundle_hash,
+            prompt_hash=prompt_hash,
+            schema_hash=schema_hash,
+            model_id=model_id,
+            thinking_level=thinking_level,
+            run_id=run_id,
+        )
+        if entry is not None:
+            return entry.get("raw_output")
+        return None
 
     def put(
         self,
@@ -77,8 +97,15 @@ class LLMCache:
         run_id: int = 0,
         raw_output: str = "",
         served_model: str | None = None,
+        tokens: dict[str, int | None] | None = None,
+        cost_low: float | None = None,
+        cost_high: float | None = None,
+        usage_flagged: bool = False,
+        usage_raw: dict[str, int] | None = None,
+        raw_response_bytes: int = 0,
+        raw_response_shape: Any = None,
     ) -> None:
-        """Write raw LLM response to disk cache."""
+        """Write raw LLM response and metadata to disk cache."""
         # Backward compatibility for legacy 4-arg positional call: put(bundle_hash, prompt_hash, model_id, raw_output)
         if raw_output == "" and model_id != "" and (model_id.startswith("{") or model_id.startswith("[")):
             raw_output = model_id
@@ -102,6 +129,13 @@ class LLMCache:
             "run_id": run_id,
             "raw_output": raw_output,
             "served_model": served_model,
+            "tokens": tokens,
+            "cost_low": cost_low,
+            "cost_high": cost_high,
+            "usage_flagged": usage_flagged,
+            "usage_raw": usage_raw,
+            "raw_response_bytes": raw_response_bytes,
+            "raw_response_shape": raw_response_shape,
         }
         temp_filepath = f"{filepath}.tmp"
         with open(temp_filepath, "w", encoding="utf-8") as f:

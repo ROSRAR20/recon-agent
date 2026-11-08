@@ -615,6 +615,8 @@ def test_verifier_no_issue_within_tolerance() -> None:
             "amount_paise": 100000,
             "fee_paise": 2360,
             "tax_paise": 360,
+            "fee_delta_paise": 0,
+            "tax_delta_paise": 0,
         },
         untrusted_text={
             "recon_item_description": "Clean transaction",
@@ -656,7 +658,14 @@ def test_verifier_no_issue_rejects_discrepancies() -> None:
         merchant_id="mer_01",
         case_type="payment",
         rule_id="B1_NEAR_TOLERANCE",
-        facts={"entity_id": "pay_disc_1", "type": "payment", "amount_paise": 50000, "fee_paise": 1180},
+        facts={
+            "entity_id": "pay_disc_1",
+            "type": "payment",
+            "amount_paise": 50000,
+            "fee_paise": 1180,
+            "fee_delta_paise": 6,
+            "tax_delta_paise": 1,
+        },
         untrusted_text={},
     )
     res_pay = verifier.verify(pay_bundle, llm_out)
@@ -692,7 +701,13 @@ def test_verifier_no_issue_rejects_discrepancies() -> None:
         merchant_id="mer_01",
         case_type="bank_statement",
         rule_id="B1_BANK_AMBIGUOUS_CANDIDATES",
-        facts={"entity_id": "stmt_disc_1", "type": "bank_statement", "credit_paise": 100000},
+        facts={
+            "statement_id": "stmt_disc_1",
+            "type": "bank_statement",
+            "credit_paise": 100000,
+            "ambiguous_candidates": True,
+            "candidates_count": 2,
+        },
         untrusted_text={},
     )
     res_bank = verifier.verify(bank_bundle, llm_out)

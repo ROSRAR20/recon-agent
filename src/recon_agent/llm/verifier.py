@@ -488,14 +488,18 @@ class Verifier:
                     details="Decision 'benign_explained' requires amount to be strictly sourced by quote.",
                 )
 
-            # Arithmetic check: cited_amount_paise must equal |refund_difference_paise|
-            refund_diff = bundle_facts.get("refund_difference_paise")
-            if refund_diff is None:
-                debit = bundle_facts.get("debit_paise", 0)
+            # Arithmetic check: recompute refund difference directly from facts
+            ledger_ref = bundle_facts.get("ledger_refund_paise")
+            debit = bundle_facts.get("debit_paise")
+            if ledger_ref is not None and debit is not None:
+                recomputed_diff = ledger_ref - debit
+            elif "refund_difference_paise" in bundle_facts:
+                recomputed_diff = bundle_facts["refund_difference_paise"]
+            else:
                 amt = bundle_facts.get("amount_paise", 0)
-                refund_diff = debit - amt
+                recomputed_diff = (debit if debit is not None else 0) - amt
 
-            if llm_output.cited_amount_paise is None or abs(llm_output.cited_amount_paise) != abs(refund_diff):
+            if llm_output.cited_amount_paise is None or abs(llm_output.cited_amount_paise) != abs(recomputed_diff):
                 failed_checks.append("V7")
                 return VerifierResult(
                     outcome=VerifierOutcome.REJECT,
@@ -503,7 +507,7 @@ class Verifier:
                     reason_code="ARITHMETIC_MISMATCH",
                     details=(
                         f"Cited amount {llm_output.cited_amount_paise} paise does not match refund difference "
-                        f"{refund_diff} paise."
+                        f"{recomputed_diff} paise."
                     ),
                 )
 
@@ -642,41 +646,55 @@ class Verifier:
                         details="CUTOFF_DRIFT requires timing drift indication in facts.",
                     )
 
+            else:
+                failed_checks.append("V7")
+                return VerifierResult(
+                    outcome=VerifierOutcome.REJECT,
+                    failed_checks=tuple(failed_checks),
+                    reason_code="UNSUPPORTED_FLAG_CLASS",
+                    details=f"Flagged class '{pred_class}' is unsupported or has no guard table verification.",
+                )
+
         elif llm_output.decision == "no_issue":
-            # Guard no_issue using numerical facts directly (not rule_id strings)
-            # 1. Fee/tax delta in payment facts <= 2 paise tolerance
-            if "fee_paise" in bundle_facts and "amount_paise" in bundle_facts and "credit_paise" in bundle_facts:
-                amt = bundle_facts["amount_paise"]
-                fee = bundle_facts["fee_paise"]
-                credit = bundle_facts["credit_paise"]
-                tax = bundle_facts.get("tax_paise", 0)
-                diff1 = abs(amt - fee - credit)
-                diff2 = abs(amt - fee - tax - credit)
-                min_diff = min(diff1, diff2)
-                if min_diff > 2:
+            # Guard no_issue using verifiable supporting facts directly
+            # 1. Fee/tax check family: requires fee_delta_paise and tax_delta_paise in facts
+            if bundle.check_family == "fee_tax":
+                fee_delta = bundle_facts.get("fee_delta_paise")
+                tax_delta = bundle_facts.get("tax_delta_paise")
+                if fee_delta is None or tax_delta is None:
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.ABSTAIN,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="MISSING_DELTA_FACTS",
+                        details="Decision 'no_issue' for fee_tax requires fee_delta_paise and tax_delta_paise in facts.",
+                    )
+                delta = max(abs(fee_delta), abs(tax_delta))
+                if delta > 2:
                     failed_checks.append("V7")
                     return VerifierResult(
                         outcome=VerifierOutcome.REJECT,
                         failed_checks=tuple(failed_checks),
                         reason_code="POLICY_VIOLATION_TOLERANCE",
-                        details=f"Payment fee/tax discrepancy ({min_diff} paise) exceeds 2 paise rounding tolerance.",
+                        details=f"Payment fee/tax delta ({delta} paise) exceeds 2 paise rounding tolerance.",
                     )
-            elif bundle.rule_id in ("B1_NEAR_TOLERANCE", "B1_FEE_TAX_MISMATCH"):
-                failed_checks.append("V7")
-                return VerifierResult(
-                    outcome=VerifierOutcome.REJECT,
-                    failed_checks=tuple(failed_checks),
-                    reason_code="POLICY_VIOLATION_TOLERANCE",
-                    details=f"Item has rule {bundle.rule_id} exceeding rounding tolerance (2 paise); no_issue rejected.",
-                )
 
-            # 2. Refund difference == 0
-            if "refund_difference_paise" in bundle_facts or (
-                bundle.check_family == "refund" and "debit_paise" in bundle_facts and "amount_paise" in bundle_facts
-            ):
-                diff = bundle_facts.get("refund_difference_paise")
-                if diff is None:
-                    diff = bundle_facts.get("debit_paise", 0) - bundle_facts.get("amount_paise", 0)
+            # 2. Refund check family: requires refund_difference == 0
+            elif bundle.check_family == "refund":
+                ledger_ref = bundle_facts.get("ledger_refund_paise")
+                debit = bundle_facts.get("debit_paise")
+                if ledger_ref is not None and debit is not None:
+                    diff = ledger_ref - debit
+                elif "refund_difference_paise" in bundle_facts:
+                    diff = bundle_facts["refund_difference_paise"]
+                else:
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.ABSTAIN,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="MISSING_REFUND_DIFF_FACTS",
+                        details="Decision 'no_issue' for refund requires verifiable refund difference facts.",
+                    )
                 if diff != 0:
                     failed_checks.append("V7")
                     return VerifierResult(
@@ -686,13 +704,28 @@ class Verifier:
                         details=f"Refund has non-zero difference ({diff} paise); no_issue rejected.",
                     )
 
-            # 3. Bank match ambiguity
-            if bundle.check_family == "bank":
-                if (
-                    bundle_facts.get("ambiguous_candidates")
+            # 3. Bank check family: requires unambiguous match
+            elif bundle.check_family == "bank":
+                has_ambiguity_facts = (
+                    "ambiguous_candidates" in bundle_facts
+                    or "candidates_count" in bundle_facts
+                    or "unambiguous_match" in bundle_facts
+                )
+                if not has_ambiguity_facts:
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.ABSTAIN,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="MISSING_BANK_MATCH_FACTS",
+                        details="Decision 'no_issue' for bank requires candidate ambiguity facts.",
+                    )
+                is_ambiguous = (
+                    bundle_facts.get("ambiguous_candidates") is True
                     or bundle_facts.get("candidates_count", 1) > 1
+                    or bundle_facts.get("unambiguous_match") is False
                     or bundle.rule_id == "B1_BANK_AMBIGUOUS_CANDIDATES"
-                ):
+                )
+                if is_ambiguous:
                     failed_checks.append("V7")
                     return VerifierResult(
                         outcome=VerifierOutcome.REJECT,
