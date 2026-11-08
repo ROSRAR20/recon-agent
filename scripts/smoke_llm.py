@@ -257,7 +257,8 @@ def main() -> None:
         print(f"  Usage Flagged: {client.last_usage_flagged}")
         cost_low_str = f"${client.last_cost_low:.6f}" if client.last_cost_low is not None else "None"
         cost_high_str = f"${client.last_cost_high:.6f}" if client.last_cost_high is not None else "None"
-        print(f"  Estimated Cost: low={cost_low_str}, high={cost_high_str}")
+        rate_label = " (UNVERIFIED RATE)" if not client.rates.get("verified", False) else ""
+        print(f"  Estimated Cost: low={cost_low_str}, high={cost_high_str}{rate_label}")
 
         print(f"  Raw Output: {sanitized_summary}")
         print(f"  Raw Decision: {final_dec.raw_decision}")

@@ -117,6 +117,8 @@ To maintain engineering clarity, the verifier explicitly does **NOT** guarantee:
    - Non-numeric or qualitative justifications (e.g., `"goods returned damaged beyond repair"`) cannot be verified mathematically. The verifier abstains and escalates these cases to human review.
 4. **Number Word Parsing**:
    - Natural language number words (`"twenty"`, `"five hundred"`) are intentionally not parsed into numbers, preventing subjective NLP interpretation errors in financial verification.
+5. **Qualitative Policy Claims in Explanations**:
+   - Explanations can contain wrong qualitative claims (e.g., asserting a "zero-tolerance policy threshold" when the actual policy tolerance is 2 paise) that no numeric or referential check catches. The pre-registered metrics do not claim or test qualitative accuracy beyond strict numerical grounding and schema compliance.
 
 ---
 

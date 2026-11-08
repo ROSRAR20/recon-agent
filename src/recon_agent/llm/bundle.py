@@ -211,21 +211,33 @@ def _build_recon_item_bundle(
             facts["refund_difference_paise"] = ledger_refund_paise - item.debit
         else:
             facts["refund_difference_paise"] = 0
+        facts["refund_tolerance_paise"] = 0
 
-    # For payment items, compute fee and tax deltas if rate_card is provided
-    if rate_card and item.type == "payment":
-        method = item.method or (pay.method if pay else "card")
-        if method == "netbanking":
-            rate_bps = rate_card.netbanking_bps
-        elif method == "upi":
-            rate_bps = rate_card.upi_bps
+    # For payment items, add policy thresholds and compute fee and tax deltas
+    if item.type == "payment":
+        round_tol = getattr(rate_card, "rounding_tolerance_paise", 2) if rate_card else 2
+        near_tol = getattr(rate_card, "near_tolerance_max_paise", getattr(rate_card, "escalate_tolerance_paise", 9)) if rate_card else 9
+        err_thresh = getattr(rate_card, "error_threshold_paise", 10) if rate_card else 10
+        facts["rounding_tolerance_paise"] = round_tol
+        facts["near_tolerance_max_paise"] = near_tol
+        facts["error_threshold_paise"] = err_thresh
+
+        if rate_card:
+            method = item.method or (pay.method if pay else "card")
+            if method == "netbanking":
+                rate_bps = rate_card.netbanking_bps
+            elif method == "upi":
+                rate_bps = rate_card.upi_bps
+            else:
+                rate_bps = rate_card.card_bps
+            base_fee = (item.amount * rate_bps + 5000) // 10000
+            expected_tax = (base_fee * rate_card.gst_bps + 5000) // 10000
+            expected_fee = base_fee + expected_tax if rate_card.fee_includes_tax else base_fee
+            facts["fee_delta_paise"] = abs(item.fee - expected_fee)
+            facts["tax_delta_paise"] = abs(item.tax - expected_tax)
         else:
-            rate_bps = rate_card.card_bps
-        base_fee = (item.amount * rate_bps + 5000) // 10000
-        expected_tax = (base_fee * rate_card.gst_bps + 5000) // 10000
-        expected_fee = base_fee + expected_tax if rate_card.fee_includes_tax else base_fee
-        facts["fee_delta_paise"] = abs(item.fee - expected_fee)
-        facts["tax_delta_paise"] = abs(item.tax - expected_tax)
+            facts["fee_delta_paise"] = 0
+            facts["tax_delta_paise"] = 0
 
     # Untrusted text
     untrusted_text = {

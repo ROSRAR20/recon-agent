@@ -383,12 +383,14 @@ def score_llm_run(
         paid_equiv_low = None
         paid_equiv_high = None
 
+    rate_verified = rates.get("verified", False)
     if tier == "free":
         actual_cost_usd = 0.0 if completed > 0 else 0.0
         report_cost_str = "$0.00 (free tier)"
     else:
         actual_cost_usd = paid_equiv_high
-        report_cost_str = f"${actual_cost_usd:.4f}" if actual_cost_usd is not None else "None"
+        base_cost = f"${actual_cost_usd:.4f}" if actual_cost_usd is not None else "None"
+        report_cost_str = f"{base_cost} (UNVERIFIED RATE)" if not rate_verified and actual_cost_usd is not None else base_cost
 
     header_warning = None
     if allow_infra_failures and n_infra_failed > 0:

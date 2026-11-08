@@ -116,22 +116,40 @@ def load_price_rates(prices_path: str = "config/llm_prices.json", model_id: str 
     if selected_rate is None:
         selected_rate = model_entry["rates"][0]
 
+    rate_verified = bool(selected_rate.get("verified", data.get("_metadata", {}).get("verified", False)))
     return {
         "input_cost_per_million": float(selected_rate.get("input_cost_per_million", 0.075)),
         "output_cost_per_million": float(selected_rate.get("output_cost_per_million", 0.30)),
         "thinking_cost_per_million": float(
             selected_rate.get("thinking_cost_per_million", selected_rate.get("output_cost_per_million", 0.30))
         ),
+        "verified": rate_verified,
     }
 
 
 def extract_key_structure(obj: Any) -> Any:
-    """Recursively extract key names and value types only (never values)."""
+    """Recursively extract key names and value types only (never values).
+
+    For lists containing objects with a 'type' discriminator (such as steps),
+    extracts distinct shapes by step type rather than only the first item.
+    """
     if isinstance(obj, dict):
         return {str(k): extract_key_structure(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         if not obj:
             return []
+        if any(isinstance(item, dict) and "type" in item for item in obj):
+            shapes_by_type: dict[str, Any] = {}
+            for item in obj:
+                if isinstance(item, dict) and "type" in item:
+                    t = str(item.get("type"))
+                    if t not in shapes_by_type:
+                        shapes_by_type[t] = extract_key_structure(item)
+                else:
+                    item_type = type(item).__name__
+                    if item_type not in shapes_by_type:
+                        shapes_by_type[item_type] = extract_key_structure(item)
+            return list(shapes_by_type.values())
         return [extract_key_structure(obj[0])]
     else:
         return type(obj).__name__

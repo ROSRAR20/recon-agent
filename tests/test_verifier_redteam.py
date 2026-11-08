@@ -165,6 +165,75 @@ def test_5_evidence_value_mismatch_rejects() -> None:
     assert res.reason_code == "EVIDENCE_VALUE_MISMATCH"
 
 
+def test_5b_evidence_bool_int_type_mismatch_rejects() -> None:
+    """Validator rejects booleans where integers expected and vice versa in evidence.
+
+    Python bool is an int subclass (1 == True is True). Exact type check is required.
+    Red-team tests:
+    - evidence value True for int fact 1 -> REJECT
+    - evidence value 1 for bool fact True -> REJECT
+    """
+    verifier = Verifier()
+
+    # Case 1: Fact has candidates_count: 1 (int), evidence has value: True (bool)
+    bundle_int = create_case_bundle(
+        bundle_id="b_int_test",
+        entity_id="entity_int_01",
+        merchant_id="mer_01",
+        check_family="bank",
+        facts={"candidates_count": 1, "bank_credit_paise": 5000},
+    )
+    out_bool_ev = {
+        "decision": "escalate_human",
+        "predicted_class": None,
+        "reason_code": "AMBIGUOUS_TEXT",
+        "explanation": "Discrepancy observed.",
+        "evidence": [{"field": "facts.candidates_count", "value": True}],  # bool for int!
+        "cited_amount_paise": None,
+        "verbatim_quote": None,
+    }
+    res1 = verifier.verify(bundle_int, out_bool_ev)
+    assert res1.outcome == VerifierOutcome.REJECT
+    assert res1.reason_code == "EVIDENCE_VALUE_MISMATCH"
+    assert "bool" in res1.details or "type" in res1.details.lower()
+
+    # Case 2: Fact has unambiguous_match: True (bool), evidence has value: 1 (int)
+    bundle_bool = create_case_bundle(
+        bundle_id="b_bool_test",
+        entity_id="entity_bool_01",
+        merchant_id="mer_01",
+        check_family="bank",
+        facts={"unambiguous_match": True, "bank_credit_paise": 5000},
+    )
+    out_int_ev = {
+        "decision": "escalate_human",
+        "predicted_class": None,
+        "reason_code": "AMBIGUOUS_TEXT",
+        "explanation": "Discrepancy observed.",
+        "evidence": [{"field": "facts.unambiguous_match", "value": 1}],  # int for bool!
+        "cited_amount_paise": None,
+        "verbatim_quote": None,
+    }
+    res2 = verifier.verify(bundle_bool, out_int_ev)
+    assert res2.outcome == VerifierOutcome.REJECT
+    assert res2.reason_code == "EVIDENCE_VALUE_MISMATCH"
+    assert "int" in res2.details or "type" in res2.details.lower()
+
+    # Case 3: Schema validation rejects boolean for cited_amount_paise
+    out_schema_bool = {
+        "decision": "escalate_human",
+        "predicted_class": None,
+        "reason_code": "AMBIGUOUS_TEXT",
+        "explanation": "Discrepancy observed.",
+        "evidence": [],
+        "cited_amount_paise": True,  # bool instead of int
+        "verbatim_quote": None,
+    }
+    is_valid, parsed, errors = validate_llm_output(out_schema_bool)
+    assert not is_valid
+    assert any("boolean" in err.lower() or "integer" in err.lower() for err in errors)
+
+
 def test_6_escalate_human_with_fabricated_number_rejects_and_templates() -> None:
     """6. escalate_human with fabricated number in explanation -> REJECT, template explanation."""
     bundle = _build_test_refund_bundle()
@@ -507,7 +576,116 @@ def test_mutation_suite_rejects_corrupted_outputs() -> None:
         c["evidence"] = [{"field": "facts.amount_paise", "value": corrupt_val}]
         mutations.append(("evidence_value_mismatch", "benign_explained", b_refund, c, False, None))
 
-    # 7. Declared Neutral Corruptions (6 controls)
+    # 7. escalate_human corruptions (>= 35 corruptions across 5 corruption types)
+    # 7a. Fabricated number in explanation (7)
+    for i in range(7):
+        c = dict(out_esc)
+        c["explanation"] = f"Discrepancy cannot be resolved. Fabricated ungrounded number {88880 + i}."
+        mutations.append(("corrupt_number", "escalate_human", b_escalate, c, False, None))
+
+    # 7b. Fabricated evidence field (7)
+    for i in range(7):
+        c = dict(out_esc)
+        c["evidence"] = [{"field": f"facts.phantom_esc_field_{i}", "value": 50000}]
+        mutations.append(("swap_field", "escalate_human", b_escalate, c, False, None))
+
+    # 7c. Wrong evidence value (7)
+    for i in range(7):
+        c = dict(out_esc)
+        c["evidence"] = [{"field": "facts.amount_paise", "value": 99900 + i}]
+        mutations.append(("evidence_value_mismatch", "escalate_human", b_escalate, c, False, None))
+
+    # 7d. Fabricated quote (7)
+    for i in range(7):
+        c = dict(out_esc)
+        c["verbatim_quote"] = f"Fabricated quote not present in note {i}."
+        mutations.append(("alter_quote", "escalate_human", b_escalate, c, False, None))
+
+    # 7e. Oversized explanation > 280 chars (7)
+    for i in range(7):
+        c = dict(out_esc)
+        c["explanation"] = (
+            "This explanation is intentionally longer than two hundred and eighty characters to test schema limits. "
+            + ("escalation review needed " * (10 + i))
+        )
+        mutations.append(("oversized_explanation", "escalate_human", b_escalate, c, False, None))
+
+    # 8. no_issue corruptions (>= 28 additional corruptions: delta > 2, missing delta facts, refund diff != 0, bank ambiguous)
+    # 8a. Fee/tax delta > 2 paise (10)
+    for i in range(10):
+        delta_val = 3 + i
+        b_tol_violation = create_case_bundle(
+            bundle_id=f"b_tol_{i}",
+            entity_id=f"pay_tol_{i}",
+            merchant_id="mer_01",
+            check_family="fee_tax",
+            facts={
+                "amount_paise": 100000,
+                "fee_paise": 2000,
+                "tax_paise": 360,
+                "credit_paise": 97640,
+                "fee_delta_paise": delta_val,
+                "tax_delta_paise": 0,
+                "rounding_tolerance_paise": 2,
+            },
+        )
+        c = dict(out_clean)
+        mutations.append(("policy_violation_tolerance", "no_issue", b_tol_violation, c, False, None))
+
+    # 8b. Missing delta facts for fee_tax (6)
+    for i in range(6):
+        b_missing_delta = create_case_bundle(
+            bundle_id=f"b_miss_delta_{i}",
+            entity_id=f"pay_miss_{i}",
+            merchant_id="mer_01",
+            check_family="fee_tax",
+            facts={
+                "amount_paise": 100000,
+                "credit_paise": 97640,
+            },
+        )
+        c = dict(out_clean)
+        mutations.append(("missing_delta_facts", "no_issue", b_missing_delta, c, False, None))
+
+    # 8c. Refund with non-zero difference for refund no_issue (6)
+    for i in range(6):
+        b_rfnd_diff = create_case_bundle(
+            bundle_id=f"b_rfnd_diff_{i}",
+            entity_id=f"rfnd_diff_{i}",
+            merchant_id="mer_01",
+            check_family="refund",
+            facts={
+                "amount_paise": 10000,
+                "debit_paise": 8500,
+                "ledger_refund_paise": 10000,
+                "refund_difference_paise": 1500 + i * 10,
+                "refund_tolerance_paise": 0,
+            },
+        )
+        c = dict(out_clean)
+        c["decision"] = "no_issue"
+        mutations.append(("policy_violation_refund_diff", "no_issue", b_rfnd_diff, c, False, None))
+
+    # 8d. Bank item with ambiguous candidates for bank no_issue (6)
+    for i in range(6):
+        b_bank_ambig = create_case_bundle(
+            bundle_id=f"b_bank_ambig_{i}",
+            entity_id=f"stmt_ambig_{i}",
+            merchant_id="mer_01",
+            check_family="bank",
+            facts={
+                "statement_id": f"stmt_ambig_{i}",
+                "bank_credit_paise": 50000,
+                "ambiguous_candidates": True,
+                "candidates_count": 2 + (i % 3),
+                "unambiguous_match": False,
+            },
+        )
+        c = dict(out_clean)
+        c["decision"] = "no_issue"
+        mutations.append(("policy_violation_ambiguous_bank", "no_issue", b_bank_ambig, c, False, None))
+
+    # 9. Declared Neutral Corruptions (6 controls)
     # Neutral 1: Whitespace spacing in benign_explained explanation
     c_neu1 = dict(out_benign)
     c_neu1["explanation"] = "Refund difference of 1500 paise  is verified by note stating Rs 15.00 fee deduction."

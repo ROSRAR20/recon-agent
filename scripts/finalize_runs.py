@@ -42,7 +42,7 @@ def finalize_run(
 ) -> str:
     """Finalize all cached cases for a given population and run_id."""
     model_cfg = load_model_config()
-    resolved_model_id = model_id or model_cfg["primary_model"]
+    resolved_model_id = model_id or model_cfg.get("primary", model_cfg.get("primary_model", "gemini-3.5-flash-lite"))
     resolved_verifier_version = verifier_version or compute_verifier_version()
 
     # Load system prompt for prompt hash
@@ -72,7 +72,8 @@ def finalize_run(
     bundles = build_case_bundles(dataset)
     print(f"Loaded {len(bundles)} case bundles for population '{population}' from {resolved_data_dir}")
 
-    cache = LLMCache(cache_dir=os.path.join(REPO_ROOT, cache_dir))
+    resolved_cache_dir = cache_dir if os.path.isabs(cache_dir) else os.path.join(REPO_ROOT, cache_dir)
+    cache = LLMCache(cache_dir=resolved_cache_dir)
 
     decisions: list[FinalDecision] = []
     missing_cache = 0
@@ -108,12 +109,13 @@ def finalize_run(
     if missing_cache > 0:
         print(f"[WARNING] {missing_cache}/{len(bundles)} cases missing from cache (finalized as empty_output)")
 
+    resolved_output_dir = output_dir if os.path.isabs(output_dir) else os.path.join(REPO_ROOT, output_dir)
     out_path = write_finalized_results(
         decisions=decisions,
         verifier_version=resolved_verifier_version,
         run_id=run_id,
         population=population,
-        base_dir=os.path.join(REPO_ROOT, output_dir),
+        base_dir=resolved_output_dir,
     )
 
     # Print summary

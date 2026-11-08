@@ -264,23 +264,23 @@ class Verifier:
 
             if field in bundle_facts:
                 fact_val = bundle_facts[field]
-                # Compare value with type tolerance for numeric equality (e.g. 200.0 == 200)
-                if isinstance(fact_val, (int, float)) and isinstance(ev_value, (int, float)):
-                    if fact_val != ev_value:
-                        failed_checks.append("V3")
-                        return VerifierResult(
-                            outcome=VerifierOutcome.REJECT,
-                            failed_checks=tuple(failed_checks),
-                            reason_code="EVIDENCE_VALUE_MISMATCH",
-                            details=f"Evidence field '{raw_field}' value {ev_value} != fact value {fact_val}.",
-                        )
-                elif str(fact_val) != str(ev_value):
+                # An evidence value must have exactly the type of the referenced fact.
+                # In Python, bool is an int subclass; exact type equality catches bool vs int.
+                if type(ev_value) is not type(fact_val):
                     failed_checks.append("V3")
                     return VerifierResult(
                         outcome=VerifierOutcome.REJECT,
                         failed_checks=tuple(failed_checks),
                         reason_code="EVIDENCE_VALUE_MISMATCH",
-                        details=f"Evidence field '{raw_field}' value '{ev_value}' != fact value '{fact_val}'.",
+                        details=f"Evidence field '{raw_field}' type {type(ev_value).__name__} != fact type {type(fact_val).__name__}.",
+                    )
+                if fact_val != ev_value:
+                    failed_checks.append("V3")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.REJECT,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="EVIDENCE_VALUE_MISMATCH",
+                        details=f"Evidence field '{raw_field}' value {ev_value!r} != fact value {fact_val!r}.",
                     )
 
             elif field in bundle_untrusted:
@@ -543,24 +543,30 @@ class Verifier:
                         reason_code="UNSUPPORTED_FLAG_CLASS",
                         details="FEE_TAX_MISMATCH requires fee_tax family and fee_paise in facts.",
                     )
-                amt = bundle_facts.get("amount_paise", 0)
-                fee = bundle_facts.get("fee_paise", 0)
-                credit = bundle_facts.get("credit_paise", 0)
-                tax = bundle_facts.get("tax_paise", 0)
-                # Check for fee/tax delta >= rounding threshold (2 paise)
-                diff1 = abs(amt - fee - credit)
-                diff2 = abs(amt - fee - tax - credit)
-                has_mismatch = (
-                    bundle_facts.get("fee_difference_paise", 0) != 0
-                    or min(diff1, diff2) > 2
-                )
+                err_thresh = bundle_facts.get("error_threshold_paise", 10)
+                fee_delta = bundle_facts.get("fee_delta_paise")
+                tax_delta = bundle_facts.get("tax_delta_paise")
+                if fee_delta is not None or tax_delta is not None:
+                    delta = max(abs(fee_delta or 0), abs(tax_delta or 0))
+                    has_mismatch = delta >= err_thresh
+                else:
+                    amt = bundle_facts.get("amount_paise", 0)
+                    fee = bundle_facts.get("fee_paise", 0)
+                    credit = bundle_facts.get("credit_paise", 0)
+                    tax = bundle_facts.get("tax_paise", 0)
+                    diff1 = abs(amt - fee - credit)
+                    diff2 = abs(amt - fee - tax - credit)
+                    has_mismatch = (
+                        abs(bundle_facts.get("fee_difference_paise", 0)) >= err_thresh
+                        or min(diff1, diff2) >= err_thresh
+                    )
                 if not has_mismatch:
                     failed_checks.append("V7")
                     return VerifierResult(
                         outcome=VerifierOutcome.REJECT,
                         failed_checks=tuple(failed_checks),
                         reason_code="UNSUPPORTED_FLAG_CLASS",
-                        details="FEE_TAX_MISMATCH requires supporting fee/tax discrepancy in facts.",
+                        details=f"FEE_TAX_MISMATCH requires fee/tax discrepancy >= {err_thresh} paise error threshold in facts.",
                     )
 
             elif pred_class == "PARTIAL_REFUND_MISMATCH":
@@ -572,16 +578,21 @@ class Verifier:
                         reason_code="UNSUPPORTED_FLAG_CLASS",
                         details="PARTIAL_REFUND_MISMATCH requires refund check family.",
                     )
+                ref_tol = bundle_facts.get("refund_tolerance_paise", 0)
                 refund_diff = bundle_facts.get("refund_difference_paise")
-                if refund_diff is None and "debit_paise" in bundle_facts and "amount_paise" in bundle_facts:
-                    refund_diff = bundle_facts["debit_paise"] - bundle_facts["amount_paise"]
-                if refund_diff is None or abs(refund_diff) == 0:
+                ledger_ref = bundle_facts.get("ledger_refund_paise")
+                debit = bundle_facts.get("debit_paise")
+                if ledger_ref is not None and debit is not None:
+                    refund_diff = ledger_ref - debit
+                elif refund_diff is None and "amount_paise" in bundle_facts:
+                    refund_diff = (debit or 0) - bundle_facts["amount_paise"]
+                if refund_diff is None or abs(refund_diff) <= ref_tol:
                     failed_checks.append("V7")
                     return VerifierResult(
                         outcome=VerifierOutcome.REJECT,
                         failed_checks=tuple(failed_checks),
                         reason_code="UNSUPPORTED_FLAG_CLASS",
-                        details="PARTIAL_REFUND_MISMATCH requires non-zero refund difference in facts.",
+                        details=f"PARTIAL_REFUND_MISMATCH requires refund difference exceeding {ref_tol} paise tolerance in facts.",
                     )
 
             elif pred_class == "MISSING_SETTLEMENT":
@@ -679,17 +690,18 @@ class Verifier:
                         reason_code="MISSING_DELTA_FACTS",
                         details="Decision 'no_issue' for fee_tax requires fee_delta_paise and tax_delta_paise in facts.",
                     )
+                round_tol = bundle_facts.get("rounding_tolerance_paise", 2)
                 delta = max(abs(fee_delta), abs(tax_delta))
-                if delta > 2:
+                if delta > round_tol:
                     failed_checks.append("V7")
                     return VerifierResult(
                         outcome=VerifierOutcome.REJECT,
                         failed_checks=tuple(failed_checks),
                         reason_code="POLICY_VIOLATION_TOLERANCE",
-                        details=f"Payment fee/tax delta ({delta} paise) exceeds 2 paise rounding tolerance.",
+                        details=f"Payment fee/tax delta ({delta} paise) exceeds {round_tol} paise rounding tolerance.",
                     )
 
-            # 2. Refund check family: requires refund_difference == 0
+            # 2. Refund check family: requires refund_difference within refund tolerance (0 paise)
             elif bundle.check_family == "refund":
                 ledger_ref = bundle_facts.get("ledger_refund_paise")
                 debit = bundle_facts.get("debit_paise")
@@ -705,13 +717,14 @@ class Verifier:
                         reason_code="MISSING_REFUND_DIFF_FACTS",
                         details="Decision 'no_issue' for refund requires verifiable refund difference facts.",
                     )
-                if diff != 0:
+                ref_tol = bundle_facts.get("refund_tolerance_paise", 0)
+                if abs(diff) > ref_tol:
                     failed_checks.append("V7")
                     return VerifierResult(
                         outcome=VerifierOutcome.REJECT,
                         failed_checks=tuple(failed_checks),
                         reason_code="POLICY_VIOLATION_REFUND_DIFF",
-                        details=f"Refund has non-zero difference ({diff} paise); no_issue rejected.",
+                        details=f"Refund has difference ({diff} paise) exceeding tolerance ({ref_tol} paise); no_issue rejected.",
                     )
 
             # 3. Bank check family: requires unambiguous match

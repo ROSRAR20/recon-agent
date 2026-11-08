@@ -1780,11 +1780,19 @@ def test_system_prompt_few_shots_match_real_bundle_key_structure() -> None:
         if b_dict["check_family"] == "refund":
             assert "ledger_refund_paise" in facts, f"Few-shot {idx} missing ledger_refund_paise"
             assert "refund_difference_paise" in facts, f"Few-shot {idx} missing refund_difference_paise"
+            assert "refund_tolerance_paise" in facts, f"Few-shot {idx} missing refund_tolerance_paise"
+            assert facts["refund_tolerance_paise"] == 0
             # Positive sign convention: ledger_refund_paise - debit_paise
             assert facts["refund_difference_paise"] == facts["ledger_refund_paise"] - facts["debit_paise"]
         elif b_dict["check_family"] == "fee_tax":
             assert "fee_delta_paise" in facts, f"Few-shot {idx} missing fee_delta_paise"
             assert "tax_delta_paise" in facts, f"Few-shot {idx} missing tax_delta_paise"
+            assert "rounding_tolerance_paise" in facts, f"Few-shot {idx} missing rounding_tolerance_paise"
+            assert "near_tolerance_max_paise" in facts, f"Few-shot {idx} missing near_tolerance_max_paise"
+            assert "error_threshold_paise" in facts, f"Few-shot {idx} missing error_threshold_paise"
+            assert facts["rounding_tolerance_paise"] == 2
+            assert facts["near_tolerance_max_paise"] == 9
+            assert facts["error_threshold_paise"] == 10
 
 
 def test_invariants_over_200_stored_raw_outputs() -> None:
@@ -1891,6 +1899,149 @@ def test_invariants_over_200_stored_raw_outputs() -> None:
 
         # Cache remains completely empty
         assert len(os.listdir(tmp_dir)) == 0
+
+
+def test_runner_collects_raw_outputs_only() -> None:
+    """Runner records ok (raw obtained) | infra_failed | pending; never validates or verifies."""
+    from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.runner import Runner, QuotaTracker
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        state_file = os.path.join(tmp_dir, "run_state.json")
+        quota_file = os.path.join(tmp_dir, "quota.json")
+
+        tracker = QuotaTracker(quota_state_path=quota_file, max_requests_per_day=10)
+        client = GeminiClient(api_key="test-api-key", sleep_fn=lambda _: None)
+
+        b1 = create_case_bundle(
+            bundle_id="b_ok",
+            entity_id="pay_1",
+            merchant_id="mer_1",
+            check_family="fee_tax",
+            facts={"entity_id": "pay_1", "type": "payment", "amount_paise": 10000},
+        )
+        b2 = create_case_bundle(
+            bundle_id="b_malformed",
+            entity_id="pay_2",
+            merchant_id="mer_1",
+            check_family="fee_tax",
+            facts={"entity_id": "pay_2", "type": "payment", "amount_paise": 20000},
+        )
+
+        runner = Runner(
+            client=client,
+            quota_tracker=tracker,
+            system_prompt="prompt",
+            run_state_path=state_file,
+        )
+
+        resp1 = MagicMock()
+        resp1.status_code = 200
+        resp1.json.return_value = {
+            "model": "gemini-3.5-flash-lite",
+            "output_text": '{"decision": "no_issue"}',
+            "usage": {"total_input_tokens": 100, "total_output_tokens": 20},
+        }
+
+        resp2 = MagicMock()
+        resp2.status_code = 200
+        resp2.json.return_value = {
+            "model": "gemini-3.5-flash-lite",
+            "output_text": '<<<NOT JSON>>>',
+            "usage": {"total_input_tokens": 100, "total_output_tokens": 10},
+        }
+
+        with patch("requests.post", side_effect=[resp1, resp2]):
+            results = runner.run_cases([b1, b2], resume=False)
+
+        # Runner statuses at collection time are 'ok' because raw output was obtained
+        assert results["b_ok"].status == "ok"
+        assert results["b_ok"].raw_output == '{"decision": "no_issue"}'
+        assert results["b_malformed"].status == "ok"
+        assert results["b_malformed"].raw_output == '<<<NOT JSON>>>'
+
+
+def test_unknown_response_shape_stays_infra_failed() -> None:
+    """Unknown response shape raises InfraError, audits key structure, stays infra_failed."""
+    from unittest.mock import MagicMock, patch
+    from src.recon_agent.llm.gemini_client import InfraError
+    from src.recon_agent.llm.runner import Runner, QuotaTracker
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        audit_file = os.path.join(tmp_dir, "audit.jsonl")
+        logger = AuditLogger(log_path=audit_file)
+        client = GeminiClient(api_key="test-api-key", audit_logger=logger, max_retries=1)
+
+        b = create_case_bundle(
+            bundle_id="b_unknown_shape",
+            entity_id="pay_unknown",
+            merchant_id="mer_1",
+            check_family="fee_tax",
+            facts={"entity_id": "pay_unknown", "type": "payment", "amount_paise": 10000},
+        )
+
+        resp_unknown = MagicMock()
+        resp_unknown.status_code = 200
+        resp_unknown.json.return_value = {
+            "model": "gemini-3.5-flash-lite",
+            "unrecognized_field": 12345,
+            "error_payload": "Unexpected gateway format",
+        }
+
+        with patch("requests.post", return_value=resp_unknown):
+            with pytest.raises(InfraError) as exc_info:
+                client.complete(b, system_prompt="prompt", run_id=0)
+
+        assert "Unrecognized response shape" in str(exc_info.value)
+        assert client.last_raw_response_shape is not None
+        assert "unrecognized_field" in client.last_raw_response_shape
+
+        # Audited in audit log
+        assert os.path.isfile(audit_file)
+        with open(audit_file, "r", encoding="utf-8") as f:
+            entry = json.loads(f.readline())
+        assert entry["raw_response_shape"]["unrecognized_field"] == "int"
+
+
+def test_empty_output_counted_as_model_failure() -> None:
+    """Valid response shape with empty or whitespace text counts as model failure (empty_output)."""
+    from src.recon_agent.llm.finalize import finalize
+
+    bundle = _make_test_bundle()
+    for empty_str in ("", "   ", "\n\t"):
+        dec = finalize(bundle, empty_str)
+        assert dec.raw_parse_status == "empty_output"
+        assert dec.b2_action == "escalate_human"
+        assert dec.b3_action == "escalate_human"
+        assert "empty or blocked" in dec.b3_explanation.lower()
+
+
+def test_finalize_runs_script_and_runner_cache_loading() -> None:
+    """scripts/finalize_runs.py reads cache and outputs atomic finalized decisions."""
+    from scripts.finalize_runs import finalize_run
+    from src.recon_agent.llm.finalize import compute_verifier_version, load_finalized_results
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cache_dir = os.path.join(tmp_dir, "cache")
+        out_dir = os.path.join(tmp_dir, "finalized")
+
+        out_path = finalize_run(
+            population="dev",
+            run_id=0,
+            cache_dir=cache_dir,
+            output_dir=out_dir,
+            data_dir=os.path.join(REPO_ROOT, "data", "synth", "small", "dev"),
+        )
+        assert os.path.isfile(out_path)
+
+        ver_ver = compute_verifier_version()
+        loaded = load_finalized_results(
+            verifier_version=ver_ver,
+            run_id=0,
+            population="dev",
+            base_dir=out_dir,
+        )
+        assert len(loaded) > 0
 
 
 
