@@ -13,8 +13,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from typing import Any
+
+REASON_CODE_REGEX = re.compile(r"^[A-Z][A-Z0-9_]{2,39}$")
 
 ALLOWED_DECISIONS: tuple[str, ...] = ("flag", "benign_explained", "escalate_human", "no_issue")
 
@@ -180,8 +183,8 @@ def validate_llm_output(raw_json: str | dict[str, Any]) -> tuple[bool, LLMOutput
     reason_code = data.get("reason_code")
     if not isinstance(reason_code, str) or not reason_code:
         errors.append("reason_code must be a non-empty string")
-    elif len(reason_code) > 40:
-        errors.append(f"reason_code length {len(reason_code)} exceeds max limit 40")
+    elif not REASON_CODE_REGEX.match(reason_code):
+        errors.append(f"reason_code '{reason_code}' must match pattern ^[A-Z][A-Z0-9_]{{2,39}}$")
 
     explanation = data.get("explanation")
     if not isinstance(explanation, str):

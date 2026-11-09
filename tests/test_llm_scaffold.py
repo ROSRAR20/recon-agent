@@ -70,8 +70,10 @@ def _make_test_bundle(
         "entity_id": entity_id,
         "type": "refund",
         "amount_paise": amount_paise,
+        "ledger_refund_paise": amount_paise,
         "debit_paise": debit_paise,
         "refund_difference_paise": refund_diff_paise,
+        "refund_tolerance_paise": 0,
         "payment_id": "pay_Ab12Cd",
         "settlement_id": "setl_Xy98Zz",
     }
@@ -617,6 +619,9 @@ def test_verifier_no_issue_within_tolerance() -> None:
             "tax_paise": 360,
             "fee_delta_paise": 0,
             "tax_delta_paise": 0,
+            "rounding_tolerance_paise": 2,
+            "near_tolerance_max_paise": 9,
+            "error_threshold_paise": 10,
         },
         untrusted_text={
             "recon_item_description": "Clean transaction",
@@ -648,7 +653,7 @@ def test_verifier_no_issue_rejects_discrepancies() -> None:
         evidence=[],
         verbatim_quote=None,
         cited_amount_paise=None,
-        reason_code=None,
+        reason_code="WITHIN_TOLERANCE",
     )
 
     # 1. NEAR_TOLERANCE payment
@@ -665,6 +670,9 @@ def test_verifier_no_issue_rejects_discrepancies() -> None:
             "fee_paise": 1180,
             "fee_delta_paise": 6,
             "tax_delta_paise": 1,
+            "rounding_tolerance_paise": 2,
+            "near_tolerance_max_paise": 9,
+            "error_threshold_paise": 10,
         },
         untrusted_text={},
     )
@@ -684,8 +692,10 @@ def test_verifier_no_issue_rejects_discrepancies() -> None:
             "entity_id": "rfnd_disc_1",
             "type": "refund",
             "amount_paise": 5000,
+            "ledger_refund_paise": 5000,
             "debit_paise": 4000,
             "refund_difference_paise": -1000,
+            "refund_tolerance_paise": 0,
         },
         untrusted_text={},
     )

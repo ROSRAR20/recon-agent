@@ -22,6 +22,7 @@ from typing import Any
 from src.recon_agent.llm.bundle import CaseBundle
 from src.recon_agent.llm.schema import (
     LLMOutput,
+    REASON_CODE_REGEX,
     validate_llm_output,
 )
 
@@ -67,13 +68,17 @@ class VerifierResult:
 
 
 # Unit-bearing amount pattern: explicitly requires currency symbol/code (Rs, INR, ₹) OR paise unit
+# Supports both Indian digit grouping (e.g. 1,23,456.50, 1,234) and standard Western grouping
 AMOUNT_UNIT_PATTERN = re.compile(
-    r"(?:(?:INR|Rs\.?|₹)\s*\d+(?:,\d{3})*(?:\.\d{1,2})?|\b\d+(?:,\d{3})*(?:\.\d{1,2})?\s*(?:paise|paisa)\b)",
+    r"(?:(?:INR|Rs\.?|₹)\s*(?:\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?|"
+    r"\b(?:\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\s*(?:paise|paisa)\b)",
     re.IGNORECASE,
 )
 
 # Pattern to detect any digit sequence (for bare-number checks)
-DIGIT_PATTERN = re.compile(r"\b\d+(?:,\d{3})*(?:\.\d+)?\b")
+DIGIT_PATTERN = re.compile(
+    r"\b(?:\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\b"
+)
 
 
 def _extract_unit_bearing_amount_tokens(text: str) -> list[str]:
@@ -226,6 +231,15 @@ class Verifier:
                     details=f"Schema validation failed: {schema_errs}",
                 )
             llm_output = parsed
+
+        if not isinstance(llm_output.reason_code, str) or not REASON_CODE_REGEX.match(llm_output.reason_code):
+            failed_checks.append("V1")
+            return VerifierResult(
+                outcome=VerifierOutcome.REJECT,
+                failed_checks=tuple(failed_checks),
+                reason_code="INVALID_REASON_CODE_FORMAT",
+                details=f"reason_code '{llm_output.reason_code}' must match pattern ^[A-Z][A-Z0-9_]{{2,39}}$",
+            )
 
         # --- Check V2: Enum membership in bundle allowed sets ---
         if llm_output.decision not in bundle.allowed_decisions:
@@ -422,38 +436,75 @@ class Verifier:
                     details=f"Cited amount {cited} paise does not match any fact value in bundle.",
                 )
 
-        # --- Check V6: No fabricated standalone numbers in explanation ---
+        # --- Check V6: Unit-aware explanation amount & bare-number verification ---
         bundle_ids = _get_bundle_all_ids(bundle)
         explanation_clean = llm_output.explanation
 
-        # Remove known bundle IDs from explanation text
+        # 1. Remove known bundle IDs from explanation text
         for bid in sorted(bundle_ids, key=len, reverse=True):
             explanation_clean = explanation_clean.replace(bid, " ")
 
-        # Extract standalone numbers from explanation
-        extracted_num_tokens = re.findall(r"\b\d+(?:,\d{3})*(?:\.\d+)?\b", explanation_clean)
-        allowed_numbers = _collect_allowed_numbers(
-            bundle=bundle,
-            cited_amount_paise=llm_output.cited_amount_paise,
-            verified_quote=verified_quote if is_quote_sourced else None,
-        )
+        # 2. Collect allowed amounts in PAISE
+        allowed_paise: set[int] = set()
+        for v in bundle_facts.values():
+            if isinstance(v, int) and not isinstance(v, bool):
+                allowed_paise.add(v)
+                allowed_paise.add(abs(v))
+        if llm_output.cited_amount_paise is not None:
+            allowed_paise.add(llm_output.cited_amount_paise)
+            allowed_paise.add(abs(llm_output.cited_amount_paise))
+        if parsed_quote_amount_paise is not None:
+            allowed_paise.add(parsed_quote_amount_paise)
+            allowed_paise.add(abs(parsed_quote_amount_paise))
 
-        for num_tok in extracted_num_tokens:
+        # 3. Extract unit-bearing amounts from explanation
+        unit_matches = list(AMOUNT_UNIT_PATTERN.finditer(explanation_clean))
+        for m in unit_matches:
+            tok = m.group(0)
+            amt_paise, unit_type = _strict_convert_amount_token(tok)
+            if amt_paise is None or amt_paise not in allowed_paise:
+                failed_checks.append("V6")
+                return VerifierResult(
+                    outcome=VerifierOutcome.REJECT,
+                    failed_checks=tuple(failed_checks),
+                    reason_code="FABRICATED_NUMBER_IN_EXPLANATION",
+                    details=f"Explanation contains ungrounded or unit-mismatched amount '{tok}'.",
+                )
+
+        # Remove unit-bearing tokens from explanation_clean to isolate bare numbers
+        explanation_without_units = AMOUNT_UNIT_PATTERN.sub(" ", explanation_clean)
+
+        # 4. Collect allowed bare numbers:
+        # - Identity constants {0, 1, 100}
+        # - Small-count fact integers <= 20 (e.g. candidates_count, rounding_tolerance_paise)
+        # - Digits inside the verified quote
+        allowed_bare: set[str | int] = {0, 1, 100, "0", "1", "100"}
+        for v in bundle_facts.values():
+            if isinstance(v, int) and not isinstance(v, bool) and 0 <= abs(v) <= 20:
+                allowed_bare.add(abs(v))
+                allowed_bare.add(str(abs(v)))
+
+        if verified_quote:
+            for m in DIGIT_PATTERN.finditer(verified_quote):
+                raw_digit = m.group(0).replace(",", "")
+                allowed_bare.add(raw_digit)
+                try:
+                    allowed_bare.add(int(raw_digit))
+                except ValueError:
+                    pass
+
+        # 5. Verify remaining bare numbers
+        extracted_bare_tokens = DIGIT_PATTERN.findall(explanation_without_units)
+        for num_tok in extracted_bare_tokens:
             clean_tok = num_tok.replace(",", "")
-            # Check match against allowed_numbers
             matched = False
-            if clean_tok in allowed_numbers:
+            if clean_tok in allowed_bare:
                 matched = True
             else:
                 try:
-                    if "." in clean_tok:
-                        f_val = float(clean_tok)
-                        if f_val in allowed_numbers or clean_tok in allowed_numbers:
-                            matched = True
-                    else:
-                        i_val = int(clean_tok)
-                        if i_val in allowed_numbers:
-                            matched = True
+                    i_val = int(clean_tok)
+                    if i_val in allowed_bare:
+                        matched = True
                 except ValueError:
                     pass
 
@@ -463,10 +514,40 @@ class Verifier:
                     outcome=VerifierOutcome.REJECT,
                     failed_checks=tuple(failed_checks),
                     reason_code="FABRICATED_NUMBER_IN_EXPLANATION",
-                    details=f"Explanation contains ungrounded standalone number '{num_tok}'.",
+                    details=f"Explanation contains ungrounded bare number '{num_tok}'.",
                 )
 
-        # If decision is escalate_human and V1-V6 passed, it is verified safe
+        # --- Check V8: Reflected untrusted text guard ---
+        exp_words = llm_output.explanation.lower().split()
+        if len(exp_words) >= 6:
+            norm_quote = " ".join(verified_quote.lower().split()) if verified_quote else ""
+            clean_quote = re.sub(r"[^\w\s]", "", norm_quote) if norm_quote else ""
+            untrusted_strings = [
+                " ".join(v.lower().split())
+                for v in bundle_untrusted.values()
+                if isinstance(v, str) and v.strip()
+            ]
+            for i in range(len(exp_words) - 5):
+                window_words = exp_words[i : i + 6]
+                window_phrase = " ".join(window_words)
+                clean_window = re.sub(r"[^\w\s]", "", window_phrase).strip()
+
+                # If window is inside the verified quote, it is legitimate
+                if norm_quote and (window_phrase in norm_quote or (clean_quote and clean_window in clean_quote)):
+                    continue
+
+                for u_str in untrusted_strings:
+                    clean_u = re.sub(r"[^\w\s]", "", u_str)
+                    if window_phrase in u_str or (len(clean_window.split()) >= 6 and clean_window in clean_u):
+                        failed_checks.append("V8")
+                        return VerifierResult(
+                            outcome=VerifierOutcome.REJECT,
+                            failed_checks=tuple(failed_checks),
+                            reason_code="REFLECTED_UNTRUSTED_TEXT",
+                            details=f"Explanation reflects untrusted text sequence '{window_phrase}'.",
+                        )
+
+        # If decision is escalate_human and V1-V6 and V8 passed, it is verified safe
         if llm_output.decision == "escalate_human":
             return VerifierResult(
                 outcome=VerifierOutcome.ACCEPT,
@@ -477,6 +558,16 @@ class Verifier:
 
         # --- Check V7: Arithmetic, class guard table & policy checks ---
         if llm_output.decision == "benign_explained":
+            # benign_explained is allowed only when check_family == "refund"; otherwise REJECT (BENIGN_WRONG_FAMILY)
+            if bundle.check_family != "refund":
+                failed_checks.append("V7")
+                return VerifierResult(
+                    outcome=VerifierOutcome.REJECT,
+                    failed_checks=tuple(failed_checks),
+                    reason_code="BENIGN_WRONG_FAMILY",
+                    details=f"Decision 'benign_explained' is allowed only for 'refund' family, got '{bundle.check_family}'.",
+                )
+
             # benign_explained REQUIRES verified quote sourcing the amount
             if not verified_quote:
                 failed_checks.append("V4")
@@ -498,16 +589,20 @@ class Verifier:
                     details="Decision 'benign_explained' requires amount to be strictly sourced by quote.",
                 )
 
-            # Arithmetic check: recompute refund difference directly from facts
+            # Delete the fallback that derives a difference from amount_paise/debit_paise;
+            # if ledger_refund_paise or debit_paise is missing -> ABSTAIN (MISSING_REFUND_FACTS).
             ledger_ref = bundle_facts.get("ledger_refund_paise")
             debit = bundle_facts.get("debit_paise")
-            if ledger_ref is not None and debit is not None:
-                recomputed_diff = ledger_ref - debit
-            elif "refund_difference_paise" in bundle_facts:
-                recomputed_diff = bundle_facts["refund_difference_paise"]
-            else:
-                amt = bundle_facts.get("amount_paise", 0)
-                recomputed_diff = (debit if debit is not None else 0) - amt
+            if ledger_ref is None or debit is None:
+                failed_checks.append("V7")
+                return VerifierResult(
+                    outcome=VerifierOutcome.ABSTAIN,
+                    failed_checks=tuple(failed_checks),
+                    reason_code="MISSING_REFUND_FACTS",
+                    details="Decision 'benign_explained' requires ledger_refund_paise and debit_paise in facts.",
+                )
+
+            recomputed_diff = ledger_ref - debit
 
             if llm_output.cited_amount_paise is None or abs(llm_output.cited_amount_paise) != abs(recomputed_diff):
                 failed_checks.append("V7")
@@ -543,23 +638,27 @@ class Verifier:
                         reason_code="UNSUPPORTED_FLAG_CLASS",
                         details="FEE_TAX_MISMATCH requires fee_tax family and fee_paise in facts.",
                     )
-                err_thresh = bundle_facts.get("error_threshold_paise", 10)
+                err_thresh = bundle_facts.get("error_threshold_paise")
+                if err_thresh is None:
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.ABSTAIN,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="MISSING_POLICY_FACTS",
+                        details="FEE_TAX_MISMATCH requires error_threshold_paise in facts.",
+                    )
                 fee_delta = bundle_facts.get("fee_delta_paise")
                 tax_delta = bundle_facts.get("tax_delta_paise")
-                if fee_delta is not None or tax_delta is not None:
-                    delta = max(abs(fee_delta or 0), abs(tax_delta or 0))
-                    has_mismatch = delta >= err_thresh
-                else:
-                    amt = bundle_facts.get("amount_paise", 0)
-                    fee = bundle_facts.get("fee_paise", 0)
-                    credit = bundle_facts.get("credit_paise", 0)
-                    tax = bundle_facts.get("tax_paise", 0)
-                    diff1 = abs(amt - fee - credit)
-                    diff2 = abs(amt - fee - tax - credit)
-                    has_mismatch = (
-                        abs(bundle_facts.get("fee_difference_paise", 0)) >= err_thresh
-                        or min(diff1, diff2) >= err_thresh
+                if fee_delta is None and tax_delta is None:
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.ABSTAIN,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="MISSING_DELTA_FACTS",
+                        details="FEE_TAX_MISMATCH requires fee_delta_paise or tax_delta_paise in facts.",
                     )
+                delta = max(abs(fee_delta or 0), abs(tax_delta or 0))
+                has_mismatch = delta >= err_thresh
                 if not has_mismatch:
                     failed_checks.append("V7")
                     return VerifierResult(
@@ -578,7 +677,15 @@ class Verifier:
                         reason_code="UNSUPPORTED_FLAG_CLASS",
                         details="PARTIAL_REFUND_MISMATCH requires refund check family.",
                     )
-                ref_tol = bundle_facts.get("refund_tolerance_paise", 0)
+                ref_tol = bundle_facts.get("refund_tolerance_paise")
+                if ref_tol is None:
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.ABSTAIN,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="MISSING_POLICY_FACTS",
+                        details="PARTIAL_REFUND_MISMATCH requires refund_tolerance_paise in facts.",
+                    )
                 refund_diff = bundle_facts.get("refund_difference_paise")
                 ledger_ref = bundle_facts.get("ledger_refund_paise")
                 debit = bundle_facts.get("debit_paise")
@@ -586,7 +693,15 @@ class Verifier:
                     refund_diff = ledger_ref - debit
                 elif refund_diff is None and "amount_paise" in bundle_facts:
                     refund_diff = (debit or 0) - bundle_facts["amount_paise"]
-                if refund_diff is None or abs(refund_diff) <= ref_tol:
+                if refund_diff is None:
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.ABSTAIN,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="MISSING_REFUND_DIFF_FACTS",
+                        details="PARTIAL_REFUND_MISMATCH requires verifiable refund difference in facts.",
+                    )
+                if abs(refund_diff) <= ref_tol:
                     failed_checks.append("V7")
                     return VerifierResult(
                         outcome=VerifierOutcome.REJECT,
@@ -690,7 +805,15 @@ class Verifier:
                         reason_code="MISSING_DELTA_FACTS",
                         details="Decision 'no_issue' for fee_tax requires fee_delta_paise and tax_delta_paise in facts.",
                     )
-                round_tol = bundle_facts.get("rounding_tolerance_paise", 2)
+                round_tol = bundle_facts.get("rounding_tolerance_paise")
+                if round_tol is None:
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.ABSTAIN,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="MISSING_POLICY_FACTS",
+                        details="Decision 'no_issue' for fee_tax requires rounding_tolerance_paise in facts.",
+                    )
                 delta = max(abs(fee_delta), abs(tax_delta))
                 if delta > round_tol:
                     failed_checks.append("V7")
@@ -717,7 +840,15 @@ class Verifier:
                         reason_code="MISSING_REFUND_DIFF_FACTS",
                         details="Decision 'no_issue' for refund requires verifiable refund difference facts.",
                     )
-                ref_tol = bundle_facts.get("refund_tolerance_paise", 0)
+                ref_tol = bundle_facts.get("refund_tolerance_paise")
+                if ref_tol is None:
+                    failed_checks.append("V7")
+                    return VerifierResult(
+                        outcome=VerifierOutcome.ABSTAIN,
+                        failed_checks=tuple(failed_checks),
+                        reason_code="MISSING_POLICY_FACTS",
+                        details="Decision 'no_issue' for refund requires refund_tolerance_paise in facts.",
+                    )
                 if abs(diff) > ref_tol:
                     failed_checks.append("V7")
                     return VerifierResult(
@@ -746,7 +877,6 @@ class Verifier:
                     bundle_facts.get("ambiguous_candidates") is True
                     or bundle_facts.get("candidates_count", 1) > 1
                     or bundle_facts.get("unambiguous_match") is False
-                    or bundle.rule_id == "B1_BANK_AMBIGUOUS_CANDIDATES"
                 )
                 if is_ambiguous:
                     failed_checks.append("V7")
