@@ -739,6 +739,7 @@ class GeminiClient:
         self.last_tokens = tokens
         self.last_cost_low = cost_low
         self.last_cost_high = cost_high
+        self.last_latency_ms = latency_ms
         self.last_served_model = served_model
         self.last_service_tier = service_tier
         self.last_usage_flagged = usage_flagged

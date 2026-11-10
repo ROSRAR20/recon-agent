@@ -166,6 +166,7 @@ class CaseResult:
     thinking_tokens: int | None = None
     served_model: str | None = None
     service_tier: str | None = None
+    latency_ms: float | None = None
 
 
 class Runner:
@@ -273,6 +274,7 @@ class Runner:
                 served_m = getattr(self.client, "last_served_model", self.client.model_id)
                 svc_tier = getattr(self.client, "last_service_tier", self.client.tier)
                 eff_cost = 0.0 if svc_tier == "free" and cost_high is not None else cost_high
+                lat_ms = getattr(self.client, "last_latency_ms", None)
 
                 # Runner collects RAW outputs only: status is ok once raw_output is obtained.
                 # Parse status and verification are handled strictly by finalize.
@@ -280,6 +282,7 @@ class Runner:
                     bundle_id=bid,
                     status="ok",
                     raw_output=raw_output,
+                    latency_ms=lat_ms,
                     cost_usd=eff_cost,
                     estimated_cost_low_usd=cost_low,
                     estimated_cost_high_usd=cost_high,
