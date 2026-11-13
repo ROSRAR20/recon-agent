@@ -223,6 +223,8 @@ class GeminiClient:
 
         # Model ID selection and validation
         chosen_model = model_id or self.model_config.get("primary", "gemini-3.5-flash-lite")
+        if chosen_model == "mock":
+            raise ValueError("Model id 'mock' is not allowed in real Gemini API client mode; use MockClient")
         if chosen_model.endswith("-latest"):
             raise ValueError(
                 f"Alias-style model id '{chosen_model}' is forbidden; specify an explicit model version"
@@ -241,6 +243,10 @@ class GeminiClient:
             raise ValueError(f"thinking_level must be 'low', 'medium', or 'high', got '{thinking_level}'")
         self.thinking_level = thinking_level
 
+        if cache is not None:
+            norm_cache_name = os.path.basename(os.path.normpath(cache.cache_dir))
+            if norm_cache_name == "llm_cache_mock":
+                raise ValueError("Real Gemini API client must not read from or write to mock cache directory 'llm_cache_mock'")
         self.cache = cache
         self.no_cache = no_cache
         self.audit_logger = audit_logger

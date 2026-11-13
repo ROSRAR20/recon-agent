@@ -20,6 +20,8 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from scripts.run_pilot import load_stratified_prefix
+from scripts.check_env import check_env, check_tzdata
+from scripts.check_frozen import check_frozen_baselines
 from src.recon_agent.eval.llm_scoring import ArmEvaluation, format_scorecard_table, score_arm
 from src.recon_agent.llm.bundle import CaseBundle
 from src.recon_agent.llm.cache import LLMCache
@@ -82,6 +84,7 @@ def run_pilot_report(
     n_residual: int = 100,
     n_control: int = 20,
     run_id: int = 0,
+    mock: bool = False,
     population_dir: str = "data/populations",
     results_dir: str = "results",
     finalized_dir: str = "results/finalized",
@@ -90,10 +93,25 @@ def run_pilot_report(
     model_id: str | None = None,
 ) -> None:
     """Finalize runs, calculate scores, and print pilot evaluation report."""
+    check_tzdata()
     arms = arms or ["default", "low", "high"]
     resolved_pop_dir = population_dir if os.path.isabs(population_dir) else os.path.join(REPO_ROOT, population_dir)
     resolved_res_dir = results_dir if os.path.isabs(results_dir) else os.path.join(REPO_ROOT, results_dir)
     resolved_fin_dir = finalized_dir if os.path.isabs(finalized_dir) else os.path.join(REPO_ROOT, finalized_dir)
+
+    # Detect mock mode from flag or run state files
+    is_mock = mock
+    for arm in arms:
+        st_path = os.path.join(resolved_res_dir, f"pilot_run_state_{arm}_seed{seed}.json")
+        if os.path.isfile(st_path):
+            try:
+                with open(st_path, "r", encoding="utf-8") as f:
+                    st_data = json.load(f)
+                if st_data.get("is_mock") or st_data.get("model_id") == "mock":
+                    is_mock = True
+                    break
+            except Exception:
+                pass
 
     pop_file = os.path.join(resolved_pop_dir, f"dev_seed{seed}.jsonl")
     meta_file = os.path.join(resolved_pop_dir, f"dev_seed{seed}_meta.jsonl")
@@ -114,10 +132,31 @@ def run_pilot_report(
     verifier_version = compute_verifier_version()
 
     model_cfg = load_model_config()
-    resolved_model_id = model_id or model_cfg.get("primary", "gemini-3.5-flash-lite")
+    if is_mock:
+        cache_dir = os.path.join(resolved_res_dir, "llm_cache_mock")
+        resolved_model_id = "mock"
+    else:
+        cache_dir = os.path.join(resolved_res_dir, "llm_cache")
+        resolved_model_id = model_id or model_cfg.get("primary", "gemini-3.5-flash-lite")
 
-    cache_dir = os.path.join(resolved_res_dir, "llm_cache")
     cache = LLMCache(cache_dir=cache_dir)
+
+    # Load B1r predictions for dev seed
+    dataset_dir = os.path.join(REPO_ROOT, "data", "synth", "full", f"dev_seed{seed}")
+    if not os.path.isdir(dataset_dir):
+        fallback_dataset_dir = os.path.join(REPO_ROOT, "data", "synth", "full", "dev")
+        if os.path.isdir(fallback_dataset_dir):
+            dataset_dir = fallback_dataset_dir
+        else:
+            dataset_dir = None
+
+    b1r_predictions = []
+    if dataset_dir and os.path.isdir(dataset_dir):
+        from src.recon_agent.pipeline.loader import load_dataset
+        from src.recon_agent.systems.b1r import run_b1r
+        dataset = load_dataset(dataset_dir)
+        b1r_output = run_b1r(dataset)
+        b1r_predictions = b1r_output.predictions
 
     arm_thinking_map: dict[str, str | None] = {
         "default": None,
@@ -189,6 +228,7 @@ def run_pilot_report(
             meta_records=meta_lookup,
             bundles=bundles,
             case_results=cases_map,
+            b1r_predictions=b1r_predictions,
             model_id=resolved_model_id,
             prices_path=prices_path,
         )
@@ -198,13 +238,23 @@ def run_pilot_report(
         total_cases_all += arm_eval.total_cases
         total_infra_failed += arm_eval.infra_failed_count
 
-    # Git metadata & checker verification
+    # Git metadata, environment info & checker verification
     git_commit, is_dirty, checker_hash, checker_matches_tag = get_git_info()
+    env_info = check_env()
+    frozen_ok, frozen_details = check_frozen_baselines()
+    frozen_status = "PASS (b1-frozen, checker-v1, prereg)" if frozen_ok else "FAIL: " + "; ".join(frozen_details["failures"])
     overall_infra_rate = (total_infra_failed / total_cases_all) if total_cases_all > 0 else 0.0
 
+    if is_mock:
+        print("=" * 80)
+        print("MOCK DATA - NOT RESULTS")
+        print("=" * 80)
+
     print("=" * 80)
-    print("DAY 7b-1 PILOT EVALUATION REPORT")
+    print("DAY 7b-3 PILOT EVALUATION REPORT")
     print("=" * 80)
+    print(f"Environment       : {env_info.summary_line()}")
+    print(f"Frozen Baselines  : {frozen_status}")
     print(f"Git Commit        : {git_commit} {'(DIRTY)' if is_dirty else '(CLEAN)'}")
     print(f"System Prompt Hash: {prompt_hash}")
     print(f"Verifier Version  : {verifier_version}")
@@ -214,7 +264,7 @@ def run_pilot_report(
     else:
         print("Checker Tag Status: Matches frozen tag checker-v1 (CLEAN)")
     print(f"Requested Model   : {resolved_model_id}")
-    print(f"Served Model(s)   : {', '.join(sorted(served_models)) if served_models else resolved_model_id}")
+    print(f"Served Model(s)   : {'mock' if is_mock else (', '.join(sorted(served_models)) if served_models else resolved_model_id)}")
     print(f"Run ID(s)         : [{run_id}]")
     print(f"Completed Cases   : {total_completed}/{total_cases_all} across {len(eval_results)} evaluated arm(s)")
     print(f"Infra-Failure Rate: {overall_infra_rate:.1%}")
@@ -306,7 +356,9 @@ def run_pilot_report(
             )
 
     print("### Suggested Arm for Freeze")
-    if suggested_arm:
+    if is_mock:
+        print("> **None (MOCK DATA - NO SUGGESTION)**")
+    elif suggested_arm:
         print(f"> **`{suggested_arm}`** (SUGGESTION ONLY)")
         print(f"> *Reason*: {selection_reason}")
     else:
@@ -321,6 +373,7 @@ def main() -> None:
     parser.add_argument("--n-residual", type=int, default=100, help="Number of residual cases (default: 100)")
     parser.add_argument("--n-control", type=int, default=20, help="Number of control cases (default: 20)")
     parser.add_argument("--run-id", type=int, default=0, help="Run ID (default: 0)")
+    parser.add_argument("--mock", action="store_true", help="Run in mock mode (MockClient, mock cache)")
     parser.add_argument("--population-dir", default="data/populations", help="Population directory")
     parser.add_argument("--results-dir", default="results", help="Results directory")
     parser.add_argument("--output-dir", default="results/finalized", help="Finalized output directory")
@@ -335,6 +388,7 @@ def main() -> None:
         n_residual=args.n_residual,
         n_control=args.n_control,
         run_id=args.run_id,
+        mock=args.mock,
         population_dir=args.population_dir,
         results_dir=args.results_dir,
         finalized_dir=args.output_dir,

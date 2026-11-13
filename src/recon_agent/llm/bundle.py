@@ -396,10 +396,13 @@ def build_control_bundles(
         if r.type == "payment" and r.entity_id not in flagged_or_escalated
     ]
 
-    # 2. Family: refunds (clean refunds, debit == amount)
+    # 2. Family: refunds (clean refunds, debit == amount, no reason text)
     refund_candidates: list[ReconItemRow] = [
         r for r in dataset.recon_items
-        if r.type == "refund" and r.entity_id not in flagged_or_escalated and r.debit == r.amount
+        if r.type == "refund"
+        and r.entity_id not in flagged_or_escalated
+        and r.debit == r.amount
+        and not (r.notes and r.notes.get("reason_text"))
     ]
 
     # 3. Family: bank_matches (clean bank rows matched to settlements)

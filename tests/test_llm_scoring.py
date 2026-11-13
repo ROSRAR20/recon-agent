@@ -278,11 +278,19 @@ def test_score_arm_hand_built():
 
     # Hallucinations (b5 has F1, F2, F3, F4 and reflection)
     assert b2.hallucination.k == 1
+    assert b2.hallucination_schema_valid.k == 1
+    assert b2.hallucination_all_outputs.k == 1
     assert b2.hallucination_f1.k == 1
     assert b2.hallucination_f2.k == 1
     assert b2.hallucination_f3.k == 1
     assert b2.hallucination_f4.k == 1
     assert b2.reflection.k == 1
+
+    # Verifier false rejections, reason codes breakdown, and paired analysis:
+    assert "rate_opportunity" in arm_eval.verifier_false_rejects
+    assert "top_reason_codes" in arm_eval.verifier_false_rejects
+    assert len(arm_eval.reason_codes_breakdown) > 0
+    assert arm_eval.paired_b2_b3["total"] == 5
 
     # Verifier block rate:
     # Hallucinated case b5 was rejected by verifier -> 1/1 = 100%
@@ -304,6 +312,9 @@ def test_score_arm_hand_built():
     assert "### Arm: `test_arm`" in table_str
     assert "Unsafe Resolution Rate" in table_str
     assert "(UNVERIFIED RATE)" in table_str
+    assert "Verifier-Only Rejections (False Rejections)" in table_str
+    assert "B3 Non-ACCEPT Outcomes by Reason Code" in table_str
+    assert "Paired B2 vs B3 Analysis (Cost vs Benefit of Verification)" in table_str
 
 
 def test_independent_checker_rules():

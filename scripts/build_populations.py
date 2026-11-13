@@ -84,6 +84,15 @@ def build_population_for_seed(
         results_dir=os.path.join(REPO_ROOT, "results"),
     )
 
+    # Invariant assertions: residual and control sets must be strictly disjoint,
+    # and controls must never contain recon_item_notes_reason_text.
+    overlap_bids = set(b.bundle_id for b in residual_bundles) & set(b.bundle_id for b in control_bundles)
+    assert not overlap_bids, f"Bundle IDs appear in both residual and control sets: {overlap_bids}"
+    for b in control_bundles:
+        assert b.untrusted_text.get("recon_item_notes_reason_text") is None, (
+            f"Control bundle {b.bundle_id} contains recon_item_notes_reason_text"
+        )
+
     # 3. Stratification
     # 3a. Stratify residual bundles by (check_family, ambiguity_type)
     res_buckets: dict[tuple[str, str], list[CaseBundle]] = defaultdict(list)

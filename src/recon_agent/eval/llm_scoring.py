@@ -120,6 +120,8 @@ class SystemScorecard:
     false_flag_on_controls: BinomialMetric
     over_escalation: BinomialMetric
     hallucination: BinomialMetric
+    hallucination_schema_valid: BinomialMetric
+    hallucination_all_outputs: BinomialMetric
     hallucination_f1: BinomialMetric
     hallucination_f2: BinomialMetric
     hallucination_f3: BinomialMetric
@@ -161,6 +163,9 @@ class ArmEvaluation:
     always_escalate_scorecard: SystemScorecard
     b1r_scorecard: SystemScorecard
     by_family: dict[str, dict[str, SystemScorecard]]  # family -> system -> SystemScorecard
+    verifier_false_rejects: dict[str, Any]
+    reason_codes_breakdown: list[dict[str, Any]]
+    paired_b2_b3: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -298,7 +303,9 @@ def _evaluate_system_subset(
         if raw_dec in ("benign_explained", "no_issue") and exp_act in ("flag", "escalate_human"):
             unsafe_raw_cases.append(c)
 
-    hallucination_metric = make_binomial_metric(n_hallucinated, n_completed)
+    hallucination_schema_valid = make_binomial_metric(n_hallucinated, n_schema_valid)
+    hallucination_all_outputs = make_binomial_metric(n_hallucinated, n_completed)
+    hallucination_metric = hallucination_schema_valid
     f1_metric = make_binomial_metric(f1_count, n_completed)
     f2_metric = make_binomial_metric(f2_count, n_completed)
     f3_metric = make_binomial_metric(f3_count, n_completed)
@@ -374,6 +381,8 @@ def _evaluate_system_subset(
         false_flag_on_controls=false_flag_metric,
         over_escalation=over_esc_metric,
         hallucination=hallucination_metric,
+        hallucination_schema_valid=hallucination_schema_valid,
+        hallucination_all_outputs=hallucination_all_outputs,
         hallucination_f1=f1_metric,
         hallucination_f2=f2_metric,
         hallucination_f3=f3_metric,
@@ -477,6 +486,18 @@ def score_arm(
     always_esc_card = _evaluate_system_subset("always-escalate", cases_data, model_id=model_id, prices_path=prices_path)
     b1r_card = _evaluate_system_subset("B1r", cases_data, model_id=model_id, prices_path=prices_path)
 
+    # Annotate hallucination flag on cases_data
+    for c in cases_data:
+        if c["status"] == "ok":
+            raw_t = c.get("raw_output")
+            try:
+                p_json = json.loads(raw_t) if raw_t else None
+                c["is_hallucinated"] = is_hallucinated(c["bundle_dict"], p_json) if isinstance(p_json, dict) else False
+            except Exception:
+                c["is_hallucinated"] = False
+        else:
+            c["is_hallucinated"] = False
+
     # Per-family scorecards
     by_family: dict[str, dict[str, SystemScorecard]] = {}
     families = sorted(set(c["check_family"] for c in cases_data))
@@ -488,6 +509,97 @@ def score_arm(
             "always-escalate": _evaluate_system_subset("always-escalate", fam_cases, model_id=model_id, prices_path=prices_path),
             "B1r": _evaluate_system_subset("B1r", fam_cases, model_id=model_id, prices_path=prices_path),
         }
+
+    # 1. Verifier-only rejections (false rejections)
+    # B3 escalates a raw output whose raw decision equals expected decision and checker does not flag
+    from collections import Counter
+    false_reject_cases = []
+    opp_cases = []
+    for c in cases_data:
+        if c["status"] == "ok":
+            raw_d = c.get("raw_decision")
+            exp_d = c["expected_decision"]
+            exp_c = c.get("expected_class")
+            pred_c = c.get("predicted_class")
+            raw_match = (raw_d == exp_d and (exp_d != "flag" or pred_c == exp_c))
+            if raw_match and not c["is_hallucinated"] and exp_d != "escalate_human":
+                opp_cases.append(c)
+                if c.get("b3_action") == "escalate_human":
+                    false_reject_cases.append(c)
+
+    fr_metric = make_binomial_metric(len(false_reject_cases), len(opp_cases))
+    fr_all_metric = make_binomial_metric(len(false_reject_cases), completed_cases)
+    top_rcs = Counter(c.get("verifier_reason_code") or "REJECT" for c in false_reject_cases).most_common(5)
+
+    by_fam_fr = {}
+    for fam in families:
+        fam_c = [c for c in cases_data if c["check_family"] == fam and c["status"] == "ok"]
+        fam_fr = [c for c in false_reject_cases if c["check_family"] == fam]
+        fam_opp = [c for c in opp_cases if c["check_family"] == fam]
+        by_fam_fr[fam] = {
+            "metric": make_binomial_metric(len(fam_fr), len(fam_opp)),
+            "metric_all": make_binomial_metric(len(fam_fr), len(fam_c)),
+            "top_reason_codes": Counter(c.get("verifier_reason_code") or "REJECT" for c in fam_fr).most_common(3),
+        }
+
+    verifier_false_rejects = {
+        "rate_opportunity": fr_metric,
+        "rate_all": fr_all_metric,
+        "top_reason_codes": top_rcs,
+        "by_family": by_fam_fr,
+        "cases_count": len(false_reject_cases),
+    }
+
+    # 2. B3 non-ACCEPT outcomes by reason code
+    rc_map: dict[str, dict[str, int]] = {}
+    for c in cases_data:
+        if c["status"] == "ok" and c.get("verifier_outcome") != "ACCEPT":
+            rc = c.get("verifier_reason_code") or c.get("raw_parse_status") or "UNKNOWN"
+            if rc not in rc_map:
+                rc_map[rc] = {"hallucinated": 0, "not_hallucinated": 0, "total": 0}
+            if c.get("is_hallucinated"):
+                rc_map[rc]["hallucinated"] += 1
+            else:
+                rc_map[rc]["not_hallucinated"] += 1
+            rc_map[rc]["total"] += 1
+
+    reason_codes_breakdown = [
+        {"reason_code": k, **v}
+        for k, v in sorted(rc_map.items(), key=lambda item: (-item[1]["total"], item[0]))
+    ]
+
+    # 3. Paired B2-vs-B3 table
+    cost_c = 0
+    benefit_c = 0
+    unchanged_c = 0
+    for c in cases_data:
+        if c["status"] == "ok":
+            b2_act = c.get("b2_action")
+            b3_act = c.get("b3_action")
+            exp_act = c["expected_decision"]
+            exp_cls = c.get("expected_class")
+            pred_cls = c.get("predicted_class")
+
+            b2_corr = (b2_act == exp_act and (exp_act != "flag" or pred_cls == exp_cls))
+            b2_uns = (b2_act in ("benign_explained", "no_issue") and exp_act in ("flag", "escalate_human"))
+            b3_uns = (b3_act in ("benign_explained", "no_issue") and exp_act in ("flag", "escalate_human"))
+
+            if b2_corr and b3_act == "escalate_human" and exp_act != "escalate_human":
+                cost_c += 1
+            elif b2_uns and not b3_uns:
+                benefit_c += 1
+            else:
+                unchanged_c += 1
+
+    paired_b2_b3 = {
+        "cost": cost_c,
+        "benefit": benefit_c,
+        "unchanged": unchanged_c,
+        "total": completed_cases,
+        "cost_rate": (cost_c / completed_cases) if completed_cases > 0 else 0.0,
+        "benefit_rate": (benefit_c / completed_cases) if completed_cases > 0 else 0.0,
+        "unchanged_rate": (unchanged_c / completed_cases) if completed_cases > 0 else 0.0,
+    }
 
     return ArmEvaluation(
         arm_name=arm_name,
@@ -501,6 +613,9 @@ def score_arm(
         always_escalate_scorecard=always_esc_card,
         b1r_scorecard=b1r_card,
         by_family=by_family,
+        verifier_false_rejects=verifier_false_rejects,
+        reason_codes_breakdown=reason_codes_breakdown,
+        paired_b2_b3=paired_b2_b3,
     )
 
 
@@ -526,7 +641,8 @@ def format_scorecard_table(eval_result: ArmEvaluation) -> str:
         f"| **Unsafe Resolution Rate** | **{b3.unsafe_resolution.kn_str}** | {b2.unsafe_resolution.kn_str} | {b1r.unsafe_resolution.kn_str} | {esc.unsafe_resolution.kn_str} |",
         f"| **False-Flag Rate (Controls)** | {b3.false_flag_on_controls.kn_str} | {b2.false_flag_on_controls.kn_str} | {b1r.false_flag_on_controls.kn_str} | {esc.false_flag_on_controls.kn_str} |",
         f"| **Over-Escalation Rate** | {b3.over_escalation.kn_str} | {b2.over_escalation.kn_str} | {b1r.over_escalation.kn_str} | {esc.over_escalation.kn_str} |",
-        f"| **Hallucination Rate (RAW)** | {b3.hallucination.kn_str} | {b2.hallucination.kn_str} | N/A | 0/N (0.0%) |",
+        f"| **Hallucination Rate (Schema-Valid)** | {b3.hallucination_schema_valid.kn_str} | {b2.hallucination_schema_valid.kn_str} | N/A | 0/N (0.0%) |",
+        f"| &nbsp;&nbsp;&bull; Rate (All Outputs) | {b3.hallucination_all_outputs.kn_str} | {b2.hallucination_all_outputs.kn_str} | N/A | 0/N (0.0%) |",
         f"| &nbsp;&nbsp;&bull; F1 (Evidence) | {b2.hallucination_f1.kn_str} | {b2.hallucination_f1.kn_str} | N/A | 0/N |",
         f"| &nbsp;&nbsp;&bull; F2 (Quote) | {b2.hallucination_f2.kn_str} | {b2.hallucination_f2.kn_str} | N/A | 0/N |",
         f"| &nbsp;&nbsp;&bull; F3 (Cited Amount) | {b2.hallucination_f3.kn_str} | {b2.hallucination_f3.kn_str} | N/A | 0/N |",
@@ -537,10 +653,47 @@ def format_scorecard_table(eval_result: ArmEvaluation) -> str:
         f"| **B3 Accepted Coverage** | {b3.b3_accepted_coverage.kn_str} | N/A | N/A | N/A |",
         f"| **B3 Accepted Accuracy** | {b3.b3_accepted_accuracy.kn_str} | N/A | N/A | N/A |",
         "",
+        "#### Verifier-Only Rejections (False Rejections)",
+    ]
+
+    fr = eval_result.verifier_false_rejects
+    fr_opp_str = fr["rate_opportunity"].kn_str
+    fr_all_str = fr["rate_all"].kn_str
+    top_rc_str = ", ".join(f"`{c}` ({cnt})" for c, cnt in fr["top_reason_codes"]) if fr["top_reason_codes"] else "None"
+
+    lines.append(f"- **Overall False-Reject Rate**: {fr_opp_str} of faithful correct non-escalations ({fr_all_str} of all completed)")
+    lines.append(f"- **Top False-Reject Reason Codes**: {top_rc_str}")
+    lines.append("- **By Check Family**:")
+    for fam, fam_data in fr["by_family"].items():
+        fam_rc_str = ", ".join(f"`{c}` ({cnt})" for c, cnt in fam_data["top_reason_codes"]) if fam_data["top_reason_codes"] else "None"
+        lines.append(f"  - `{fam}`: {fam_data['metric'].kn_str} ({fam_data['metric_all'].kn_str} overall) | Top: {fam_rc_str}")
+
+    lines.extend([
+        "",
+        "#### B3 Non-ACCEPT Outcomes by Reason Code",
+        "| Reason Code | Hallucinated (Checker) | Not Hallucinated (Faithful) | Total |",
+        "| :--- | :---: | :---: | :---: |",
+    ])
+    if eval_result.reason_codes_breakdown:
+        for r_entry in eval_result.reason_codes_breakdown:
+            lines.append(f"| `{r_entry['reason_code']}` | {r_entry['hallucinated']} | {r_entry['not_hallucinated']} | {r_entry['total']} |")
+    else:
+        lines.append("| *(None - all outputs accepted)* | 0 | 0 | 0 |")
+
+    paired = eval_result.paired_b2_b3
+    lines.extend([
+        "",
+        "#### Paired B2 vs B3 Analysis (Cost vs Benefit of Verification)",
+        "| Category | Cases (k/n) | Percentage | Interpretation |",
+        "| :--- | :---: | :---: | :--- |",
+        f"| **Cost** | {paired['cost']}/{paired['total']} | {paired['cost_rate']:.1%} | B2 was correct, B3 escalated (false reject) |",
+        f"| **Benefit** | {paired['benefit']}/{paired['total']} | {paired['benefit_rate']:.1%} | B2 was unsafe, B3 safe (prevented unsafe resolution) |",
+        f"| **Unchanged** | {paired['unchanged']}/{paired['total']} | {paired['unchanged_rate']:.1%} | B2 and B3 took equivalent actions |",
+        "",
         "#### Breakdown by Check Family (B3 System)",
         "| Check Family | Total | Accuracy | Unsafe Res | False-Flag (Ctrl) | Over-Escalation |",
         "| :--- | :---: | :--- | :--- | :--- | :--- |",
-    ]
+    ])
 
     for fam, sys_map in eval_result.by_family.items():
         fam_b3 = sys_map["B3"]

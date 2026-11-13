@@ -21,6 +21,7 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from src.recon_agent.guard import sanitize_error
+from scripts.check_env import check_tzdata
 from src.recon_agent.llm.bundle import CaseBundle, create_case_bundle
 from src.recon_agent.llm.cache import LLMCache
 from src.recon_agent.llm.gemini_client import (
@@ -40,7 +41,7 @@ class MockPilotClient:
 
     def __init__(
         self,
-        model_id: str = "gemini-3.5-flash-lite",
+        model_id: str = "mock",
         thinking_level: str | None = None,
         cache: LLMCache | None = None,
         arm_name: str = "default",
@@ -222,7 +223,21 @@ class MockPilotClient:
             "output_tokens": out_tok,
             "thinking_tokens": think_tok,
         }
-        rates = load_price_rates(self.prices_path, self.model_id)
+        if self.model_id == "mock":
+            rates = {
+                "input_cost_per_million": 0.075,
+                "output_cost_per_million": 0.30,
+                "thinking_cost_per_million": 0.30,
+            }
+        else:
+            try:
+                rates = load_price_rates(self.prices_path, self.model_id)
+            except Exception:
+                rates = {
+                    "input_cost_per_million": 0.075,
+                    "output_cost_per_million": 0.30,
+                    "thinking_cost_per_million": 0.30,
+                }
         cost = (
             in_tok * rates.get("input_cost_per_million", 0.0)
             + out_tok * rates.get("output_cost_per_million", 0.0)
@@ -462,6 +477,7 @@ def run_pilot(
     run_id: int = 0,
 ) -> dict[str, Any]:
     """Execute pilot evaluation across arms, collecting raw outputs."""
+    check_tzdata()
     arms = arms or ["default", "low", "high"]
     resolved_pop_dir = population_dir if os.path.isabs(population_dir) else os.path.join(REPO_ROOT, population_dir)
     resolved_out_dir = output_dir if os.path.isabs(output_dir) else os.path.join(REPO_ROOT, output_dir)
@@ -488,12 +504,18 @@ def run_pilot(
     quota_state_path = os.path.join(resolved_out_dir, "quota_state.json")
     quota_tracker = QuotaTracker(quota_state_path=quota_state_path, max_requests_per_day=max_requests_per_day)
 
-    # Cache
-    cache_dir = os.path.join(resolved_out_dir, "llm_cache")
-    cache = LLMCache(cache_dir=cache_dir)
+    # Cache and model resolution: mock mode strictly uses llm_cache_mock and model 'mock'
+    if mock:
+        cache_dir = os.path.join(resolved_out_dir, "llm_cache_mock")
+        resolved_model_id = model_id or "mock"
+    else:
+        if model_id == "mock":
+            raise ValueError("Model id 'mock' is not allowed in real Gemini API client mode; use MockClient")
+        cache_dir = os.path.join(resolved_out_dir, "llm_cache")
+        model_cfg = load_model_config()
+        resolved_model_id = model_id or model_cfg.get("primary", "gemini-3.5-flash-lite")
 
-    model_cfg = load_model_config()
-    resolved_model_id = model_id or model_cfg.get("primary", "gemini-3.5-flash-lite")
+    cache = LLMCache(cache_dir=cache_dir)
 
     arm_thinking_map: dict[str, str | None] = {
         "default": None,
@@ -538,10 +560,22 @@ def run_pilot(
             n_infra = sum(1 for c in results.values() if c.status == "infra_failed")
             n_pending = sum(1 for c in results.values() if c.status == "pending")
             print(f"[PILOT] Arm '{arm}' completed: ok={n_ok}, infra_failed={n_infra}, pending={n_pending}")
+
+            # Record mock flag in state file
+            try:
+                with open(run_state_path, "r", encoding="utf-8") as f:
+                    state_data = json.load(f)
+                state_data["is_mock"] = mock
+                with open(run_state_path, "w", encoding="utf-8") as f:
+                    json.dump(state_data, f, indent=2)
+            except Exception:
+                pass
+
             run_summaries[arm] = {
                 "status": "completed",
                 "counts": {"ok": n_ok, "infra_failed": n_infra, "pending": n_pending, "total": len(results)},
                 "run_state_path": run_state_path,
+                "is_mock": mock,
             }
         except NonRetriableAPIError as exc:
             err_str = str(exc).lower()
