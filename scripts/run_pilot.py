@@ -500,8 +500,16 @@ def run_pilot(
     with open(prompt_full_path, "r", encoding="utf-8") as f:
         system_prompt = f.read()
 
-    # Shared quota tracker
-    quota_state_path = os.path.join(resolved_out_dir, "quota_state.json")
+    # Shared quota tracker: mock mode isolates quota tracking to quota_state_mock.json
+    if mock:
+        quota_state_path = os.path.join(resolved_out_dir, "quota_state_mock.json")
+        if not resume and os.path.isfile(quota_state_path):
+            try:
+                os.remove(quota_state_path)
+            except OSError:
+                pass
+    else:
+        quota_state_path = os.path.join(resolved_out_dir, "quota_state.json")
     quota_tracker = QuotaTracker(quota_state_path=quota_state_path, max_requests_per_day=max_requests_per_day)
 
     # Cache and model resolution: mock mode strictly uses llm_cache_mock and model 'mock'
