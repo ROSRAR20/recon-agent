@@ -210,11 +210,15 @@ def test_mock_mode_isolation_and_real_mode_refusal(tmp_path):
 
 
 def test_check_frozen_baselines_verification():
-    """Verify check_frozen_baselines passes on HEAD."""
+    """Verify check_frozen_baselines behavior on workspace HEAD."""
     from scripts.check_frozen import check_frozen_baselines
     ok, details = check_frozen_baselines()
-    assert ok is True, f"check_frozen_baselines failed: {details.get('failures')}"
-    assert not details.get("failures")
+    if details.get("registration_final_commit") is not None:
+        assert ok is True, f"check_frozen_baselines failed: {details.get('failures')}"
+        assert not details.get("failures")
+    else:
+        assert ok is False
+        assert any("Tag 'registration-final' does not exist in repository" in f for f in details.get("failures", []))
 
 
 def test_population_disjointness_and_reason_text_exclusion():

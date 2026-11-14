@@ -21,7 +21,8 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from src.recon_agent.guard import sanitize_error
-from scripts.check_env import check_tzdata
+from scripts.check_env import check_env, check_tzdata
+from scripts.check_frozen import check_frozen_baselines
 from src.recon_agent.llm.bundle import CaseBundle, create_case_bundle
 from src.recon_agent.llm.cache import LLMCache
 from src.recon_agent.llm.gemini_client import (
@@ -478,6 +479,37 @@ def run_pilot(
 ) -> dict[str, Any]:
     """Execute pilot evaluation across arms, collecting raw outputs."""
     check_tzdata()
+    frozen_ok, frozen_details = check_frozen_baselines()
+    reg_commit = frozen_details.get("registration_final_commit") or "MISSING (tag registration-final not found)"
+    frozen_status = "PASS" if frozen_ok else "FAIL: " + "; ".join(frozen_details.get("failures", []))
+    f_hashes = frozen_details.get("file_hashes", {})
+
+    print("=" * 80)
+    print("PILOT EXECUTION" if not mock else "PILOT EXECUTION (MOCK MODE)")
+    print("=" * 80)
+    print(f"Registration-Final: {reg_commit}")
+    print(f"Frozen Baselines  : {frozen_status}")
+    print("Frozen File Hashes (HEAD):")
+    print(f"  independent_checker.py: {f_hashes.get('src/recon_agent/eval/independent_checker.py')}")
+    print(f"  verifier.py           : {f_hashes.get('src/recon_agent/llm/verifier.py')}")
+    print(f"  docs/preregistration.md: {f_hashes.get('docs/preregistration.md')}")
+    print(f"  systems/ (tree)       : {f_hashes.get('src/recon_agent/systems/')}")
+    print("=" * 80)
+
+    # Real API mode guard: refuse to start unless frozen check passes and git tree is clean
+    if not mock:
+        if not frozen_ok:
+            raise RuntimeError(
+                f"Frozen baseline check failed; refusing to run in real API mode: "
+                f"{'; '.join(frozen_details.get('failures', []))}"
+            )
+        env_info = check_env()
+        if env_info.git_dirty:
+            raise RuntimeError(
+                "Git tracked working tree is dirty; refusing to run in real API mode. "
+                "Commit or stash tracked changes first."
+            )
+
     arms = arms or ["default", "low", "high"]
     resolved_pop_dir = population_dir if os.path.isabs(population_dir) else os.path.join(REPO_ROOT, population_dir)
     resolved_out_dir = output_dir if os.path.isabs(output_dir) else os.path.join(REPO_ROOT, output_dir)

@@ -37,8 +37,8 @@ from src.recon_agent.llm.gemini_client import (
 )
 
 
-def get_git_info() -> tuple[str, bool, str, bool]:
-    """Retrieve git commit, dirty flag, checker hash, and whether checker matches checker-v1."""
+def get_git_info() -> tuple[str, bool]:
+    """Retrieve git commit and dirty flag."""
     try:
         commit = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True, stderr=subprocess.DEVNULL
@@ -54,28 +54,7 @@ def get_git_info() -> tuple[str, bool, str, bool]:
     except Exception:
         is_dirty = False
 
-    try:
-        checker_hash = subprocess.check_output(
-            ["git", "rev-parse", "HEAD:src/recon_agent/eval/independent_checker.py"],
-            cwd=REPO_ROOT,
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip()
-    except Exception:
-        checker_hash = "unknown"
-
-    try:
-        diff_tag = subprocess.check_output(
-            ["git", "diff", "checker-v1", "--", "src/recon_agent/eval/independent_checker.py"],
-            cwd=REPO_ROOT,
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip()
-        checker_matches_tag = (len(diff_tag) == 0)
-    except Exception:
-        checker_matches_tag = True
-
-    return commit, is_dirty, checker_hash, checker_matches_tag
+    return commit, is_dirty
 
 
 def run_pilot_report(
@@ -238,11 +217,13 @@ def run_pilot_report(
         total_cases_all += arm_eval.total_cases
         total_infra_failed += arm_eval.infra_failed_count
 
-    # Git metadata, environment info & checker verification
-    git_commit, is_dirty, checker_hash, checker_matches_tag = get_git_info()
+    # Git metadata, environment info & frozen checks
+    git_commit, is_dirty = get_git_info()
     env_info = check_env()
     frozen_ok, frozen_details = check_frozen_baselines()
-    frozen_status = "PASS (b1-frozen, checker-v1, prereg)" if frozen_ok else "FAIL: " + "; ".join(frozen_details["failures"])
+    reg_commit = frozen_details.get("registration_final_commit") or "MISSING (tag registration-final not found)"
+    frozen_status = "PASS" if frozen_ok else "FAIL: " + "; ".join(frozen_details["failures"])
+    f_hashes = frozen_details.get("file_hashes", {})
     overall_infra_rate = (total_infra_failed / total_cases_all) if total_cases_all > 0 else 0.0
 
     if is_mock:
@@ -251,18 +232,19 @@ def run_pilot_report(
         print("=" * 80)
 
     print("=" * 80)
-    print("DAY 7b-3 PILOT EVALUATION REPORT")
+    print("DAY 7b-5 PILOT EVALUATION REPORT")
     print("=" * 80)
     print(f"Environment       : {env_info.summary_line()}")
+    print(f"Registration-Final: {reg_commit}")
     print(f"Frozen Baselines  : {frozen_status}")
+    print("Frozen File Hashes (HEAD):")
+    print(f"  independent_checker.py: {f_hashes.get('src/recon_agent/eval/independent_checker.py')}")
+    print(f"  verifier.py           : {f_hashes.get('src/recon_agent/llm/verifier.py')}")
+    print(f"  docs/preregistration.md: {f_hashes.get('docs/preregistration.md')}")
+    print(f"  systems/ (tree)       : {f_hashes.get('src/recon_agent/systems/')}")
     print(f"Git Commit        : {git_commit} {'(DIRTY)' if is_dirty else '(CLEAN)'}")
     print(f"System Prompt Hash: {prompt_hash}")
     print(f"Verifier Version  : {verifier_version}")
-    print(f"Checker Git Hash  : {checker_hash}")
-    if not checker_matches_tag:
-        print("⚠️ WARNING: independent_checker.py differs from frozen tag checker-v1!")
-    else:
-        print("Checker Tag Status: Matches frozen tag checker-v1 (CLEAN)")
     print(f"Requested Model   : {resolved_model_id}")
     print(f"Served Model(s)   : {'mock' if is_mock else (', '.join(sorted(served_models)) if served_models else resolved_model_id)}")
     print(f"Run ID(s)         : [{run_id}]")
