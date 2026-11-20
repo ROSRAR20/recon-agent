@@ -7,12 +7,16 @@ and applies pre-registered selection logic to suggest the arm for freeze.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
 import subprocess
 import sys
 from typing import Any
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 # Ensure repository root is on sys.path
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -57,6 +61,27 @@ def get_git_info() -> tuple[str, bool]:
     return commit, is_dirty
 
 
+class _TeeStream:
+    """Stream wrapper that writes to stdout and collects text for output file."""
+
+    def __init__(self, original: Any, out_path: str | None = None) -> None:
+        self.original = original
+        self.out_path = out_path
+        self.lines: list[str] = []
+
+    def write(self, s: str) -> int:
+        self.original.write(s)
+        if self.out_path:
+            self.lines.append(s)
+        return len(s)
+
+    def flush(self) -> None:
+        self.original.flush()
+
+    def get_text(self) -> str:
+        return "".join(self.lines)
+
+
 def run_pilot_report(
     seed: int = 1,
     arms: list[str] | None = None,
@@ -70,8 +95,47 @@ def run_pilot_report(
     system_prompt_path: str = "src/recon_agent/llm/prompts/system.txt",
     prices_path: str = "config/llm_prices.json",
     model_id: str | None = None,
+    out_path: str | None = None,
 ) -> None:
     """Finalize runs, calculate scores, and print pilot evaluation report."""
+    tee = _TeeStream(sys.stdout, out_path=out_path)
+    with contextlib.redirect_stdout(tee):
+        _run_pilot_report_impl(
+            seed=seed,
+            arms=arms,
+            n_residual=n_residual,
+            n_control=n_control,
+            run_id=run_id,
+            mock=mock,
+            population_dir=population_dir,
+            results_dir=results_dir,
+            finalized_dir=finalized_dir,
+            system_prompt_path=system_prompt_path,
+            prices_path=prices_path,
+            model_id=model_id,
+        )
+    if out_path:
+        out_full = out_path if os.path.isabs(out_path) else os.path.join(REPO_ROOT, out_path)
+        os.makedirs(os.path.dirname(os.path.abspath(out_full)), exist_ok=True)
+        with open(out_full, "w", encoding="utf-8") as f:
+            f.write(tee.get_text())
+
+
+def _run_pilot_report_impl(
+    seed: int = 1,
+    arms: list[str] | None = None,
+    n_residual: int = 100,
+    n_control: int = 20,
+    run_id: int = 0,
+    mock: bool = False,
+    population_dir: str = "data/populations",
+    results_dir: str = "results",
+    finalized_dir: str = "results/finalized",
+    system_prompt_path: str = "src/recon_agent/llm/prompts/system.txt",
+    prices_path: str = "config/llm_prices.json",
+    model_id: str | None = None,
+) -> None:
+    """Internal implementation of run_pilot_report."""
     check_tzdata()
     arms = arms or ["default", "low", "high"]
     resolved_pop_dir = population_dir if os.path.isabs(population_dir) else os.path.join(REPO_ROOT, population_dir)
@@ -349,6 +413,8 @@ def run_pilot_report(
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Generate pilot report and arm selection")
     parser.add_argument("--seed", type=int, default=1, help="Seed index (default: 1)")
     parser.add_argument("--arms", default="default,low,high", help="Comma-separated arms (default: default,low,high)")
@@ -361,6 +427,7 @@ def main() -> None:
     parser.add_argument("--output-dir", default="results/finalized", help="Finalized output directory")
     parser.add_argument("--prices-path", default="config/llm_prices.json", help="Pricing config path")
     parser.add_argument("--model", default=None, help="Model ID override")
+    parser.add_argument("--out", default=None, help="Output file path to write report as UTF-8 directly")
     args = parser.parse_args()
 
     arm_list = [a.strip() for a in args.arms.split(",") if a.strip()]
@@ -376,6 +443,7 @@ def main() -> None:
         finalized_dir=args.output_dir,
         prices_path=args.prices_path,
         model_id=args.model,
+        out_path=args.out,
     )
 
 
