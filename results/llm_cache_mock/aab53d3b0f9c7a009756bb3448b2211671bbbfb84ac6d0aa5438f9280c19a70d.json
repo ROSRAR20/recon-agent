@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "da22d75bbd75926aee406d25fc7b4d4318d286987bba6235d775e26bdc0110fa",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": null,
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"escalate_human\", \"predicted_class\": null, \"reason_code\": \"NEAR_TOLERANCE\", \"explanation\": \"Observed unregistered fee discrepancy of 77777 paise.\", \"evidence\": [], \"cited_amount_paise\": null, \"verbatim_quote\": null}",
+  "content_hash": "bb9a47e5936ad067faec566033260841cb5676c94b7bb2e6dba184c36c841b1c",
+  "raw_output_hash": "bb9a47e5936ad067faec566033260841cb5676c94b7bb2e6dba184c36c841b1c",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 175,
+    "output_tokens": 65,
+    "thinking_tokens": 0
+  },
+  "cost_low": 3.3e-05,
+  "cost_high": 3.3e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 175,
+    "output_tokens": 65,
+    "thinking_tokens": 0
+  },
+  "raw_response_bytes": 228,
+  "raw_response_shape": null
+}

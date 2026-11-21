@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "d148ad845127d0c4631a899a68ac462e9552c9f568b40eb169df66208cae593e",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": "high",
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"benign_explained\", \"predicted_class\": null, \"reason_code\": \"EXPLAINED_CONSISTENT\", \"explanation\": \"Difference of 270 paise explained by quote Rs. 2.70.\", \"evidence\": [{\"field\": \"ledger_refund_paise\", \"value\": 7142}, {\"field\": \"debit_paise\", \"value\": 7412}], \"cited_amount_paise\": 270, \"verbatim_quote\": \"Rs. 2.70\"}",
+  "content_hash": "3b7b29bfe9f805fd2f76fd64f948c2f4d5f59ddd6fb4262a073d121b346360cb",
+  "raw_output_hash": "3b7b29bfe9f805fd2f76fd64f948c2f4d5f59ddd6fb4262a073d121b346360cb",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 179,
+    "output_tokens": 69,
+    "thinking_tokens": 100
+  },
+  "cost_low": 6.4e-05,
+  "cost_high": 6.4e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 179,
+    "output_tokens": 69,
+    "thinking_tokens": 100
+  },
+  "raw_response_bytes": 328,
+  "raw_response_shape": null
+}

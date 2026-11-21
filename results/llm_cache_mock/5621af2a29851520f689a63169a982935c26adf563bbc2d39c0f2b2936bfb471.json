@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "dd38aaa0ab281cc38587744deb390eef6db62515ab865053c2d749985568c3e1",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": "low",
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"escalate_human\", \"predicted_class\": null, \"reason_code\": \"AMBIGUOUS_CANDIDATES\", \"explanation\": \"Multiple bank statement candidates matched; escalating for review.\", \"evidence\": [{\"field\": \"candidates_count\", \"value\": 2}], \"cited_amount_paise\": null, \"verbatim_quote\": null}",
+  "content_hash": "8e30e43eb5d9ce392ccade34a2f64afbf754b17add7305dfcd816543341bf9cb",
+  "raw_output_hash": "8e30e43eb5d9ce392ccade34a2f64afbf754b17add7305dfcd816543341bf9cb",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 162,
+    "output_tokens": 72,
+    "thinking_tokens": 40
+  },
+  "cost_low": 4.6e-05,
+  "cost_high": 4.6e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 162,
+    "output_tokens": 72,
+    "thinking_tokens": 40
+  },
+  "raw_response_bytes": 288,
+  "raw_response_shape": null
+}

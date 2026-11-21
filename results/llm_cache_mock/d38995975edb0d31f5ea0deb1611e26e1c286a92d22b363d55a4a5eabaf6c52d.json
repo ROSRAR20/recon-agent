@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "d59c995de34233c49c5d16da742ddbe2340ad8800e3303fb528d38ad11d79243",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": "high",
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"benign_explained\", \"predicted_class\": null, \"reason_code\": \"EXPLAINED_CONSISTENT\", \"explanation\": \"Difference of 493 paise explained by quote None.\", \"evidence\": [{\"field\": \"ledger_refund_paise\", \"value\": 14671}, {\"field\": \"debit_paise\", \"value\": 14178}], \"cited_amount_paise\": 493, \"verbatim_quote\": null}",
+  "content_hash": "c1f87905a7eab8e828e8ffacda7d2496d40038a4608f67fa590d3994b97e9d9b",
+  "raw_output_hash": "c1f87905a7eab8e828e8ffacda7d2496d40038a4608f67fa590d3994b97e9d9b",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 175,
+    "output_tokens": 65,
+    "thinking_tokens": 100
+  },
+  "cost_low": 6.3e-05,
+  "cost_high": 6.3e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 175,
+    "output_tokens": 65,
+    "thinking_tokens": 100
+  },
+  "raw_response_bytes": 320,
+  "raw_response_shape": null
+}

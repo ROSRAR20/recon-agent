@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "f53243ba32563424f754ba16688d2cfda6061c42c6086c34fd64c4b4998c1856",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": "low",
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"no_issue\", \"predicted_class\": null, \"reason_code\": \"CONTROL_CLEAN\", \"explanation\": \"All observed facts match expected state; no discrepancies.\", \"evidence\": [], \"cited_amount_paise\": null, \"verbatim_quote\": null}",
+  "content_hash": "2beca165880bca6ec0dd3a9bab22f94d3c216e409bfbc0e15921f658637879bc",
+  "raw_output_hash": "2beca165880bca6ec0dd3a9bab22f94d3c216e409bfbc0e15921f658637879bc",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 163,
+    "output_tokens": 73,
+    "thinking_tokens": 40
+  },
+  "cost_low": 4.6e-05,
+  "cost_high": 4.6e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 163,
+    "output_tokens": 73,
+    "thinking_tokens": 40
+  },
+  "raw_response_bytes": 226,
+  "raw_response_shape": null
+}

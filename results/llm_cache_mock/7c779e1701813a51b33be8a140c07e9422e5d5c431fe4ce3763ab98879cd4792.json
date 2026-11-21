@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "fdd14aa398ac71f1eade95b7d618421270851edcea87f184f5101e5bd375116f",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": "high",
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"escalate_human\", \"predicted_class\": null, \"reason_code\": \"AMBIGUOUS_TEXT\", \"explanation\": \"Customer service promised a special concession.\", \"evidence\": [], \"cited_amount_paise\": null, \"verbatim_quote\": \"Customer service promised a special concession.\"}",
+  "content_hash": "7091e15ee120be434d95729b1237b11337486564d3b063b5a4fd0b50006bcdb0",
+  "raw_output_hash": "7091e15ee120be434d95729b1237b11337486564d3b063b5a4fd0b50006bcdb0",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 165,
+    "output_tokens": 65,
+    "thinking_tokens": 100
+  },
+  "cost_low": 6.2e-05,
+  "cost_high": 6.2e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 165,
+    "output_tokens": 65,
+    "thinking_tokens": 100
+  },
+  "raw_response_bytes": 267,
+  "raw_response_shape": null
+}

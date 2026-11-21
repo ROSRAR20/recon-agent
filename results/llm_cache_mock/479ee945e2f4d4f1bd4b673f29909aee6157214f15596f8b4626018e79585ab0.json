@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "23e8fd0af20e575f08a1f1506c1b565f56a979beb73a6684227fa501e13fdfbc",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": null,
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"escalate_human\", \"predicted_class\": null, \"reason_code\": \"NEAR_TOLERANCE\", \"explanation\": \"Delta requires escalation.\", \"evidence\": [{\"field\": \"fabricated_evidence_field\", \"value\": 999}], \"cited_amount_paise\": null, \"verbatim_quote\": null}",
+  "content_hash": "aae269b457535d29145a95b40fcbac833a15bb361fb55a9239e46d59108d88a9",
+  "raw_output_hash": "aae269b457535d29145a95b40fcbac833a15bb361fb55a9239e46d59108d88a9",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 165,
+    "output_tokens": 75,
+    "thinking_tokens": 0
+  },
+  "cost_low": 3.5e-05,
+  "cost_high": 3.5e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 165,
+    "output_tokens": 75,
+    "thinking_tokens": 0
+  },
+  "raw_response_bytes": 253,
+  "raw_response_shape": null
+}

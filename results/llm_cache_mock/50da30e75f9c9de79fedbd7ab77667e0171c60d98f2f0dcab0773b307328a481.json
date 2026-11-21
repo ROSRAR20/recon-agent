@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "3f3b5895234f1d05c0d9a4e5ddc78b29ff9e2728a97e3b6cb8403c8adbc76fe9",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": null,
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"benign_explained\", \"predicted_class\": null, \"reason_code\": \"EXPLAINED_CONSISTENT\", \"explanation\": \"Difference of 325 paise explained by quote Rs 3.25.\", \"evidence\": [{\"field\": \"ledger_refund_paise\", \"value\": 2286}, {\"field\": \"debit_paise\", \"value\": 2611}], \"cited_amount_paise\": 325, \"verbatim_quote\": \"Rs 3.25\"}",
+  "content_hash": "3c13572902f0c02dd2df071ba895a539943ffae2dfb1e166e785a7603d3285f8",
+  "raw_output_hash": "3c13572902f0c02dd2df071ba895a539943ffae2dfb1e166e785a7603d3285f8",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 170,
+    "output_tokens": 60,
+    "thinking_tokens": 0
+  },
+  "cost_low": 3.1e-05,
+  "cost_high": 3.1e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 170,
+    "output_tokens": 60,
+    "thinking_tokens": 0
+  },
+  "raw_response_bytes": 326,
+  "raw_response_shape": null
+}

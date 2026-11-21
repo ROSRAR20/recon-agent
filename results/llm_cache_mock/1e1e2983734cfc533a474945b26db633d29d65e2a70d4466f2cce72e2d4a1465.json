@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "21f3211540a6cfb176044e77dd514378c2e8cd90eb7a0fa611dce0aa348cfbff",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": null,
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"invalid_choice\", \"predicted_class\": null, \"explanation\": \"invalid\"}",
+  "content_hash": "5dbb3a92f327edf6db3026ce76a56a84adae6f1e2de2064007226f5c3ca04211",
+  "raw_output_hash": "5dbb3a92f327edf6db3026ce76a56a84adae6f1e2de2064007226f5c3ca04211",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 167,
+    "output_tokens": 67,
+    "thinking_tokens": 0
+  },
+  "cost_low": 3.3e-05,
+  "cost_high": 3.3e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 167,
+    "output_tokens": 67,
+    "thinking_tokens": 0
+  },
+  "raw_response_bytes": 81,
+  "raw_response_shape": null
+}

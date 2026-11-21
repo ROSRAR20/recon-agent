@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "fe7f92434fe30fcff310d5ea9e1264e6742157a894986e1cfb25a9197b287a83",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": "low",
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"escalate_human\", \"predicted_class\": null, \"reason_code\": \"NEAR_TOLERANCE\", \"explanation\": \"Discrepancy noted.\", \"evidence\": [], \"cited_amount_paise\": 888888, \"verbatim_quote\": null}",
+  "content_hash": "9eeaa7ebe804ba8eb489f1532010aad2e2990c406ddf0a485fb253ce36c13f4f",
+  "raw_output_hash": "9eeaa7ebe804ba8eb489f1532010aad2e2990c406ddf0a485fb253ce36c13f4f",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 175,
+    "output_tokens": 75,
+    "thinking_tokens": 40
+  },
+  "cost_low": 4.8e-05,
+  "cost_high": 4.8e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 175,
+    "output_tokens": 75,
+    "thinking_tokens": 40
+  },
+  "raw_response_bytes": 195,
+  "raw_response_shape": null
+}

@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "22a50229832481dbbc9dcc187be7eff10baabd84880a37ed6ca48619cf1d3570",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": null,
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"escalate_human\", \"predicted_class\": null, \"reason_code\": \"EXPLAINED_NO_AMOUNT\", \"explanation\": \"Reason note lacks monetary amount; human review required.\", \"evidence\": [{\"field\": \"ledger_refund_paise\", \"value\": 8115}, {\"field\": \"debit_paise\", \"value\": 7776}], \"cited_amount_paise\": null, \"verbatim_quote\": null}",
+  "content_hash": "5013a1683098c5dfab98a7aaea18d16c0a24fe1f4f4617764dca8ec9a4f72e1c",
+  "raw_output_hash": "5013a1683098c5dfab98a7aaea18d16c0a24fe1f4f4617764dca8ec9a4f72e1c",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 153,
+    "output_tokens": 63,
+    "thinking_tokens": 0
+  },
+  "cost_low": 3e-05,
+  "cost_high": 3e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 153,
+    "output_tokens": 63,
+    "thinking_tokens": 0
+  },
+  "raw_response_bytes": 325,
+  "raw_response_shape": null
+}

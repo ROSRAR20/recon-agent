@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "c0dbb30a3ad121ff17e26babd7924e04faa2be4ed0243d660631b79e0e9ce739",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": "low",
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"benign_explained\", \"predicted_class\": null, \"reason_code\": \"EXPLAINED_CONSISTENT\", \"explanation\": \"Difference of 420 paise explained by quote Rs. 4.20.\", \"evidence\": [{\"field\": \"ledger_refund_paise\", \"value\": 8268}, {\"field\": \"debit_paise\", \"value\": 7848}], \"cited_amount_paise\": 420, \"verbatim_quote\": \"Rs. 4.20\"}",
+  "content_hash": "f665b1d27c4798f40cafa93bd76bbfa0004eb0cb1cd86c4c22f78f05592408b2",
+  "raw_output_hash": "f665b1d27c4798f40cafa93bd76bbfa0004eb0cb1cd86c4c22f78f05592408b2",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 162,
+    "output_tokens": 62,
+    "thinking_tokens": 40
+  },
+  "cost_low": 4.3e-05,
+  "cost_high": 4.3e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 162,
+    "output_tokens": 62,
+    "thinking_tokens": 40
+  },
+  "raw_response_bytes": 328,
+  "raw_response_shape": null
+}

@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "da22d75bbd75926aee406d25fc7b4d4318d286987bba6235d775e26bdc0110fa",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": "low",
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"benign_explained\", \"predicted_class\": null, \"reason_code\": \"EXPLAINED_CONSISTENT\", \"explanation\": \"Difference of 222 paise explained by quote Rs. 2.22.\", \"evidence\": [{\"field\": \"ledger_refund_paise\", \"value\": 14009}, {\"field\": \"debit_paise\", \"value\": 13787}], \"cited_amount_paise\": 222, \"verbatim_quote\": \"Rs. 2.22\"}",
+  "content_hash": "89f4a684b8603c19d76f3648d00e102d698a53ebbb783aa6a84638311a603d5f",
+  "raw_output_hash": "89f4a684b8603c19d76f3648d00e102d698a53ebbb783aa6a84638311a603d5f",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 160,
+    "output_tokens": 70,
+    "thinking_tokens": 40
+  },
+  "cost_low": 4.5e-05,
+  "cost_high": 4.5e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 160,
+    "output_tokens": 70,
+    "thinking_tokens": 40
+  },
+  "raw_response_bytes": 330,
+  "raw_response_shape": null
+}

@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "883fac6b466f3c3492f9283a0691509c9a74045150b37f00c4b0097ca91c413b",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": null,
+  "run_id": 0,
+  "raw_output": "I reviewed the case and recommend escalating to a human operator.",
+  "content_hash": "fa28f33cf306b0a8f6abd92302c0c26d5d72347d12d908fd752c54192299ae83",
+  "raw_output_hash": "fa28f33cf306b0a8f6abd92302c0c26d5d72347d12d908fd752c54192299ae83",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 153,
+    "output_tokens": 63,
+    "thinking_tokens": 0
+  },
+  "cost_low": 3e-05,
+  "cost_high": 3e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 153,
+    "output_tokens": 63,
+    "thinking_tokens": 0
+  },
+  "raw_response_bytes": 65,
+  "raw_response_shape": null
+}

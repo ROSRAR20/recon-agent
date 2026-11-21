@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "163176283c28c21fb7c7786a5ceaeba2cf9ab7b481ac7673a3d5e24bcaee42d4",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": null,
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"flag\", \"predicted_class\": \"PARTIAL_REFUND_MISMATCH\", \"reason_code\": \"PARTIAL_REFUND_MISMATCH\", \"explanation\": \"Refund difference not fully covered by reason note amount.\", \"evidence\": [{\"field\": \"ledger_refund_paise\", \"value\": 9647}, {\"field\": \"debit_paise\", \"value\": 9208}], \"cited_amount_paise\": null, \"verbatim_quote\": null}",
+  "content_hash": "582c33c4bbf9b4f8fe8dfd11fbe141c743682312d8a448a284c8387df91b6edc",
+  "raw_output_hash": "582c33c4bbf9b4f8fe8dfd11fbe141c743682312d8a448a284c8387df91b6edc",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 167,
+    "output_tokens": 77,
+    "thinking_tokens": 0
+  },
+  "cost_low": 3.6e-05,
+  "cost_high": 3.6e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 167,
+    "output_tokens": 77,
+    "thinking_tokens": 0
+  },
+  "raw_response_bytes": 341,
+  "raw_response_shape": null
+}

@@ -1,0 +1,27 @@
+{
+  "bundle_hash": "ff31e95093a84d54c3d94081fd4a38950bc76d7c2b13f6aebd343889a3e9b3f1",
+  "prompt_hash": "20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434",
+  "schema_hash": "58f84479f94426bd305efbbdb2b8b31c8ab11162bd256b73d0575c71f59baed2",
+  "model_id": "mock",
+  "thinking_level": null,
+  "run_id": 0,
+  "raw_output": "{\"decision\": \"escalate_human\", \"predicted_class\": null, \"reason_code\": \"NEAR_TOLERANCE\", \"explanation\": \"Delta of 7 paise exceeds tolerance of 2 paise.\", \"evidence\": [{\"field\": \"fee_delta_paise\", \"value\": 7}, {\"field\": \"tax_delta_paise\", \"value\": 0}, {\"field\": \"rounding_tolerance_paise\", \"value\": 2}], \"cited_amount_paise\": null, \"verbatim_quote\": null}",
+  "content_hash": "ce7b79e0304fa32ffa2f41969567cbcf8d6f04f64bc8d6bfcb669ca373e3fe28",
+  "raw_output_hash": "ce7b79e0304fa32ffa2f41969567cbcf8d6f04f64bc8d6bfcb669ca373e3fe28",
+  "served_model": "mock",
+  "tokens": {
+    "input_tokens": 153,
+    "output_tokens": 63,
+    "thinking_tokens": 0
+  },
+  "cost_low": 3e-05,
+  "cost_high": 3e-05,
+  "usage_flagged": false,
+  "usage_raw": {
+    "input_tokens": 153,
+    "output_tokens": 63,
+    "thinking_tokens": 0
+  },
+  "raw_response_bytes": 354,
+  "raw_response_shape": null
+}
