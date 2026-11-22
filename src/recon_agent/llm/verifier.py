@@ -67,11 +67,11 @@ class VerifierResult:
         )
 
 
-# Unit-bearing amount pattern: explicitly requires currency symbol/code (Rs, INR, ₹) OR paise unit
+# Unit-bearing amount pattern: explicitly requires currency symbol/code (Rs, INR, ₹) OR rupee/paise unit words
 # Supports both Indian digit grouping (e.g. 1,23,456.50, 1,234) and standard Western grouping
 AMOUNT_UNIT_PATTERN = re.compile(
-    r"(?:(?:INR|Rs\.?|₹)\s*(?:\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?|"
-    r"\b(?:\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\s*(?:paise|paisa)\b)",
+    r"(?:(?:INR|Rs\.?|₹)\s*(?:\d[\d,]*(?:\.\d+)?)(?:\s*(?:rupees?|paise|paisa)\b)?|"
+    r"\b(?:\d[\d,]*(?:\.\d+)?)\s*(?:rupees?|paise|paisa)\b)",
     re.IGNORECASE,
 )
 
@@ -95,18 +95,24 @@ def _strict_convert_amount_token(token: str) -> tuple[int | None, str]:
     """Strictly convert a single unit-bearing amount token to integer paise using Decimal.
 
     Returns (paise_value, unit_type), where unit_type is 'paise' or 'rupee'.
-    If the token lacks an explicit unit or has fractional paise, returns (None, 'none').
+    If the token lacks an explicit unit, has conflicting units, or has fractional paise,
+    returns (None, unit_type).
     """
     token_clean = token.replace(",", "").strip()
 
     is_paise = bool(re.search(r"\b(?:paise|paisa)\b", token_clean, re.IGNORECASE))
+    has_rupee_word = bool(re.search(r"\b(?:rupees?)\b", token_clean, re.IGNORECASE))
     has_rupee_sym = bool(re.search(r"(?:INR|Rs\.?|₹)", token_clean, re.IGNORECASE))
 
-    if not is_paise and not has_rupee_sym:
+    # Conflicting units: both prefix and postfix present, or rupee and paise combined
+    if (has_rupee_sym and (has_rupee_word or is_paise)) or (is_paise and has_rupee_word):
+        return None, "conflicting"
+
+    if not is_paise and not has_rupee_word and not has_rupee_sym:
         # Bare number without unit
         return None, "none"
 
-    num_part = re.sub(r"(?:INR|Rs\.?|₹|paise|paisa)", "", token_clean, flags=re.IGNORECASE).strip()
+    num_part = re.sub(r"(?:INR|Rs\.?|₹|rupees?|paise|paisa)", "", token_clean, flags=re.IGNORECASE).strip()
     if not num_part:
         return None, "none"
 
@@ -121,7 +127,7 @@ def _strict_convert_amount_token(token: str) -> tuple[int | None, str]:
             return None, "paise"
         return int(dec), "paise"
 
-    if has_rupee_sym:
+    if has_rupee_word or has_rupee_sym:
         # Rupee unit: multiplied by 100 once
         dec_paise = dec * Decimal(100)
         if dec_paise != dec_paise.to_integral_value():

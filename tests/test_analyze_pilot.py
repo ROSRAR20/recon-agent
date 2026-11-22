@@ -79,15 +79,21 @@ def test_run_error_analysis_real():
     assert len(findings["default"]["unblocked_hallucinations"]) == 1
     assert len(findings["default"]["unsafe_raw_cases"]) == 9
     assert len(findings["default"]["accepted_wrong_cases"]) == 2
+    assert len(findings["default"]["v8_rejections"]) == 1
+    assert len(findings["default"]["no_amount_in_quote_cases"]) == 10
 
     # Low arm assertions
     assert len(findings["low"]["f4_cases"]) == 21
     assert len(findings["low"]["unblocked_hallucinations"]) == 0
     assert len(findings["low"]["unsafe_raw_cases"]) == 9
     assert len(findings["low"]["accepted_wrong_cases"]) == 2
+    assert len(findings["low"]["v8_rejections"]) == 7
+    assert len(findings["low"]["no_amount_in_quote_cases"]) == 9
 
     # High arm assertions
     assert len(findings["high"]["f4_cases"]) == 22
     assert len(findings["high"]["unblocked_hallucinations"]) == 0
     assert len(findings["high"]["unsafe_raw_cases"]) == 0
     assert len(findings["high"]["accepted_wrong_cases"]) == 3
+    assert len(findings["high"]["v8_rejections"]) == 4
+    assert len(findings["high"]["no_amount_in_quote_cases"]) == 0

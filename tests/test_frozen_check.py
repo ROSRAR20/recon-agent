@@ -45,13 +45,14 @@ def temp_git_repo(tmp_path):
 
     # Create directory tree
     (repo / "src" / "recon_agent" / "eval").mkdir(parents=True)
-    (repo / "src" / "recon_agent" / "llm").mkdir(parents=True)
+    (repo / "src" / "recon_agent" / "llm" / "prompts").mkdir(parents=True)
     (repo / "src" / "recon_agent" / "systems").mkdir(parents=True)
     (repo / "docs").mkdir(parents=True)
 
     # Create frozen files
     (repo / "src" / "recon_agent" / "eval" / "independent_checker.py").write_text("# independent checker v1\n", encoding="utf-8")
     (repo / "src" / "recon_agent" / "llm" / "verifier.py").write_text("# verifier code\n", encoding="utf-8")
+    (repo / "src" / "recon_agent" / "llm" / "prompts" / "system.txt").write_text("# system prompt\n", encoding="utf-8")
     (repo / "src" / "recon_agent" / "systems" / "__init__.py").write_text("# systems init\n", encoding="utf-8")
     (repo / "src" / "recon_agent" / "systems" / "b0.py").write_text("# b0\n", encoding="utf-8")
     (repo / "src" / "recon_agent" / "systems" / "b1.py").write_text("# b1\n", encoding="utf-8")
@@ -205,3 +206,49 @@ def test_mock_pilot_runs_despite_missing_registration_tag(tmp_path):
         output_dir=out_dir,
     )
     assert summaries["default"]["status"] == "completed"
+
+
+def test_change_log_chain_valid_and_broken(temp_git_repo):
+    """Verify change log hash chaining: valid chain passes, broken chain fails."""
+    git_cmd(["tag", "registration-final"], cwd=temp_git_repo)
+
+    # 1. Get initial hash of verifier.py
+    v_path = os.path.join(temp_git_repo, "src", "recon_agent", "llm", "verifier.py")
+    orig_hash = git_cmd(["hash-object", "src/recon_agent/llm/verifier.py"], cwd=temp_git_repo)
+
+    # 2. Modify verifier.py
+    with open(v_path, "a", encoding="utf-8") as f:
+        f.write("# modification 1\n")
+    new_hash = git_cmd(["hash-object", "src/recon_agent/llm/verifier.py"], cwd=temp_git_repo)
+
+    # Without change_log entry, check fails
+    ok, details = check_frozen_baselines(repo_root=temp_git_repo)
+    assert ok is False
+    assert details["diffs"]["verifier_chain_valid"] is False
+
+    # 3. Create docs/change_log.md with unbroken chain
+    cl_path = os.path.join(temp_git_repo, "docs", "change_log.md")
+    valid_content = f"""# Change Log
+## Entry 1: Verifier update
+- **Date**: 2026-11-22
+- **File**: `src/recon_agent/llm/verifier.py`
+- **Old Git Blob Hash**: `{orig_hash}`
+- **New Git Blob Hash**: `{new_hash}`
+"""
+    with open(cl_path, "w", encoding="utf-8") as f:
+        f.write(valid_content)
+
+    ok, details = check_frozen_baselines(repo_root=temp_git_repo)
+    assert ok is True
+    assert details["diffs"]["verifier_chain_valid"] is True
+
+    # 4. Corrupt the old_hash in change_log to break the chain
+    broken_content = valid_content.replace(orig_hash, "0000000000000000000000000000000000000000")
+    with open(cl_path, "w", encoding="utf-8") as f:
+        f.write(broken_content)
+
+    ok, details = check_frozen_baselines(repo_root=temp_git_repo)
+    assert ok is False
+    assert details["diffs"]["verifier_chain_valid"] is False
+    assert any("Broken hash chain" in f for f in details["failures"])
+

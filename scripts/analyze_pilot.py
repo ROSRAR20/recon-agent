@@ -39,6 +39,27 @@ from src.recon_agent.llm.bundle import CaseBundle
 DECISION_ORDER = ["no_issue", "benign_explained", "flag", "escalate_human"]
 
 
+def find_reflected_window(bundle_dict: dict[str, Any], raw_output: dict[str, Any], n: int = 6) -> tuple[str, str]:
+    """Find the matching n-word window in untrusted_text that is outside verbatim_quote."""
+    import re
+    explanation = raw_output.get("explanation")
+    words = re.findall(r"\w+", explanation.lower()) if isinstance(explanation, str) else []
+    quote = raw_output.get("verbatim_quote")
+    quote_text = (" " + " ".join(re.findall(r"\w+", quote.lower())) + " ") if isinstance(quote, str) else ""
+    untrusted = bundle_dict.get("untrusted_text") or {}
+    for i in range(len(words) - n + 1):
+        window_words = words[i : i + n]
+        window = " " + " ".join(window_words) + " "
+        if quote_text and window in quote_text:
+            continue
+        for f_name, t in untrusted.items():
+            if isinstance(t, str):
+                norm_t = " " + " ".join(re.findall(r"\w+", t.lower())) + " "
+                if window in norm_t:
+                    return (" ".join(window_words), f_name)
+    return ("", "")
+
+
 def extract_f4_offending_tokens(bundle_dict: dict[str, Any], raw_output: dict[str, Any]) -> list[str]:
     """Extract offending number/amount tokens that triggered F4 in independent_checker."""
     facts = bundle_dict.get("facts") or {}
@@ -166,6 +187,58 @@ def run_error_analysis(
                     fin_records[rec["bundle_id"]] = rec
 
         arm_findings: dict[str, Any] = {}
+
+        # ----------------------------------------------------------------------
+        # 0. Reason Code Reconciliation & Equality Assertion
+        # ----------------------------------------------------------------------
+        EXPECTED_NON_ACCEPT_REASON_CODES: dict[str, dict[str | None, int]] = {
+            "default": {
+                "FABRICATED_NUMBER_IN_EXPLANATION": 20,
+                "NO_AMOUNT_IN_QUOTE": 10,
+                "REFLECTED_UNTRUSTED_TEXT": 1,
+                "UNGROUNDED_AMOUNT": 1,
+                "FABRICATED_QUOTE": 1,
+            },
+            "low": {
+                "FABRICATED_NUMBER_IN_EXPLANATION": 20,
+                "NO_AMOUNT_IN_QUOTE": 9,
+                "REFLECTED_UNTRUSTED_TEXT": 7,
+                None: 1,
+                "AMOUNT_MISMATCH_WITH_QUOTE": 1,
+                "FABRICATED_QUOTE": 1,
+            },
+            "high": {
+                "FABRICATED_NUMBER_IN_EXPLANATION": 22,
+                "REFLECTED_UNTRUSTED_TEXT": 4,
+            },
+        }
+
+        non_accept_reason_counts: Counter[str | None] = Counter()
+        for bid_f, rec_f in fin_records.items():
+            if rec_f.get("verifier_outcome") != "ACCEPT":
+                non_accept_reason_counts[rec_f.get("verifier_reason_code")] += 1
+
+        if arm in EXPECTED_NON_ACCEPT_REASON_CODES and len(bundles) == 120:
+            actual_reasons = dict(non_accept_reason_counts)
+            expected_reasons = EXPECTED_NON_ACCEPT_REASON_CODES[arm]
+            assert actual_reasons == expected_reasons, (
+                f"Arm '{arm}' non-ACCEPT verifier reason codes mismatch: "
+                f"actual={actual_reasons} vs expected={expected_reasons}"
+            )
+
+        print(f"### 0. Non-ACCEPT Verifier Reason Codes (Finalized Results vs Pilot Report)")
+        print(f"- Total Non-ACCEPT Outcomes: {sum(non_accept_reason_counts.values())}")
+        print("| Verifier Reason Code | Count | Expected (Report) | Reconciled? |")
+        print("| :--- | :---: | :---: | :---: |")
+        exp_table = EXPECTED_NON_ACCEPT_REASON_CODES.get(arm, {})
+        all_codes = sorted(set(non_accept_reason_counts.keys()) | set(exp_table.keys()), key=lambda x: str(x))
+        for code in all_codes:
+            cnt = non_accept_reason_counts.get(code, 0)
+            exp_cnt = exp_table.get(code, 0)
+            code_label = f"`{code}`" if code is not None else "*None (schema_invalid)*"
+            match_str = "MATCH" if cnt == exp_cnt else "MISMATCH"
+            print(f"| {code_label} | {cnt} | {exp_cnt} | {match_str} |")
+        print()
 
         # ----------------------------------------------------------------------
         # 1. F4 Analysis
@@ -312,16 +385,18 @@ def run_error_analysis(
                 })
 
             # 5. V8 REFLECTED_UNTRUSTED_TEXT rejections
-            if "REFLECTED_UNTRUSTED_TEXT" in v_failed:
+            if v_code == "REFLECTED_UNTRUSTED_TEXT":
+                ref_win, ref_fld = find_reflected_window(b_dict, raw_dict) if raw_dict else ("", "")
                 v8_rejections.append({
                     "bundle_id": bid,
+                    "window": ref_win,
+                    "field": ref_fld,
                     "explanation": raw_dict.get("explanation") if raw_dict else "",
-                    "untrusted": untrusted,
                     "quote": raw_dict.get("verbatim_quote") if raw_dict else "",
                 })
 
             # 6. NO_AMOUNT_IN_QUOTE rejections
-            if "NO_AMOUNT_IN_QUOTE" in v_failed:
+            if v_code == "NO_AMOUNT_IN_QUOTE":
                 no_amount_in_quote_cases.append({
                     "bundle_id": bid,
                     "raw_decision": raw_dec,
@@ -427,8 +502,14 @@ def run_error_analysis(
         print(f"- Total V8 Rejections: {len(v8_rejections)}")
         if not v8_rejections:
             print("  - *(No outputs triggered V8 REFLECTED_UNTRUSTED_TEXT rejections)*")
-        for v in v8_rejections:
-            print(f"  - Bundle: `{v['bundle_id']}`")
+        else:
+            print()
+            print("| Bundle ID | Matching 6-Word Window | Source Field |")
+            print("| :--- | :--- | :--- |")
+            for v in v8_rejections:
+                win_str = f"`{v['window']}`" if v["window"] else "*(window in quote / clean)*"
+                fld_str = f"`{v['field']}`" if v["field"] else "*(unknown)*"
+                print(f"| `{v['bundle_id']}` | {win_str} | {fld_str} |")
         print()
 
         # ----------------------------------------------------------------------
@@ -438,9 +519,73 @@ def run_error_analysis(
         print(f"- Total NO_AMOUNT_IN_QUOTE Rejections: {len(no_amount_in_quote_cases)}")
         if not no_amount_in_quote_cases:
             print("  - *(No outputs triggered NO_AMOUNT_IN_QUOTE rejections)*")
-        for na in no_amount_in_quote_cases:
-            print(f"  - Bundle: `{na['bundle_id']}`: Raw=`{na['raw_decision']}`, Expected=`{na['expected_decision']}`")
+        else:
+            print()
+            print("| Bundle ID | Raw Decision | Expected Decision |")
+            print("| :--- | :---: | :---: |")
+            for na in no_amount_in_quote_cases:
+                print(f"| `{na['bundle_id']}` | `{na['raw_decision']}` | `{na['expected_decision']}` |")
         print()
+
+        # Detailed Inspection for Default Arm Focus Bundles
+        if arm == "default":
+            focus_bids = [
+                "bundle_rfnd_0kF6cL49WAGiSJ",
+                "bundle_rfnd_2gbOZUo2et5OI9",
+                "bundle_rfnd_LBZPAHnwZG7dNw",
+            ]
+            print("#### Default Arm Focus: Verbatim Quotes & EXPLAINED_NO_AMOUNT Analysis")
+            for f_bid in focus_bids:
+                if f_bid in bundles_by_id:
+                    fb = bundles_by_id[f_bid]
+                    fc = cases_in_state.get(f_bid, {})
+                    f_raw = fc.get("raw_output")
+                    f_untrusted = fb.untrusted_text
+                    f_quote = None
+                    if f_raw:
+                        try:
+                            f_dict = json.loads(f_raw)
+                            f_quote = f_dict.get("verbatim_quote")
+                        except Exception:
+                            pass
+                    
+                    note_text = f_untrusted.get("recon_item_notes_reason_text") or ""
+                    is_sub = bool(f_quote and f_quote in note_text)
+                    print(f"- **Bundle `{f_bid}`**:")
+                    print(f"  - **Untrusted Text**: `{json.dumps(f_untrusted)}`")
+                    print(f"  - **Raw Model Output (VERBATIM)**:")
+                    print(f"```json\n{f_raw}\n```")
+                    print(f"  - **Quote**: `{f_quote}`")
+                    print(f"  - **Is quote exact substring of note?**: **{is_sub}**")
+                    quote_has_num = bool(_NUM.search(f_quote or ""))
+                    print(f"  - **Does quote contain any amount/numbers?**: **{quote_has_num}**")
+                    print()
+
+            print("#### Explanation: Why EXPLAINED_NO_AMOUNT Notes Cannot Yield Valid Quotes With Amounts:")
+            print(
+                "By specification and design, EXPLAINED_NO_AMOUNT notes contain purely qualitative descriptions "
+                "(e.g., 'Courier return handling fee retained by logistics partner.', 'Promotional coupon discount clawed back on partial return.') "
+                "with zero numeric tokens or monetary amounts. Therefore, if a model's quote is a faithful, exact substring of the note, "
+                "it CANNOT contain any monetary amount. For these bundles, the model erroneously predicted 'benign_explained' and quoted "
+                "the qualitative clause; verifier check V5 strictly inspected the quote for unit-bearing amounts, found none, and correctly "
+                "rejected the decision with `NO_AMOUNT_IN_QUOTE`."
+            )
+            print()
+
+            # Data bug integrity guard: assert that NO EXPLAINED_NO_AMOUNT note has a parsable amount
+            for bid_chk, b_chk in bundles_by_id.items():
+                meta_chk = meta_lookup[bid_chk]
+                if meta_chk.get("source_label_type") == "EXPLAINED_NO_AMOUNT":
+                    u_chk = b_chk.untrusted_text
+                    for k_u, v_u in u_chk.items():
+                        if isinstance(v_u, str):
+                            for m_chk in _NUM.finditer(v_u):
+                                has_u, p_val = _paise(m_chk)
+                                if has_u and p_val is not None:
+                                    print(f"FATAL: DATA BUG: EXPLAINED_NO_AMOUNT note in bundle {bid_chk} contains parsable amount '{m_chk.group(0)}'!")
+                                    sys.exit("DATA BUG")
+            print("- **Integrity Assertion**: 0/120 EXPLAINED_NO_AMOUNT notes contain parsable amounts. (NO DATA BUG)")
+            print()
 
         # ----------------------------------------------------------------------
         # Print Section 7: Infra Failures & p95 Latency Analysis

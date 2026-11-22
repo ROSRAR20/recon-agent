@@ -1759,7 +1759,7 @@ def test_system_prompt_few_shots_match_real_bundle_key_structure() -> None:
             else:
                 current_json.append(line)
 
-    assert len(blocks) == 5, f"Expected 5 few-shot examples, found {len(blocks)}"
+    assert len(blocks) == 6, f"Expected 6 few-shot examples, found {len(blocks)}"
 
     expected_top_keys = {
         "allowed_classes",
