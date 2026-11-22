@@ -1,7 +1,7 @@
 ================================================================================
 DAY 7b-5 PILOT EVALUATION REPORT
 ================================================================================
-Environment       : Python 3.13.0 on Windows | tzdata OK | Commit f09646f5 (CLEAN)
+Environment       : Python 3.13.0 on Windows | tzdata OK | Commit 480d120c (CLEAN)
 Registration-Final: f09646f5283791344ee6b9ef931b3b57e83ade43
 Frozen Baselines  : PASS
 Frozen File Hashes (HEAD):
@@ -9,7 +9,7 @@ Frozen File Hashes (HEAD):
   verifier.py           : 06929945500e4818b38ce07e58aa8a0c2915556e
   docs/preregistration.md: a690d23686806bac3899a9b389561e02d2fea7a2
   systems/ (tree)       : 3d7c50658ddefd38f3bf4e21a4276a6c32ed235a
-Git Commit        : f09646f5283791344ee6b9ef931b3b57e83ade43 (CLEAN)
+Git Commit        : 480d120c5fed2a671122451c66a62a2274df34ac (CLEAN)
 System Prompt Hash: 20026d1fd2cee1efd10abe9e7e5c9815406f3547d422a612156db5dee1fa4434
 Verifier Version  : bd2a4e01e29520a8c19669402abbe414c23413f31bfa61a56745dc65c562185d
 Requested Model   : gemini-3.5-flash-lite
