@@ -289,9 +289,10 @@ def _generate_main_report_impl(
 
     # 9. Per-family counts
     family_stats: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    case_bundles_lookup = {b.bundle_id: b for b in case_bundles}
 
     for d in eval_decisions:
-        bundle = d.bundle
+        bundle = case_bundles_lookup[d.bundle_id]
         bid = bundle.bundle_id
         meta = meta_lookup.get(bid, {})
         expected_act = meta.get("expected_decision")
@@ -341,9 +342,15 @@ def _generate_main_report_impl(
                 family_stats[fam]["b3_ctrl_false_flag"] += 1
 
         # Hallucination check using independent checker
-        raw_text = d.raw_output or ""
-        chk_res = check_output(raw_text, bundle.facts, bundle.untrusted_text)
-        is_hallucinated = len(chk_res.violations) > 0
+        raw_text = run0_cases.get(d.bundle_id, {}).get("raw_output") or ""
+        out_dict = {}
+        if raw_text:
+            try:
+                out_dict = json.loads(raw_text)
+            except Exception:
+                out_dict = {}
+        chk_res = check_output(bundle.to_dict(), out_dict)
+        is_hallucinated = len(chk_res) > 0
 
         if is_hallucinated:
             n_b2_hallucinated += 1

@@ -1,0 +1,18 @@
+{
+  "git_commit": "6a23066ad57600d65605c2439cdf0e5ef5120b87",
+  "git_dirty": true,
+  "prompt_hash": "a92e1b8026684afc584502fb2d7853a301348f6ef400708da18bbaff5eafd52f",
+  "verifier_version": "568c7f01c13d1df49a1bf8c13fd36f813a089f0e829ad6685d4ecd200e76f1f6",
+  "model": "gemini-3.5-flash-lite",
+  "archives": [
+    {
+      "archive_file": "main_run0_full.jsonl.gz",
+      "type": "main_run",
+      "run_id": 0,
+      "scope": "full",
+      "case_count": 816,
+      "sha256": "b6b04c146336d57c91ecdeb1a8add317ebbe675d8e5e51e23f40d50bb666e7dc",
+      "size_bytes": 34101
+    }
+  ]
+}
