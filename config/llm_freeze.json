@@ -1,0 +1,7 @@
+{
+  "model": "gemini-3.5-flash-lite",
+  "arm": "default",
+  "thinking_level": null,
+  "prompt_hash": "a92e1b8026684afc584502fb2d7853a301348f6ef400708da18bbaff5eafd52f",
+  "verifier_version": "568c7f01c13d1df49a1bf8c13fd36f813a089f0e829ad6685d4ecd200e76f1f6"
+}
