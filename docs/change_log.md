@@ -17,7 +17,12 @@ Integrity checker `scripts/check_frozen.py` validates that `verifier.py` and `sy
   - Unsafe Resolution Rate: default 0/120 (0.0%), low 0/120 (0.0%), high 0/120 (0.0%)
   - B3 Decision Accuracy: default 93/120 (77.5%), low 87/120 (72.5%), high 88/120 (73.3%)
   - B3 Non-ACCEPT Verifier Outcomes: default 33 (20 FABRICATED_NUMBER_IN_EXPLANATION, 10 NO_AMOUNT_IN_QUOTE, 1 REFLECTED_UNTRUSTED_TEXT, 1 UNGROUNDED_AMOUNT, 1 FABRICATED_QUOTE)
-- **AFTER Numbers**: pending re-pilot
+- **AFTER Numbers** (from `docs/pilot_run2_report.md`):
+  - Hallucination Rate (Schema-Valid): default 2/120 (1.7%, 95% CI: [0.5%, 5.9%])
+  - Verifier Block Rate (Hallucinated): default 2/2 (100.0%, 95% CI: [34.2%, 100.0%], 0 unblocked)
+  - Unsafe Resolution Rate: default 0/120 (0.0%, 95% CI: [0.0%, 3.1%])
+  - B3 Decision Accuracy: default 114/120 (95.0%, 95% CI: [89.5%, 97.7%])
+  - B3 Non-ACCEPT Verifier Outcomes: default 4 (3 NO_AMOUNT_IN_QUOTE, 1 FABRICATED_NUMBER_IN_EXPLANATION)
 
 ---
 
@@ -33,4 +38,9 @@ Integrity checker `scripts/check_frozen.py` validates that `verifier.py` and `sy
   - B3 Over-Escalation Rate: default 3/45 (6.7%), low 8/45 (17.8%), high 7/45 (15.6%)
   - False-Reject Rate (Faithful Correct Non-Escalations): default 3/45 (6.7%), low 8/45 (17.8%), high 7/45 (15.6%)
   - Non-ACCEPT Outcomes: default 33 (10 NO_AMOUNT_IN_QUOTE), low 39 (9 NO_AMOUNT_IN_QUOTE), high 26 (0 NO_AMOUNT_IN_QUOTE)
-- **AFTER Numbers**: pending re-pilot
+- **AFTER Numbers** (from `docs/pilot_run2_report.md`):
+  - B3 Decision Accuracy: default 114/120 (95.0%, 95% CI: [89.5%, 97.7%])
+  - B2 Decision Accuracy: default 117/120 (97.5%, 95% CI: [92.9%, 99.2%])
+  - B3 Over-Escalation Rate: default 3/45 (6.7%, 95% CI: [2.3%, 17.9%])
+  - False-Reject Rate (Faithful Correct Non-Escalations): default 2/65 (3.1%, 95% CI: [0.9%, 10.5%])
+  - Non-ACCEPT Outcomes: default 4 (3 NO_AMOUNT_IN_QUOTE, 1 FABRICATED_NUMBER_IN_EXPLANATION)

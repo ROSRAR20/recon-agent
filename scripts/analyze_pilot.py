@@ -179,6 +179,11 @@ def run_error_analysis(
         # Load finalized records
         fin_pattern = os.path.join(resolved_fin_dir, f"**/finalized_dev_seed{seed}_{arm}_run0.jsonl")
         fin_matches = glob.glob(fin_pattern, recursive=True)
+        # Prefer pilot 1 verifier version (bd2a4e01) when analyzing 3-arm pilot 1 results
+        if len(fin_matches) > 1:
+            p1_matches = [m for m in fin_matches if "bd2a4e01" in m]
+            if p1_matches:
+                fin_matches = p1_matches
         fin_records: dict[str, dict[str, Any]] = {}
         if fin_matches:
             with open(fin_matches[0], "r", encoding="utf-8") as f:
